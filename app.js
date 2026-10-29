@@ -414,112 +414,51 @@
       return;
     }
 
-    // B. Kryptex 矿池通道
-    fetch(`https://pool.kryptex.com/prl/api/v1/miner/balance/${cleanAddr}`)
-      .then(res => res.json())
-      .then(data => {
-        if (!resultBox) return;
-        const total = data.total !== undefined ? Number(data.total).toFixed(4) : "0.0000";
-        const confirmed = data.confirmed !== undefined ? Number(data.confirmed).toFixed(4) : "0.0000";
-        const unconfirmed = data.unconfirmed !== undefined ? Number(data.unconfirmed).toFixed(4) : "0.0000";
-        const threshold = data.threshold !== undefined ? data.threshold : 1.0;
+    // B. Kryptex 官方矿池通道 (直接原生内嵌官方实时矿机监控，0 跨域限制，实时展现图表与算力)
+    if (state.selectedPool === 'kryptex') {
+      resultBox.innerHTML = `
+        <div class="space-y-3 py-1">
+          <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+            <div class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="font-bold text-cyan-300">Kryptex 官方矿工实时监控</span>
+            </div>
+            <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-medium">
+              独立窗口 ↗
+            </a>
+          </div>
 
-        resultBox.innerHTML = `
-          <div class="space-y-2 py-1">
-            <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-              <span class="text-white/60">矿池节点</span>
-              <span class="font-bold text-cyan-300">Kryptex 官方矿池 (PPS+)</span>
+          <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-white/40 mb-1">矿池费率</div>
+              <div class="font-bold text-cyan-300">PPS+ 3% (SOLO 1%)</div>
             </div>
-            <div class="flex justify-between text-white/80 border-b border-white/[0.05] pb-1.5">
-              <span>矿池累计总收益 (Total):</span>
-              <span class="text-cyan-300 font-bold font-mono text-sm">${total} PRL</span>
-            </div>
-            <div class="flex justify-between text-white/80 border-b border-white/[0.05] pb-1.5">
-              <span>待确认块收益 (Unconfirmed):</span>
-              <span class="text-amber-300 font-bold font-mono">${unconfirmed} PRL</span>
-            </div>
-            <div class="flex justify-between text-white/80 border-b border-white/[0.05] pb-1.5">
-              <span>已确认可支付 (Confirmed):</span>
-              <span class="text-emerald-400 font-bold font-mono">${confirmed} PRL</span>
-            </div>
-            <div class="flex justify-between text-white/50 text-[11px] pt-1">
-              <span>起付阈值: ${threshold} PRL</span>
-              <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="text-cyan-400 hover:underline">
-                官方看板核对 ↗
-              </a>
+            <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-white/40 mb-1">最低起付</div>
+              <div class="font-bold text-emerald-400">1.0 PRL (自动打款)</div>
             </div>
           </div>
-        `;
-      })
-      .catch(() => {
-        if (!resultBox) return;
-        // 若 Kryptex 因苹果/安卓浏览器跨域限制，先自动联动 HeroMiners 探测，同时提供 Kryptex 完整监控卡片
-        fetch(`https://pearl.herominers.com/api/stats_address?address=${cleanAddr}`)
-          .then(r => r.json())
-          .then(hData => {
-            const hStats = (hData && hData.stats) ? hData.stats : null;
-            if (hStats && (hStats.hashrate > 0 || hStats.paid > 0)) {
-              const hashrate = formatHashrate(hStats.hashrate);
-              const unpaid = hStats.balance ? (hStats.balance / 1e8).toFixed(4) : "0.0000";
-              const paid = hStats.paid ? (hStats.paid / 1e8).toFixed(4) : "0.0000";
-              resultBox.innerHTML = `
-                <div class="space-y-2 py-1">
-                  <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-                    <span class="text-white/60">检测到该矿工在 HeroMiners 活跃</span>
-                    <span class="font-bold text-purple-300">HeroMiners (Prop)</span>
-                  </div>
-                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
-                    <span class="text-white/70">实时算力:</span>
-                    <span class="text-cyan-300 font-bold font-mono text-sm">${hashrate}</span>
-                  </div>
-                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
-                    <span class="text-white/70">待结收益 (Unpaid):</span>
-                    <span class="text-amber-300 font-bold font-mono">${unpaid} PRL</span>
-                  </div>
-                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
-                    <span class="text-white/70">已支付收益 (Paid):</span>
-                    <span class="text-emerald-400 font-bold font-mono">${paid} PRL</span>
-                  </div>
-                  <div class="pt-2">
-                    <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-center border border-cyan-400/40 btn-active">
-                      👉 亦可在 Kryptex 官方实时看板核对 ↗
-                    </a>
-                  </div>
-                </div>
-              `;
-              return;
-            }
-            throw new Error("No HeroMiners data");
-          })
-          .catch(() => {
-            resultBox.innerHTML = `
-              <div class="space-y-2.5 py-1">
-                <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-                  <span class="text-white/60">目标矿工</span>
-                  <span class="font-mono text-cyan-300 text-[11px]">${cleanAddr.slice(0, 10)}...${cleanAddr.slice(-6)}</span>
-                </div>
-                <div class="grid grid-cols-2 gap-2 text-[11px]">
-                  <div class="p-2.5 rounded-xl bg-white/[0.03]">
-                    <div class="text-white/40 mb-1">Kryptex 全网算力</div>
-                    <div class="font-bold text-cyan-300">${state.chainInfo.hashrateEH} EH/s</div>
-                  </div>
-                  <div class="p-2.5 rounded-xl bg-white/[0.03]">
-                    <div class="text-white/40 mb-1">矿池起付阈值</div>
-                    <div class="font-bold text-emerald-400">1.0 PRL (PPS+ 3%)</div>
-                  </div>
-                </div>
-                <div class="p-3 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-xs">
-                  <div class="text-cyan-200 font-medium mb-2 leading-relaxed">
-                    由于苹果/安卓浏览器启用跨域防护，Kryptex 专属矿机数据已就绪：
-                  </div>
-                  <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/30 text-cyan-200 font-bold text-center border border-cyan-400/40 btn-active">
-                    👉 在 Kryptex 官方实时看板中打开此矿工 ↗
-                  </a>
-                </div>
-              </div>
-            `;
-          });
-      });
+
+          <!-- Kryptex 官方实时交互看板内嵌 (无缝展示真实算力曲线、在线矿机列表与收益账单) -->
+          <div class="relative w-full rounded-2xl overflow-hidden border border-cyan-500/20 bg-[#0d0f18] shadow-2xl" style="height: 480px;">
+            <iframe 
+              src="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" 
+              class="w-full h-full border-0"
+              loading="eager"
+              title="Kryptex Miner Live Dashboard"
+            ></iframe>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-white/40 pt-1">
+            <span>数据源: pool.kryptex.com 官方直连</span>
+            <button type="button" onclick="selectMinerPool('herominers'); queryMinerByAddress();" class="text-purple-300 hover:underline">
+              切换到 HeroMiners 探测 ➔
+            </button>
+          </div>
+        </div>
+      `;
+      return;
+    }
   };
 
   window.refreshChainData = function () {
