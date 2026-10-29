@@ -187,36 +187,63 @@
     </main>
 
     <!-- 主视图区 2：矿池与 PoUW 算力监控 -->
-    <main id="view-mining" class="flex-1 flex flex-col hidden">
-      <div class="ios-glass-card rounded-[28px] p-6 mb-5">
+    <!-- 主视图区 2：矿池与 PoUW 算力监控 (媲美 Pearl Hub) -->
+    <main id="view-mining" class="flex-1 flex flex-col hidden space-y-4">
+      <!-- 顶部全网状态看板 -->
+      <div class="ios-glass-card rounded-[28px] p-6 relative overflow-hidden">
         <div class="flex items-center justify-between mb-4">
-          <span class="text-xs font-bold text-white/50">Kryptex 官方矿池全网状态</span>
-          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">105,699 矿机在线</span>
+          <span class="text-xs font-bold text-white/50">Pearl PoUW 全网总算力</span>
+          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">105,699+ 矿机在线</span>
         </div>
-        <div class="text-2xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">38.56 EH/s</div>
-        <div class="text-xs text-white/40 mb-5">全网 PearlHash / PoUW 矩阵算力速率</div>
+        <div class="text-3xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">68.00 EH/s</div>
+        <div class="text-xs text-white/40 mb-4">全网 PearlHash / AI 矩阵算力集群</div>
 
-        <div class="grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.08]">
+        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/[0.08]">
           <div class="p-3 rounded-xl bg-white/[0.03]">
-            <div class="text-[11px] text-white/40 mb-1">矿池费率</div>
-            <div class="text-sm font-bold text-cyan-300 tabular-numbers">PPS+ 3% (SOLO 1%)</div>
+            <div class="text-[11px] text-white/40 mb-1">主导矿池</div>
+            <div class="text-xs font-bold text-cyan-300">Kryptex (56.7%)</div>
           </div>
           <div class="p-3 rounded-xl bg-white/[0.03]">
-            <div class="text-[11px] text-white/40 mb-1">最低起付</div>
-            <div class="text-sm font-bold text-white/80">1.0 PRL</div>
+            <div class="text-[11px] text-white/40 mb-1">第二矿池</div>
+            <div class="text-xs font-bold text-purple-300">HeroMiners (Prop)</div>
           </div>
         </div>
       </div>
 
-      <!-- 矿池输入查询绑定的矿工钱包 -->
-      <div class="ios-glass-card rounded-2xl p-4 mb-4">
-        <h4 class="text-xs font-bold text-white mb-2">查询真实矿工收益与算力</h4>
-        <div class="flex gap-2">
-          <input id="custom-miner-address" type="text" placeholder="输入 Pearl 矿工收款地址..." class="flex-1 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
-          <button onclick="queryMinerByAddress()" class="px-3.5 py-2.5 rounded-xl bg-cyan-500/10 text-cyan-300 font-bold text-xs btn-active border border-cyan-400/20">查询</button>
+      <!-- 矿工实时监控卡片 (媲美 Pearl Hub) -->
+      <div class="ios-glass-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-xs font-bold text-white">真实矿工监控</h4>
+          <span class="text-[10px] text-cyan-400 font-medium">支持多矿池直连</span>
         </div>
-        <div id="miner-query-result" class="hidden mt-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs space-y-1">
-          <!-- 动态展示矿工查询收益 -->
+
+        <div class="mb-3">
+          <label class="block text-[11px] text-white/60 mb-1">选择矿池</label>
+          <div class="grid grid-cols-2 gap-2" id="miner-pool-selector">
+            <button type="button" onclick="selectMinerPool('kryptex')" id="btn-pool-kryptex" class="py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active">
+              Kryptex 官方矿池
+            </button>
+            <button type="button" onclick="selectMinerPool('herominers')" id="btn-pool-herominers" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active">
+              HeroMiners 矿池
+            </button>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <div class="flex items-center justify-between text-[11px] text-white/60 mb-1">
+            <span>矿工钱包收款地址</span>
+            <button onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
+          </div>
+          <input id="custom-miner-address" type="text" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+        </div>
+
+        <button onclick="queryMinerByAddress()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-1.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          立即查询矿工收益与算力
+        </button>
+
+        <div id="miner-query-result" class="hidden mt-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-2">
+          <!-- 动态展示矿工真实数据 -->
         </div>
       </div>
     </main>
@@ -568,7 +595,7 @@
     </div>
 
     <div class="flex justify-center mb-5">
-      <div id="qrcode-canvas-container" class="p-3 bg-[#111422] rounded-3xl border border-cyan-400/20 shadow-xl shadow-cyan-500/10"></div>
+      <div id="qrcode-canvas-container" class="p-3 bg-white rounded-3xl shadow-2xl shadow-cyan-500/20 flex items-center justify-center overflow-hidden"></div>
     </div>
 
     <div class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-5">
@@ -635,6 +662,8 @@
 
   <!-- 引入官方完整 2048 词表 -->
   <script src="bip39-wordlist.js"></script>
+  <!-- 引入标准离线二维码生成库 -->
+  <script src="qrcode.min.js"></script>
   <!-- 业务核心脚本 -->
   <script src="app.js"></script>
 </body>

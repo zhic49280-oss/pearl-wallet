@@ -98,6 +98,7 @@
     wallets: [],
     activeWalletId: null,
     pendingWallet: null, // 创建流程中的临时状态 { name, pin, mnemonic, address, privateKeyHex }
+    selectedPool: 'kryptex',
     enteredPin: "",
     autoLockTimer: null,
     countdownSeconds: 45,
@@ -107,11 +108,11 @@
     livePriceUSD: 1.72,
     livePriceCNY: 11.47,
     chainInfo: {
-      height: 135232,
+      height: 135249,
       miners: 32111,
       workers: 105699,
       blockReward: "2213.31",
-      hashrateEH: "38.56"
+      hashrateEH: "68.00"
     },
     txHistory: []
   };
@@ -217,7 +218,50 @@
       .catch(() => renderWalletBalances());
   };
 
-  // 3. 矿工真实收益查询 (处理浏览器跨域与智能直达通道)
+  // 矿池切换
+  window.selectMinerPool = function (pool) {
+    triggerHaptic('light');
+    state.selectedPool = pool;
+    const btnKryptex = document.getElementById('btn-pool-kryptex');
+    const btnHero = document.getElementById('btn-pool-herominers');
+
+    if (pool === 'kryptex') {
+      btnKryptex.className = "py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active";
+      btnHero.className = "py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active";
+    } else {
+      btnHero.className = "py-2.5 px-3 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-xs border border-purple-400/40 btn-active";
+      btnKryptex.className = "py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active";
+    }
+  };
+
+  // 一键填入当前钱包地址
+  window.fillCurrentWalletAddress = function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    const input = document.getElementById('custom-miner-address');
+    if (!wallet) {
+      showToast("当前设备无钱包，请先创建或导入");
+      return;
+    }
+    if (input) {
+      input.value = wallet.address;
+      showToast("已填入当前钱包地址");
+    }
+  };
+
+  // 格式化算力单位
+  function formatHashrate(hr) {
+    const num = Number(hr) || 0;
+    if (num >= 1e18) return (num / 1e18).toFixed(2) + " EH/s";
+    if (num >= 1e15) return (num / 1e15).toFixed(2) + " PH/s";
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + " TH/s";
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + " GH/s";
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + " MH/s";
+    if (num >= 1e3) return (num / 1e3).toFixed(2) + " KH/s";
+    return num.toFixed(2) + " H/s";
+  }
+
+  // 3. 矿工真实收益查询 (原生支持 HeroMiners 与 Kryptex 双通道解析)
   window.queryMinerByAddress = function () {
     const input = document.getElementById('custom-miner-address');
     const resultBox = document.getElementById('miner-query-result');
@@ -232,28 +276,84 @@
     const cleanAddr = rawAddr.split(/[:/]/)[0].trim();
 
     triggerHaptic('light');
-    showToast("正在查询矿池账目...");
+    showToast("正在连接矿池查询实时账目...");
     if (resultBox) {
       resultBox.classList.remove('hidden');
       resultBox.innerHTML = `
-        <div class="py-2 text-white/80 space-y-2">
-          <div class="flex items-center justify-between text-xs font-semibold text-white">
-            <span>目标地址</span>
-            <span class="font-mono text-cyan-300 text-[11px]">${cleanAddr.slice(0, 10)}...${cleanAddr.slice(-6)}</span>
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-cyan-400/20 text-xs">
-            <div class="text-white/60 mb-2">
-              💡 提示：由于苹果浏览器 Safari 开启了严格的跨域保护（CORS），矿池实时数据可直接通过下方官方通道一键查看：
-            </div>
-            <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-center border border-cyan-400/40 btn-active">
-              👉 在 Kryptex 官方实时看板中打开此矿工 ↗
-            </a>
-          </div>
+        <div class="py-3 text-center text-white/60 flex items-center justify-center gap-2">
+          <svg class="w-4 h-4 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+          正在检索 ${cleanAddr.slice(0, 10)}... 矿池账目
         </div>
       `;
     }
 
-    // 尝试直接请求 (在某些无跨域限制环境或原生App中可直接解析)
+    // A. HeroMiners 矿池通道 (完全开放 CORS 协议)
+    if (state.selectedPool === 'herominers') {
+      fetch(`https://pearl.herominers.com/api/stats_address?address=${cleanAddr}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!resultBox) return;
+          if (data && data.error) {
+            resultBox.innerHTML = `
+              <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+                <div class="font-bold mb-1">未在 HeroMiners 检索到有效矿机</div>
+                <div class="text-[11px] text-white/60 mb-2">该地址可能尚未连接至 HeroMiners 提交有效算力，或地址校验和有误。</div>
+                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2 rounded-lg bg-amber-500/20 text-center font-bold text-amber-200">
+                  前往 HeroMiners 官网核对 ↗
+                </a>
+              </div>
+            `;
+            return;
+          }
+
+          const stats = data.stats || {};
+          const workers = data.workers || [];
+          const hashrate = stats.hashrate ? formatHashrate(stats.hashrate) : "0.00 H/s";
+          const unpaid = stats.balance ? (stats.balance / 1e8).toFixed(4) : "0.0000";
+          const paid = stats.paid ? (stats.paid / 1e8).toFixed(4) : "0.0000";
+
+          resultBox.innerHTML = `
+            <div class="space-y-2 py-1">
+              <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+                <span class="text-white/60">矿池节点</span>
+                <span class="font-bold text-purple-300">HeroMiners (Prop)</span>
+              </div>
+              <div class="flex justify-between border-b border-white/[0.05] pb-2">
+                <span class="text-white/70">实时算力:</span>
+                <span class="text-cyan-300 font-bold font-mono text-sm">${hashrate}</span>
+              </div>
+              <div class="flex justify-between border-b border-white/[0.05] pb-2">
+                <span class="text-white/70">待结算收益 (Unpaid):</span>
+                <span class="text-amber-300 font-bold font-mono">${unpaid} PRL</span>
+              </div>
+              <div class="flex justify-between border-b border-white/[0.05] pb-2">
+                <span class="text-white/70">已支付收益 (Paid):</span>
+                <span class="text-emerald-400 font-bold font-mono">${paid} PRL</span>
+              </div>
+              <div class="flex justify-between text-white/50 text-[11px] pt-1">
+                <span>在线矿机: ${workers.length} 台</span>
+                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="text-purple-300 hover:underline">
+                  查看明细图表 ↗
+                </a>
+              </div>
+            </div>
+          `;
+        })
+        .catch(err => {
+          if (!resultBox) return;
+          resultBox.innerHTML = `
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs">
+              <div class="text-white/70 mb-2">矿池连接已发送，若本地网络限制可通过官网直达：</div>
+              <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-center border border-purple-400/30">
+                👉 在 HeroMiners 实时看板中查看此地址 ↗
+              </a>
+            </div>
+          `;
+        });
+      return;
+    }
+
+    // B. Kryptex 矿池通道
     fetch(`https://pool.kryptex.com/prl/api/v1/miner/balance/${cleanAddr}`)
       .then(res => res.json())
       .then(data => {
@@ -261,10 +361,14 @@
         const total = data.total !== undefined ? Number(data.total).toFixed(4) : "0.0000";
         const confirmed = data.confirmed !== undefined ? Number(data.confirmed).toFixed(4) : "0.0000";
         const unconfirmed = data.unconfirmed !== undefined ? Number(data.unconfirmed).toFixed(4) : "0.0000";
-        const threshold = data.threshold !== undefined ? data.threshold : 100;
+        const threshold = data.threshold !== undefined ? data.threshold : 1.0;
 
         resultBox.innerHTML = `
           <div class="space-y-2 py-1">
+            <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+              <span class="text-white/60">矿池节点</span>
+              <span class="font-bold text-cyan-300">Kryptex 官方矿池 (PPS+)</span>
+            </div>
             <div class="flex justify-between text-white/80 border-b border-white/[0.05] pb-1.5">
               <span>矿池累计总收益 (Total):</span>
               <span class="text-cyan-300 font-bold font-mono text-sm">${total} PRL</span>
@@ -287,7 +391,23 @@
         `;
       })
       .catch(() => {
-        // 静默保留直达通道
+        if (!resultBox) return;
+        resultBox.innerHTML = `
+          <div class="space-y-2 py-1">
+            <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+              <span class="text-white/60">目标矿工</span>
+              <span class="font-mono text-cyan-300 text-[11px]">${cleanAddr.slice(0, 10)}...${cleanAddr.slice(-6)}</span>
+            </div>
+            <div class="p-3 rounded-xl bg-white/[0.04] border border-cyan-400/20 text-xs">
+              <div class="text-white/60 mb-2">
+                Kryptex 官方实时矿机监控：
+              </div>
+              <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-center border border-cyan-400/40 btn-active">
+                👉 在 Kryptex 官方实时看板中打开此矿工 ↗
+              </a>
+            </div>
+          </div>
+        `;
       });
   };
 
@@ -770,39 +890,108 @@
     openSheet('sheet-verify-auth');
   };
 
+  function bufToBase64(buf) {
+    let binary = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  function b64ToBuf(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  // 唤起 Apple 官方 Face ID / 触控 ID / 通行密钥 (WebAuthn 平台认证规范)
   window.authenticateWithFaceID = async function () {
     triggerHaptic('medium');
     const wallet = getActiveWallet();
     if (!wallet) return;
 
-    if (window.PublicKeyCredential && window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable) {
-      try {
-        const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        if (available) {
-          showToast("正在唤起 Face ID / 手机密码...");
-          const challenge = new Uint8Array(32);
-          window.crypto.getRandomValues(challenge);
-          await navigator.credentials.get({
-            publicKey: {
-              challenge,
-              timeout: 60000,
-              userVerification: "required"
-            }
-          }).then(() => {
-            triggerHaptic('success');
-            showToast("生物识别验证成功");
-            revealMnemonicDisplaySheet();
-          }).catch(() => {
-            showToast("请使用下方 6 位密码解锁");
-          });
-          return;
-        }
-      } catch (e) {
-        // Fallback to PIN
-      }
+    if (!window.PublicKeyCredential) {
+      showToast("此浏览器暂未支持 Apple 面容/指纹通行密钥，请使用 6 位数字密码解锁");
+      return;
     }
 
-    showToast("请使用下方 6 位密码解锁");
+    try {
+      const challenge = new Uint8Array(32);
+      window.crypto.getRandomValues(challenge);
+
+      // 若尚未录入 Passkey，首次点击立即唤起 Apple 官方录入注册弹窗
+      if (!wallet.passkeyId) {
+        showToast("正在唤起 Apple 面容 ID 授权绑定...");
+        const credential = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: {
+              name: "Pearl 移动钱包",
+              id: window.location.hostname
+            },
+            user: {
+              id: new TextEncoder().encode(wallet.id),
+              name: wallet.name,
+              displayName: wallet.name
+            },
+            pubKeyCredParams: [
+              { alg: -7, type: "public-key" },
+              { alg: -257, type: "public-key" }
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: "platform",
+              userVerification: "required",
+              residentKey: "preferred"
+            },
+            timeout: 60000,
+            attestation: "none"
+          }
+        });
+
+        if (credential) {
+          wallet.passkeyId = bufToBase64(credential.rawId);
+          saveWalletsToStorage();
+          triggerHaptic('success');
+          showToast("🎉 Apple 面容 ID 认证成功并已绑定");
+          revealMnemonicDisplaySheet();
+          return;
+        }
+      } else {
+        // 已有通行密钥，直接唤起 Apple 面容扫描
+        showToast("正在唤起 Apple 面容 ID 扫描...");
+        const assertion = await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            allowCredentials: [{
+              id: b64ToBuf(wallet.passkeyId),
+              type: "public-key",
+              transports: ["internal"]
+            }],
+            userVerification: "required",
+            timeout: 60000
+          }
+        });
+
+        if (assertion) {
+          triggerHaptic('success');
+          showToast("🎉 Apple 面容 ID 认证成功");
+          revealMnemonicDisplaySheet();
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Face ID WebAuthn:", err);
+      triggerHaptic('error');
+      if (err.name === 'NotAllowedError') {
+        showToast("已取消面容验证，请输入 6 位密码解锁");
+      } else {
+        showToast("面容验证未完成，请输入 6 位密码解锁");
+      }
+    }
   };
 
   window.pressVerifyPinKey = function (key) {
@@ -955,50 +1144,34 @@
     }
   };
 
-  // 生成珍珠冷色渐变风格真实二维码
+  // 生成 100% 真实、标准、可被任何相机与钱包扫码识别的二维码
   function generateQRCode(text) {
     const qrContainer = document.getElementById('qrcode-canvas-container');
     if (!qrContainer) return;
     qrContainer.innerHTML = '';
 
-    const canvas = document.createElement('canvas');
-    canvas.width = 180;
-    canvas.height = 180;
-    const ctx = canvas.getContext('2d');
-
-    const grad = ctx.createLinearGradient(0, 0, 180, 180);
-    grad.addColorStop(0, '#00F0FF');
-    grad.addColorStop(1, '#8A2BE2');
-
-    ctx.fillStyle = '#111422';
-    ctx.fillRect(0, 0, 180, 180);
-
-    ctx.fillStyle = grad;
-    for (let r = 20; r < 160; r += 12) {
-      for (let c = 20; c < 160; c += 12) {
-        if ((r + c) % 3 === 0 || (r === 20 || r === 140 || c === 20 || c === 140)) {
-          ctx.beginPath();
-          ctx.arc(r + 6, c + 6, 4, 0, Math.PI * 2);
-          ctx.fill();
-        }
+    if (typeof QRCode !== 'undefined') {
+      try {
+        new QRCode(qrContainer, {
+          text: text,
+          width: 190,
+          height: 190,
+          colorDark: "#090A12",
+          colorLight: "#FFFFFF",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+        return;
+      } catch (e) {
+        console.warn('QRCode local build error:', e);
       }
     }
 
-    ctx.beginPath();
-    ctx.arc(90, 90, 22, 0, Math.PI * 2);
-    ctx.fillStyle = '#07080B';
-    ctx.fill();
-    ctx.strokeStyle = '#00F0FF';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    ctx.font = 'bold 12px sans-serif';
-    ctx.fillStyle = '#FFFFFF';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('PRL', 90, 90);
-
-    qrContainer.appendChild(canvas);
+    // 严谨备选回退方案: 标准高清 SVG/PNG QR 图像
+    const img = document.createElement('img');
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${encodeURIComponent(text)}&bgcolor=FFFFFF&color=090A12&margin=2`;
+    img.alt = "Pearl 收款地址二维码";
+    img.className = "w-[190px] h-[190px] rounded-2xl block";
+    qrContainer.appendChild(img);
   }
 
   window.copyAddress = function () {

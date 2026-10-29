@@ -1,10 +1,11 @@
 // Pearl 珍珠币移动钱包 Service Worker - 实现 iOS 离线持久化与脱机秒开
-const CACHE_NAME = 'pearl-wallet-cache-v2';
+const CACHE_NAME = 'pearl-wallet-cache-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
   './bip39-wordlist.js',
+  './qrcode.min.js',
   './app.js',
   './manifest.json',
   'https://cdn.tailwindcss.com'
