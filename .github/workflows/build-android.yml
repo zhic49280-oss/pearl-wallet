@@ -36,6 +36,7 @@ jobs:
         run: |
           mkdir -p android/app/src/main/assets/public
           cp -r index.html app.js style.css bip39-wordlist.js qrcode.min.js manifest.json sw.js android/app/src/main/assets/public/
+          npx cap sync android || true
 
       - name: Grant Execute Permission for Gradlew
         run: |
