@@ -184,34 +184,62 @@
     fetchRealKryptexRates();
   }
 
-  // 1. 获取 Kryptex 矿池全网状态
+  // 1. 获取主网与矿池全网状态 (优先直连开放 CORS 的 HeroMiners 官方 API，并与 Kryptex 互备)
   window.fetchRealChainData = function () {
-    fetch('https://pool.kryptex.com/prl/api/v1/pool/info')
+    // 优先从开放 CORS 的 HeroMiners 官方 API 抓取真实全网链上数据
+    fetch('https://pearl.herominers.com/api/stats')
       .then(res => res.json())
       .then(data => {
-        if (data && data.height) {
-          state.chainInfo.height = data.height;
-          state.chainInfo.miners = data.miners || 32111;
-          state.chainInfo.workers = data.workers || 105699;
-          state.chainInfo.blockReward = data.block_reward ? parseFloat(data.block_reward).toFixed(2) : "2213.31";
-          if (data.hashrate) {
-            state.chainInfo.hashrateEH = (data.hashrate / 1e18).toFixed(2);
+        if (data) {
+          if (data.network) {
+            if (data.network.height) state.chainInfo.height = data.network.height;
+            if (data.network.networkHashps) {
+              state.chainInfo.hashrateEH = (data.network.networkHashps / 1e18).toFixed(2);
+            }
+          }
+          if (data.pool) {
+            if (data.pool.miners) state.chainInfo.miners = data.pool.miners;
+            if (data.pool.workers) state.chainInfo.workers = data.pool.workers;
+            if (data.pool.averageReward) {
+              state.chainInfo.blockReward = (data.pool.averageReward / 1e8).toFixed(2);
+            }
+          }
+          if (data.price && data.price.usd) {
+            state.livePriceUSD = parseFloat(data.price.usd) || 1.74;
+            state.livePriceCNY = +(state.livePriceUSD * 7.25).toFixed(2);
+            renderWalletBalances();
           }
           updateChainDomElements();
         }
       })
-      .catch(() => updateChainDomElements());
+      .catch(() => {
+        // Kryptex 备用
+        fetch('https://pool.kryptex.com/prl/api/v1/pool/info')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.height) {
+              state.chainInfo.height = data.height;
+              state.chainInfo.miners = data.miners || 32111;
+              state.chainInfo.workers = data.workers || 105699;
+              if (data.hashrate) {
+                state.chainInfo.hashrateEH = (data.hashrate / 1e18).toFixed(2);
+              }
+              updateChainDomElements();
+            }
+          })
+          .catch(() => updateChainDomElements());
+      });
   };
 
-  // 2. 真实币价
+  // 2. 真实币价获取
   window.fetchRealKryptexRates = function () {
     fetch('https://pool.kryptex.com/api/v1/rates')
       .then(res => res.json())
       .then(data => {
         if (data && data.crypto && data.crypto.PRL) {
           state.livePriceUSD = data.crypto.PRL;
-          const cnyRate = (data.fiat && data.fiat.CNY) ? data.fiat.CNY : 6.666;
-          state.livePriceCNY = state.livePriceUSD * cnyRate;
+          const cnyRate = (data.fiat && data.fiat.CNY) ? data.fiat.CNY : 7.25;
+          state.livePriceCNY = +(state.livePriceUSD * cnyRate).toFixed(2);
           renderWalletBalances();
         }
       })
@@ -246,6 +274,18 @@
     if (input) {
       input.value = wallet.address;
       showToast("已填入当前钱包地址");
+    }
+  };
+
+  // 一键填入主网出块活跃矿工 (方便用户立即核验全量真实数据)
+  window.fillTestMinerAddress = function () {
+    triggerHaptic('light');
+    const input = document.getElementById('custom-miner-address');
+    if (input) {
+      input.value = 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm';
+      selectMinerPool('herominers');
+      showToast("已填入主网活跃矿工地址 (HeroMiners)");
+      queryMinerByAddress();
     }
   };
 
@@ -311,6 +351,7 @@
           const hashrate = stats.hashrate ? formatHashrate(stats.hashrate) : "0.00 H/s";
           const unpaid = stats.balance ? (stats.balance / 1e8).toFixed(4) : "0.0000";
           const paid = stats.paid ? (stats.paid / 1e8).toFixed(4) : "0.0000";
+          const blocksFound = stats.blocksFound || 0;
 
           resultBox.innerHTML = `
             <div class="space-y-2 py-1">
@@ -330,10 +371,30 @@
                 <span class="text-white/70">已支付收益 (Paid):</span>
                 <span class="text-emerald-400 font-bold font-mono">${paid} PRL</span>
               </div>
-              <div class="flex justify-between text-white/50 text-[11px] pt-1">
+              <div class="flex justify-between text-white/50 text-[11px] pt-1 border-b border-white/[0.05] pb-2">
+                <span>出块总数: ${blocksFound} 个</span>
                 <span>在线矿机: ${workers.length} 台</span>
-                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="text-purple-300 hover:underline">
-                  查看明细图表 ↗
+              </div>
+              ${workers.length > 0 ? `
+                <div class="pt-1">
+                  <div class="text-[11px] text-white/50 mb-1.5 flex justify-between">
+                    <span>活跃矿机 Worker (前 ${Math.min(workers.length, 3)} 台):</span>
+                    <span class="text-cyan-400 font-medium">状态</span>
+                  </div>
+                  <div class="space-y-1.5 text-[11px]">
+                    ${workers.slice(0, 3).map(w => `
+                      <div class="flex items-center justify-between p-2 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                        <span class="font-mono text-white/90 truncate max-w-[120px]">${w.name || '默认矿机'}</span>
+                        <span class="text-white/40 text-[10px]">${w.agent || 'peakminer'}</span>
+                        <span class="font-mono text-cyan-300 font-bold">${formatHashrate(w.hashrate)}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+              <div class="pt-2">
+                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-center border border-purple-400/30 btn-active">
+                  👉 在 HeroMiners 实时看板中查看此地址 ↗
                 </a>
               </div>
             </div>
@@ -883,62 +944,92 @@
   };
 
   window.executeImportWallet = function () {
-    const nameInput = document.getElementById('import-wallet-name');
-    const wordsInput = document.getElementById('import-mnemonic-input');
-    const pinInput = document.getElementById('import-wallet-pin');
+    try {
+      const errEl = document.getElementById('import-error-msg');
+      if (errEl) {
+        errEl.classList.add('hidden');
+        errEl.innerText = '';
+      }
 
-    const name = nameInput?.value.trim() || `导入钱包-${state.wallets.length + 1}`;
-    const rawWords = wordsInput?.value.trim() || '';
-    const pin = pinInput?.value.trim() || '';
+      const nameInput = document.getElementById('import-wallet-name');
+      const wordsInput = document.getElementById('import-mnemonic-input');
+      const pinInput = document.getElementById('import-wallet-pin');
 
-    if (!rawWords) {
-      showToast("请输入助记词");
-      return;
-    }
+      const name = nameInput?.value.trim() || `电脑官方主钱包`;
+      const rawWords = wordsInput?.value.trim() || '';
+      let pin = pinInput?.value.trim() || '';
 
-    const wordsList = rawWords.toLowerCase().split(/\s+/).filter(w => w.length > 0);
-    if (wordsList.length !== 12 && wordsList.length !== 24) {
-      triggerHaptic('error');
-      alert(`⚠️ 助记词格式错误：检测到 ${wordsList.length} 个单词，应为 12 或 24 个英文单词！`);
-      return;
-    }
-
-    for (const w of wordsList) {
-      if (!/^[a-z]+$/.test(w)) {
+      if (!rawWords) {
         triggerHaptic('error');
-        alert(`⚠️ 助记词包含无效字符: "${w}"，请核对单词拼写！`);
+        showImportError("请输入 12 或 24 个英文助记词");
         return;
       }
+
+      // 提取全部单词，去除标点逗号、多余空格和换行
+      const wordsList = rawWords.toLowerCase()
+        .replace(/[,，.。;；\n\r\t]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 0);
+
+      if (wordsList.length !== 12 && wordsList.length !== 24) {
+        triggerHaptic('error');
+        showImportError(`⚠️ 助记词数量错误：检测到 ${wordsList.length} 个单词，应为 12 或 24 个英文单词！`);
+        return;
+      }
+
+      for (const w of wordsList) {
+        if (!/^[a-z]+$/.test(w)) {
+          triggerHaptic('error');
+          showImportError(`⚠️ 助记词包含无效字符: "${w}"，请核对拼写！`);
+          return;
+        }
+      }
+
+      // 密码处理：若用户未输入密码，默认安全初始设为 123456
+      if (!pin) {
+        pin = '123456';
+      } else if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+        triggerHaptic('error');
+        showImportError("密码需为 6 位纯数字，或者留空默认使用 123456");
+        return;
+      }
+
+      triggerHaptic('success');
+      const { address, privateKeyHex } = deriveFromSeed(wordsList);
+
+      const importedWallet = {
+        id: `wallet-${Date.now()}`,
+        name,
+        pin,
+        mnemonic: wordsList,
+        address,
+        privateKeyHex,
+        balance: 0.00,
+        createdAt: new Date().toISOString()
+      };
+
+      state.wallets.push(importedWallet);
+      state.activeWalletId = importedWallet.id;
+
+      saveWalletsToStorage();
+      closeSheet();
+      switchTab('wallet');
+      renderAll();
+      showToast(`🎉 成功导入钱包【${name}】！`);
+    } catch (err) {
+      console.error('Import wallet error:', err);
+      showImportError(`导入失败: ${err.message || err}`);
     }
-
-    if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
-      triggerHaptic('error');
-      showToast("请为该钱包设定 6 位纯数字密码");
-      return;
-    }
-
-    triggerHaptic('success');
-    const { address, privateKeyHex } = deriveFromSeed(wordsList);
-
-    const importedWallet = {
-      id: `wallet-${Date.now()}`,
-      name,
-      pin,
-      mnemonic: wordsList,
-      address,
-      privateKeyHex,
-      balance: 0.00,
-      createdAt: new Date().toISOString()
-    };
-
-    state.wallets.push(importedWallet);
-    state.activeWalletId = importedWallet.id;
-
-    saveWalletsToStorage();
-    closeSheet();
-    renderAll();
-    showToast(`🎉 成功导入钱包【${name}】！`);
   };
+
+  function showImportError(msg) {
+    const errEl = document.getElementById('import-error-msg');
+    if (errEl) {
+      errEl.innerText = msg;
+      errEl.classList.remove('hidden');
+    }
+    showToast(msg);
+  }
 
   // ======================== 助记词安全查看防线 ========================
   window.startSecureMnemonicFlow = function () {
@@ -1413,21 +1504,16 @@
     showToast(`已连接至: ${label}`);
   };
 
-  // 底部导航栏高亮动态刷新 (消除模糊不更新的问题)
+  // 底部导航栏高亮动态刷新 (纯 CSS 强约束驱动，100% 保持高亮一致)
   function renderNavTabs(activeTab) {
-    const tabs = [
-      { id: 'wallet', el: document.getElementById('tab-btn-wallet') },
-      { id: 'mining', el: document.getElementById('tab-btn-mining') },
-      { id: 'settings', el: document.getElementById('tab-btn-settings') }
-    ];
-
-    tabs.forEach(({ id, el }) => {
+    const tabs = ['wallet', 'mining', 'settings'];
+    tabs.forEach(id => {
+      const el = document.getElementById(`tab-btn-${id}`);
       if (!el) return;
-      const isActive = (id === activeTab);
-      if (isActive) {
-        el.className = "flex-1 py-2.5 rounded-full flex flex-col items-center gap-0.5 text-cyan-300 font-bold bg-cyan-500/20 border border-cyan-400/40 shadow-lg shadow-cyan-500/20 transition-all btn-active";
+      if (id === activeTab) {
+        el.classList.add('active');
       } else {
-        el.className = "flex-1 py-2.5 rounded-full flex flex-col items-center gap-0.5 text-white/40 font-medium hover:text-white/80 transition-all btn-active border border-transparent";
+        el.classList.remove('active');
       }
     });
   }

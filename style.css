@@ -14,13 +14,13 @@
 /* 现代 iOS 原生 App 触控和视区重置 */
 * {
   -webkit-tap-highlight-color: transparent;
-  -webkit-touch-callout: none;
   box-sizing: border-box;
 }
 
 html {
   min-height: 100%;
   background-color: #07080B;
+  overflow-x: hidden;
 }
 
 body {
@@ -31,11 +31,72 @@ body {
   padding: 0;
   min-height: 100%;
   overflow-x: hidden;
-  overflow-y: auto !important;
+  touch-action: pan-y;
   -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 核心视口外层容器：保证底部有足够 150px 滑动安全空间，决不遮挡卡片 */
+.app-container {
+  width: 100%;
+  max-width: 28rem;
+  margin-left: auto;
+  margin-right: auto;
+  min-height: 100vh;
+  position: relative;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  padding-top: max(env(safe-area-inset-top), 16px);
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 24px) + 140px) !important;
+}
+
+/* 底部悬浮手势胶囊导航专属高亮样式 (硬件级加速，100% 确保任何机型高亮生效) */
+.nav-tab-btn {
+  display: flex !important;
+  flex: 1 1 0% !important;
+  padding: 8px 0 !important;
+  border-radius: 9999px !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  transition: all 0.2s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.nav-tab-btn.active {
+  color: #00F0FF !important;
+  background: rgba(0, 240, 255, 0.18) !important;
+  border-color: rgba(0, 240, 255, 0.4) !important;
+  box-shadow: 0 4px 18px rgba(0, 240, 255, 0.25) !important;
+}
+
+.nav-tab-btn.active svg {
+  color: #00F0FF !important;
+  stroke: #00F0FF !important;
+  transform: scale(1.08) !important;
+  filter: drop-shadow(0 0 8px rgba(0, 240, 255, 0.7)) !important;
+}
+
+.nav-tab-btn.active span {
+  color: #00F0FF !important;
+  font-weight: 700 !important;
+}
+
+.nav-tab-btn:not(.active) svg {
+  color: rgba(255, 255, 255, 0.4) !important;
+  stroke: rgba(255, 255, 255, 0.4) !important;
+}
+
+.nav-tab-btn:not(.active) span {
+  color: rgba(255, 255, 255, 0.4) !important;
+  font-weight: 500 !important;
 }
 
 /* 等宽数字排版，避免余额跳动 */
@@ -101,7 +162,7 @@ body {
 }
 
 .safe-area-bottom {
-  padding-bottom: max(env(safe-area-inset-bottom), 18px);
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 24px) + 140px) !important;
 }
 
 /* iOS 滚动条隐藏与流畅惯性滑动 */

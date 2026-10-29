@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3.1">
   <script>
     tailwind.config = {
       theme: {
@@ -40,7 +40,7 @@
   </div>
 
   <!-- 外层容器 (留足底部滑动空间，确保内容绝不被底部导航胶囊遮挡) -->
-  <div class="w-full max-w-md mx-auto min-h-screen flex flex-col relative px-4 safe-area-top safe-area-bottom pb-48">
+  <div class="app-container">
 
     <!-- 顶部状态导航栏 -->
     <header class="flex items-center justify-between py-3 mb-3">
@@ -232,7 +232,11 @@
         <div class="mb-3">
           <div class="flex items-center justify-between text-[11px] text-white/60 mb-1">
             <span>矿工钱包收款地址</span>
-            <button onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="fillTestMinerAddress()" class="text-purple-300 font-medium hover:underline text-[11px]">填入主网活跃矿工</button>
+              <span class="text-white/20">|</span>
+              <button type="button" onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
+            </div>
           </div>
           <input id="custom-miner-address" type="text" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
         </div>
@@ -296,21 +300,21 @@
       </div>
     </main>
 
-    <!-- 底部悬浮手势胶囊导航栏 (完全避开底部指示横条区域) -->
+    <!-- 底部悬浮手势胶囊导航栏 (硬件级高亮保障) -->
     <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-sm ios-glass rounded-full p-1.5 shadow-2xl flex items-center justify-around border border-white/10">
-      <button id="tab-btn-wallet" onclick="switchTab('wallet')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-cyan-400 btn-active">
+      <button id="tab-btn-wallet" type="button" onclick="switchTab('wallet')" class="nav-tab-btn active btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
-        <span class="text-[10px] font-semibold">钱包</span>
+        <span class="text-[10px]">钱包</span>
       </button>
 
-      <button id="tab-btn-mining" onclick="switchTab('mining')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-white/40 hover:text-white/80 btn-active">
+      <button id="tab-btn-mining" type="button" onclick="switchTab('mining')" class="nav-tab-btn btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        <span class="text-[10px] font-semibold">矿池</span>
+        <span class="text-[10px]">矿池</span>
       </button>
 
-      <button id="tab-btn-settings" onclick="switchTab('settings')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-white/40 hover:text-white/80 btn-active">
+      <button id="tab-btn-settings" type="button" onclick="switchTab('settings')" class="nav-tab-btn btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        <span class="text-[10px] font-semibold">自托管</span>
+        <span class="text-[10px]">自托管</span>
       </button>
     </nav>
 
@@ -537,28 +541,31 @@
     <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
     <div class="text-center mb-4">
       <h3 class="text-base font-bold text-white">导入已有助记词</h3>
-      <p class="text-xs text-white/40 mt-0.5">支持输入官方电脑客户端生成的 12 或 24 位真实单词</p>
+      <p class="text-xs text-white/40 mt-0.5">支持官方电脑客户端导出的 12 或 24 位真实单词</p>
     </div>
 
     <div class="mb-3">
       <label class="block text-xs text-white/60 mb-1">钱包备注名称</label>
-      <input id="import-wallet-name" type="text" placeholder="例如: 电脑官方主钱包" class="w-full p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+      <input id="import-wallet-name" type="text" placeholder="例如: 电脑官方主钱包" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
     </div>
 
     <div class="mb-3">
-      <label class="block text-xs text-white/60 mb-1">助记词 (英文空格隔开)</label>
-      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: abandon ability able about above absent..." class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <label class="block text-xs text-white/60 mb-1">助记词 (英文空格或换行隔开)</label>
+      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: lottery girl rain peasant fold ankle combine quote supply source can season..." class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
     </div>
 
-    <div class="mb-5">
-      <label class="block text-xs text-white/60 mb-1">为该钱包设定 6 位解锁密码</label>
-      <input id="import-wallet-pin" type="password" maxlength="6" inputmode="numeric" placeholder="输入 6 位数字密码" class="w-full p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-center text-xs font-bold tracking-widest text-cyan-300 focus:outline-none focus:border-cyan-400">
+    <div class="mb-4">
+      <label class="block text-xs text-white/60 mb-1">设定 6 位解锁密码 (选填，留空默认为 123456)</label>
+      <input id="import-wallet-pin" type="password" maxlength="6" inputmode="numeric" placeholder="选填：默认 123456 (可自定)" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-center text-xs font-bold tracking-widest text-cyan-300 focus:outline-none focus:border-cyan-400">
     </div>
 
-    <button onclick="executeImportWallet()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-bold text-xs btn-active mb-2.5">
+    <!-- 显式错误提示区 (让用户第一时间看清任何格式问题，绝不静默拦截) -->
+    <div id="import-error-msg" class="hidden mb-3 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center font-medium leading-relaxed"></div>
+
+    <button id="btn-execute-import" type="button" onclick="executeImportWallet()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-bold text-sm shadow-xl shadow-cyan-500/20 btn-active mb-2.5">
       验证助记词并立即导入
     </button>
-    <button onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/50 text-xs btn-active">
+    <button type="button" onclick="closeSheet()" class="w-full py-3.5 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active">
       取消
     </button>
   </div>
@@ -648,12 +655,14 @@
     </div>
   </div>
 
-  <!-- 注册 Service Worker (支持 iOS Safari PWA 脱机运行) -->
+  <!-- 注册 Service Worker (启用即时更新校验机制) -->
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then(() => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
           console.log('[PWA] Service Worker 激活');
+          // 每次访问主动检查 Service Worker 是否有新版本
+          reg.update().catch(() => {});
         }).catch(err => {
           console.warn('[PWA] Service Worker 跳过', err);
         });
@@ -662,10 +671,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js"></script>
+  <script src="bip39-wordlist.js?v=3.1"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js"></script>
+  <script src="qrcode.min.js?v=3.1"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js"></script>
+  <script src="app.js?v=3.1"></script>
 </body>
 </html>
