@@ -1371,11 +1371,31 @@
     });
   };
 
+  // 实时转账数量与手续费联动计算
+  window.handleSendAmountInput = function (el) {
+    if (!el) return;
+    let valStr = el.value || '';
+    if (valStr.includes('-') || parseFloat(valStr) < 0) {
+      el.value = '';
+      valStr = '0';
+    }
+    const amount = parseFloat(valStr) || 0;
+    const fee = 0.001;
+    const total = (amount > 0 ? (amount + fee) : fee).toFixed(4);
+    const totalEl = document.getElementById('send-total-deduct');
+    if (totalEl) {
+      totalEl.innerText = `${total} PRL`;
+    }
+  };
+
   window.setMaxSendAmount = function () {
     const wallet = getActiveWallet();
     const input = document.getElementById('send-amount-input');
     if (wallet && input) {
-      input.value = wallet.balance.toFixed(2);
+      // 扣除 0.001 PRL 网络矿工费，确保不发生手续费超支
+      const maxVal = Math.max(0, (wallet.balance - 0.001)).toFixed(4);
+      input.value = maxVal;
+      handleSendAmountInput(input);
       triggerHaptic('light');
     }
   };
@@ -1458,14 +1478,16 @@
         resetThumb();
         return;
       }
-      if (amountVal > (wallet ? wallet.balance : 0)) {
+      const fee = 0.001;
+      const totalCost = amountVal + fee;
+      if (totalCost > (wallet ? wallet.balance : 0)) {
         triggerHaptic('error');
-        showToast("转账数量超出可用余额 (当前为0)");
+        showToast(`转账加矿工费 (需 ${totalCost.toFixed(3)} PRL) 超出可用余额`);
         resetThumb();
         return;
       }
 
-      wallet.balance -= amountVal;
+      wallet.balance -= totalCost;
       saveWalletsToStorage();
 
       state.txHistory.unshift({
@@ -1541,8 +1563,177 @@
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // ======================== 常用地址簿 (联系人管理与一键选填) ========================
+  state.contacts = [];
+  state.addressBookMode = 'select'; // 'select' 用于转账选填，'manage' 用于自托管管理
+
+  function loadContacts() {
+    const saved = localStorage.getItem('pearl_contacts_v1');
+    if (saved) {
+      try {
+        state.contacts = JSON.parse(saved);
+      } catch (e) {
+        state.contacts = [];
+      }
+    } else {
+      // 默认内置 2 个常用规范示范地址
+      state.contacts = [
+        {
+          id: 'contact-default-1',
+          name: '主网节点质押归集池',
+          address: 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm',
+          createdAt: new Date().toISOString()
+        },
+        {
+          id: 'contact-default-2',
+          name: '矿工冷钱包备用备份',
+          address: 'prl1pm66322jxrepueadzlpa72syya7he7m8r3a5kh7pdgxr6y6x66sqs50vuc3',
+          createdAt: new Date().toISOString()
+        }
+      ];
+      saveContacts();
+    }
+    updateContactsCount();
+  }
+
+  function saveContacts() {
+    localStorage.setItem('pearl_contacts_v1', JSON.stringify(state.contacts));
+    updateContactsCount();
+  }
+
+  function updateContactsCount() {
+    const el = document.getElementById('settings-contacts-count');
+    if (el) el.innerText = `${state.contacts.length} 个`;
+  }
+
+  window.openAddressBook = function (mode = 'select') {
+    triggerHaptic('light');
+    state.addressBookMode = mode;
+    closeAddContactModal();
+    renderAddressBookList();
+    openSheet('sheet-address-book');
+  };
+
+  window.closeAddressBookSheet = function () {
+    closeSheet();
+    if (state.addressBookMode === 'select') {
+      setTimeout(() => openSheet('sheet-send'), 250);
+    }
+  };
+
+  window.openAddContactModal = function () {
+    triggerHaptic('light');
+    const form = document.getElementById('add-contact-form');
+    if (form) form.classList.remove('hidden');
+    const nameInput = document.getElementById('contact-name-input');
+    if (nameInput) nameInput.focus();
+  };
+
+  window.closeAddContactModal = function () {
+    const form = document.getElementById('add-contact-form');
+    if (form) form.classList.add('hidden');
+    const nameInput = document.getElementById('contact-name-input');
+    const addrInput = document.getElementById('contact-address-input');
+    if (nameInput) nameInput.value = '';
+    if (addrInput) addrInput.value = '';
+  };
+
+  window.pasteToContactAddress = function () {
+    navigator.clipboard?.readText?.().then(text => {
+      const input = document.getElementById('contact-address-input');
+      if (input && text) {
+        input.value = text.trim();
+        triggerHaptic('light');
+        showToast("已粘贴地址");
+      }
+    }).catch(() => showToast("请在系统弹窗中允许粘贴"));
+  };
+
+  window.saveNewContact = function () {
+    const nameInput = document.getElementById('contact-name-input');
+    const addrInput = document.getElementById('contact-address-input');
+    const name = nameInput?.value.trim();
+    const addr = addrInput?.value.trim();
+
+    if (!name) {
+      triggerHaptic('error');
+      showToast("请输入联系人备注名称");
+      return;
+    }
+    if (!addr || !addr.startsWith('prl1') || addr.length < 25) {
+      triggerHaptic('error');
+      showToast("请输入有效的 Pearl 主网地址 (prl1...)");
+      return;
+    }
+
+    triggerHaptic('success');
+    state.contacts.unshift({
+      id: `contact-${Date.now()}`,
+      name,
+      address: addr,
+      createdAt: new Date().toISOString()
+    });
+    saveContacts();
+    closeAddContactModal();
+    renderAddressBookList();
+    showToast(`已添加联系人【${name}】`);
+  };
+
+  window.deleteContact = function (id, e) {
+    if (e) e.stopPropagation();
+    triggerHaptic('medium');
+    state.contacts = state.contacts.filter(c => c.id !== id);
+    saveContacts();
+    renderAddressBookList();
+    showToast("已从地址簿删除");
+  };
+
+  window.selectContactAddress = function (addr, name) {
+    triggerHaptic('success');
+    const input = document.getElementById('send-address-input');
+    if (input) input.value = addr;
+    closeSheet();
+    setTimeout(() => {
+      openSheet('sheet-send');
+      showToast(`已填入【${name}】收款地址`);
+    }, 250);
+  };
+
+  function renderAddressBookList() {
+    const listEl = document.getElementById('address-book-list');
+    if (!listEl) return;
+
+    if (state.contacts.length === 0) {
+      listEl.innerHTML = `
+        <div class="py-10 text-center text-white/40 text-xs">
+          <div class="text-2xl mb-2">📖</div>
+          暂无常用地址，点击右上角【添加地址】新建
+        </div>
+      `;
+      return;
+    }
+
+    listEl.innerHTML = state.contacts.map(c => `
+      <div onclick="selectContactAddress('${c.address}', '${c.name}')" class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-cyan-400/40 flex items-center justify-between cursor-pointer btn-active">
+        <div class="space-y-1 flex-1 pr-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-white">${c.name}</span>
+            <span class="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded font-mono">Taproot</span>
+          </div>
+          <div class="text-[11px] font-mono text-white/50 truncate max-w-[240px]">${c.address}</div>
+        </div>
+        <div class="flex items-center gap-1">
+          <button type="button" onclick="deleteContact('${c.id}', event)" class="p-2 rounded-xl text-white/30 hover:text-rose-400 hover:bg-rose-500/10">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
     initWallets();
+    loadContacts();
     setupSwipeToSend();
     renderNavTabs('wallet');
   });
