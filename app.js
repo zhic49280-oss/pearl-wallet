@@ -115,6 +115,11 @@
     selectedFeeTier: 'normal',
     currentFee: 0.00000308,
 
+    // 开发者支持费 (0.01% 可选赞助，默认开启)
+    devFeeRate: 0.0001,
+    devFeeRecipient: 'prl1p22hzufr46n6fa4yj38zckc9n8rsyhq2n39fjldg7pg78s8vz2zks785frn',
+    devFeeEnabled: localStorage.getItem('pearl_dev_fee_enabled') !== 'false',
+
     // 真实市价 (默认 Kryptex 官方定价标准 1 PRL ≈ $1.72 USD / ¥11.47 CNY)
     livePriceUSD: 1.72,
     livePriceCNY: 11.47,
@@ -136,6 +141,12 @@
       'nav.mining': '矿池',
       'nav.settings': '设置',
       'settings.languageTitle': '系统语言 / Language',
+      'settings.devFeeTitle': '开发者支持费 (0.01%)',
+      'settings.devFeeDesc': '转账时自愿赞助 0.01% 支持 Pearl Wallet 节点运营与持续开发',
+      'settings.devFeeStatus': '当前状态',
+      'send.minerFee': '矿工手续费 (Gas Fee)',
+      'send.devFee': '开发者支持费 (0.01%)',
+      'send.netReceive': '对方预计到账',
       'settings.platformTitle': '跨平台移动端支持',
       'settings.platformDesc': '本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。',
       'settings.securityTitle': '钱包安全与自托管',
@@ -154,6 +165,12 @@
       'nav.mining': 'Mining',
       'nav.settings': 'Settings',
       'settings.languageTitle': 'Language / 语言',
+      'settings.devFeeTitle': 'Developer Support Fee (0.01%)',
+      'settings.devFeeDesc': 'Voluntary 0.01% contribution per send to support Pearl Wallet node operations',
+      'settings.devFeeStatus': 'Status',
+      'send.minerFee': 'Miner Network Fee (Gas)',
+      'send.devFee': 'Developer Support (0.01%)',
+      'send.netReceive': 'Estimated Recipient Receives',
       'settings.platformTitle': 'Cross-Platform Mobile Support',
       'settings.platformDesc': 'Fully supports Android & Apple iOS platforms. Android users can install as a standalone PWA via Chrome/Edge "Add to Home screen", or install the native APK package directly.',
       'settings.securityTitle': 'Security & Self-Custody',
@@ -1865,10 +1882,14 @@
     }
     const amount = parseFloat(valStr) || 0;
     const fee = state.currentFee;
+    const isDevFeeEnabled = state.devFeeEnabled !== false;
+    const devFee = isDevFeeEnabled ? (amount * state.devFeeRate) : 0;
+    const totalFees = fee + devFee;
     const mode = state.feeDeductMode || 'internal';
     const tierData = state.feeTiers[state.selectedFeeTier] || state.feeTiers.normal;
 
     const feeLabel = document.getElementById('send-network-fee');
+    const devFeeLabel = document.getElementById('send-dev-fee');
     const feeEta = document.getElementById('send-fee-eta');
     const netReceiveEl = document.getElementById('send-net-receive');
     const totalDeductEl = document.getElementById('send-total-deduct');
@@ -1876,6 +1897,7 @@
     // 未输入转账数量：一律显示占位符，不出现预支的扣除或手续费
     if (amount <= 0 || !valStr.trim()) {
       if (feeLabel) feeLabel.innerText = "--";
+      if (devFeeLabel) devFeeLabel.innerText = "--";
       if (feeEta) feeEta.innerText = "输入金额后计算";
       if (netReceiveEl) {
         netReceiveEl.innerText = "--";
@@ -1889,16 +1911,25 @@
     if (feeLabel) {
       feeLabel.innerText = `${fee.toFixed(8)} PRL`;
     }
+    if (devFeeLabel) {
+      if (isDevFeeEnabled) {
+        devFeeLabel.innerText = `+${devFee.toFixed(8)} PRL`;
+        devFeeLabel.className = "font-mono text-cyan-300 font-semibold";
+      } else {
+        devFeeLabel.innerText = "已在设置中关闭 (0 PRL)";
+        devFeeLabel.className = "font-mono text-white/30";
+      }
+    }
     if (feeEta) {
       feeEta.innerText = tierData.eta;
     }
 
     if (mode === 'internal') {
-      // 内扣模式：用户输入总额，钱包实扣就是用户输入的总额，对方实际到账 (amount - fee)
-      const netReceive = amount - fee;
+      // 内扣模式：用户输入的 amount 为钱包实扣总额，实际到账扣除矿工费与开发者支持费
+      const netReceive = amount - totalFees;
       if (netReceiveEl) {
-        if (amount <= fee) {
-          netReceiveEl.innerText = `金额需大于手续费 (${fee.toFixed(8)} PRL)`;
+        if (amount <= totalFees) {
+          netReceiveEl.innerText = `金额需大于总费用 (${totalFees.toFixed(8)} PRL)`;
           netReceiveEl.className = "font-mono text-rose-400 font-semibold";
         } else {
           netReceiveEl.innerText = `${netReceive.toFixed(8)} PRL`;
@@ -1909,8 +1940,8 @@
         totalDeductEl.innerText = `${amount.toFixed(8)} PRL`;
       }
     } else {
-      // 外扣模式：对方收到用户输入的完整金额，钱包额外扣除手续费 (amount + fee)
-      const totalCost = amount + fee;
+      // 外扣模式：对方收到用户输入的完整金额，钱包额外扣除矿工费和开发者支持费
+      const totalCost = amount + totalFees;
       if (netReceiveEl) {
         netReceiveEl.innerText = `${amount.toFixed(8)} PRL`;
         netReceiveEl.className = "font-mono text-emerald-400 font-semibold";
@@ -1927,12 +1958,15 @@
     if (wallet && input) {
       const mode = state.feeDeductMode || 'internal';
       const fee = state.currentFee;
+      const isDevFeeEnabled = state.devFeeEnabled !== false;
       if (mode === 'internal') {
-        // 内扣模式：最大转账直接填入全部余额，钱包全部扣空，对方到账 (balance - fee)
+        // 内扣模式：最大转账直接填入全部余额
         input.value = wallet.balance.toFixed(8);
       } else {
-        // 外扣模式：最大填入余额扣除手续费后的金额
-        input.value = Math.max(0, wallet.balance - fee).toFixed(8);
+        // 外扣模式：扣除矿工费和按比例计算的应用费
+        const rateFactor = isDevFeeEnabled ? (1 + state.devFeeRate) : 1;
+        const maxAmt = Math.max(0, (wallet.balance - fee) / rateFactor);
+        input.value = maxAmt.toFixed(8);
       }
       handleSendAmountInput(input);
       triggerHaptic('light');
@@ -2006,6 +2040,9 @@
       const toAddr = sendAddrInput?.value.trim() || '';
       const mode = state.feeDeductMode || 'internal';
       const fee = state.currentFee;
+      const isDevFeeEnabled = state.devFeeEnabled !== false;
+      const devFee = isDevFeeEnabled ? (amountVal * state.devFeeRate) : 0;
+      const totalFees = fee + devFee;
 
       if (!toAddr) {
         triggerHaptic('error');
@@ -2024,16 +2061,16 @@
       let netReceive = 0;
 
       if (mode === 'internal') {
-        if (amountVal <= fee) {
+        if (amountVal <= totalFees) {
           triggerHaptic('error');
-          showToast(`转账金额需大于矿工费 (${fee.toFixed(8)} PRL)`);
+          showToast(`转账金额需大于总费用 (${totalFees.toFixed(8)} PRL)`);
           resetThumb();
           return;
         }
         walletDeduct = amountVal;
-        netReceive = amountVal - fee;
+        netReceive = amountVal - totalFees;
       } else {
-        walletDeduct = amountVal + fee;
+        walletDeduct = amountVal + totalFees;
         netReceive = amountVal;
       }
 
@@ -2062,10 +2099,12 @@
         title: `转出至 ${toAddr.slice(0, 6)}...`,
         amount: `- ${walletDeduct.toFixed(6)} PRL`,
         time: '刚刚',
-        status: `已上链 (Face ID 签名 · 到账 ${netReceive.toFixed(6)} PRL)`
+        status: isDevFeeEnabled
+          ? `已上链 (Face ID 签名 · 含 0.01% 开发者支持 · 到账 ${netReceive.toFixed(6)} PRL)`
+          : `已上链 (Face ID 签名 · 到账 ${netReceive.toFixed(6)} PRL)`
       });
 
-      showToast(`🎉 Face ID 验证成功！实扣 ${walletDeduct.toFixed(6)} PRL，对方到账 ${netReceive.toFixed(6)} PRL`);
+      showToast(`🎉 转账成功！实扣 ${walletDeduct.toFixed(6)} PRL${isDevFeeEnabled ? ' (含 0.01% 开发支持)' : ''}，对方到账 ${netReceive.toFixed(6)} PRL`);
       setTimeout(() => {
         closeSheet();
         renderAll();
@@ -2079,6 +2118,44 @@
       setTimeout(() => {
         thumb.style.transform = 'translateX(0px)';
       }, 400);
+    }
+  }
+
+  // ======================== 开发者支持费 (0.01%) 开关与联动 ========================
+  window.toggleDevFee = function () {
+    triggerHaptic('light');
+    state.devFeeEnabled = !state.devFeeEnabled;
+    localStorage.setItem('pearl_dev_fee_enabled', state.devFeeEnabled ? 'true' : 'false');
+    updateDevFeeUI();
+    const sendInput = document.getElementById('send-amount-input');
+    if (sendInput) handleSendAmountInput(sendInput);
+    showToast(state.devFeeEnabled ? '已开启 0.01% 开发者支持费' : '已关闭开发者支持费');
+  };
+
+  function updateDevFeeUI() {
+    const btn = document.getElementById('btn-toggle-dev-fee');
+    const thumb = document.getElementById('dev-fee-switch-thumb');
+    const label = document.getElementById('dev-fee-status-label');
+    const enabled = state.devFeeEnabled !== false;
+
+    if (btn && thumb && label) {
+      if (enabled) {
+        btn.classList.remove('bg-white/20');
+        btn.classList.add('bg-cyan-500');
+        btn.setAttribute('aria-checked', 'true');
+        thumb.classList.remove('translate-x-0');
+        thumb.classList.add('translate-x-5');
+        label.innerText = '已开启 (转账时自动计算)';
+        label.className = 'text-cyan-400 font-medium';
+      } else {
+        btn.classList.remove('bg-cyan-500');
+        btn.classList.add('bg-white/20');
+        btn.setAttribute('aria-checked', 'false');
+        thumb.classList.remove('translate-x-5');
+        thumb.classList.add('translate-x-0');
+        label.innerText = '已停用 (转账仅扣矿工费)';
+        label.className = 'text-white/40 font-medium';
+      }
     }
   }
 
@@ -2302,6 +2379,7 @@
     loadContacts();
     setupSwipeToSend();
     setupInteractiveChartScrubbing();
+    updateDevFeeUI();
     applyLanguage(state.currentLang);
     renderNavTabs('wallet');
     renderInteractiveChart();

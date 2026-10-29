@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=4.0">
+  <link rel="stylesheet" href="style.css?v=4.1">
   <script>
     tailwind.config = {
       theme: {
@@ -420,6 +420,27 @@
           <button type="button" onclick="setAppLanguage('en')" id="btn-lang-en" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active flex items-center justify-center gap-2 transition-all">
             <span>🇺🇸</span> English
           </button>
+        </div>
+      </div>
+
+      <!-- 开发者支持费设置卡片 (默认开启，可自由切换) -->
+      <div class="ios-glass-card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2.5">
+            <span class="text-base">☕</span>
+            <div>
+              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">开发者支持费 (0.01%)</h3>
+              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">转账时自愿赞助 0.01% 支持 Pearl Wallet 节点运营与持续开发</p>
+            </div>
+          </div>
+          <!-- iOS 风格弹性滑动开关 (默认开) -->
+          <button type="button" id="btn-toggle-dev-fee" onclick="toggleDevFee()" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-cyan-500" role="switch" aria-checked="true">
+            <span id="dev-fee-switch-thumb" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-5"></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between text-[11px] text-white/50 pt-2 border-t border-white/[0.05]">
+          <span data-i18n="settings.devFeeStatus">当前状态</span>
+          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">已开启 (转账时自动计算)</span>
         </div>
       </div>
 
@@ -896,11 +917,18 @@
     <!-- 转账账目明细 (未输入金额时显示占位横线，输入后即时计算) -->
     <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-5 text-xs space-y-2">
       <div class="flex items-center justify-between text-white/60">
-        <span>矿工手续费 (Gas Fee)</span>
+        <span data-i18n="send.minerFee">矿工手续费 (Gas Fee)</span>
         <span id="send-network-fee" class="font-mono text-cyan-300 font-semibold">--</span>
       </div>
+      <div id="send-dev-fee-row" class="flex items-center justify-between text-white/60">
+        <div class="flex items-center gap-1.5">
+          <span data-i18n="send.devFee">开发者支持费 (0.01%)</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">应用费</span>
+        </div>
+        <span id="send-dev-fee" class="font-mono text-cyan-300 font-semibold">--</span>
+      </div>
       <div class="flex items-center justify-between text-white/60">
-        <span>对方预计到账</span>
+        <span data-i18n="send.netReceive">对方预计到账</span>
         <span id="send-net-receive" class="font-mono text-emerald-400 font-semibold">--</span>
       </div>
       <div class="flex items-center justify-between text-white/60">
@@ -979,10 +1007,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=4.0"></script>
+  <script src="bip39-wordlist.js?v=4.1"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=4.0"></script>
+  <script src="qrcode.min.js?v=4.1"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=4.0"></script>
+  <script src="app.js?v=4.1"></script>
 </body>
 </html>
