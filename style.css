@@ -48,7 +48,7 @@ input[type="number"] {
   appearance: textfield !important;
 }
 
-/* 核心视口外层容器：保证底部有足够 150px 滑动安全空间，决不遮挡卡片 */
+/* 核心视口外层容器：针对 iPhone 灵动岛 (Dynamic Island) 与刘海屏提供舒适下移避让 */
 .app-container {
   width: 100%;
   max-width: 28rem;
@@ -58,8 +58,13 @@ input[type="number"] {
   position: relative;
   padding-left: 1rem;
   padding-right: 1rem;
-  padding-top: max(env(safe-area-inset-top), 16px);
+  padding-top: max(calc(env(safe-area-inset-top, 0px) + 14px), 56px) !important;
   padding-bottom: calc(max(env(safe-area-inset-bottom), 24px) + 140px) !important;
+}
+
+/* 顶部通知悬浮 Toast 同样避让灵动岛 */
+#ios-toast {
+  top: max(calc(env(safe-area-inset-top, 0px) + 16px), 60px) !important;
 }
 
 /* 底部悬浮手势胶囊导航专属高亮样式 (硬件级加速，100% 确保任何机型高亮生效) */
