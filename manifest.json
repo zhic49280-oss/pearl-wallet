@@ -1,0 +1,22 @@
+{
+  "short_name": "Pearl",
+  "name": "Pearl Wallet",
+  "description": "专属于你的去中心化 Pearl 珍珠币 iOS 移动轻钱包",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "./index.html",
+  "background_color": "#090A0F",
+  "theme_color": "#090A0F",
+  "display": "standalone",
+  "orientation": "portrait"
+}

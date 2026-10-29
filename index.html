@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full bg-[#07080B]">
+<head>
+  <meta charset="UTF-8">
+  <title>Pearl 珍珠币移动钱包</title>
+  
+  <!-- 现代 iOS Safari / PWA 专属视口与全屏配置 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pearl">
+  <meta name="theme-color" content="#07080B">
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="style.css">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            pearl: {
+              DEFAULT: '#00F0FF',
+              glow: 'rgba(0, 240, 255, 0.15)',
+              dark: '#07080B',
+              card: 'rgba(20, 24, 38, 0.7)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full flex flex-col justify-between selection:bg-cyan-500/30 selection:text-white">
+
+  <!-- 顶部 iOS 灵动悬浮 Toast 通知 -->
+  <div id="ios-toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full ios-glass border border-cyan-400/30 text-xs font-medium text-cyan-200 shadow-2xl transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none flex items-center gap-2">
+    <span>通知内容</span>
+  </div>
+
+  <!-- 外层容器 (最大手机宽度限制在 440px，居中自适应，无论真机还是 PC 预览都完美呈现) -->
+  <div class="w-full max-w-md mx-auto min-h-screen flex flex-col relative px-4 safe-area-top safe-area-bottom pb-28">
+
+    <!-- 顶部状态导航栏 (灵动微胶囊 + 多账户切换) -->
+    <header class="flex items-center justify-between py-3 mb-3">
+      <!-- 左侧：多账户切换入口 -->
+      <div class="flex items-center gap-2.5 btn-active cursor-pointer" onclick="openSheet('sheet-wallet-manager')">
+        <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-400 via-indigo-500 to-purple-500 p-[1.5px] shadow-lg shadow-cyan-500/20">
+          <div class="w-full h-full bg-[#090A10] rounded-full flex items-center justify-center">
+            <span class="text-xs font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-indigo-200">P</span>
+          </div>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span id="header-wallet-name" class="text-xs font-semibold text-white/90">主钱包</span>
+            <svg class="w-3.5 h-3.5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </div>
+          <span id="wallet-address-pill" class="text-[11px] font-mono text-white/40">prl1p...</span>
+        </div>
+      </div>
+
+      <!-- 右侧：网络状态微胶囊 (灵动岛视觉联动，点击调出 RPC 切换) -->
+      <div onclick="openSheet('sheet-rpc-settings')" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-md cursor-pointer btn-active">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="header-node-label" class="text-[11px] font-medium text-white/70">Pearl Mainnet</span>
+      </div>
+    </header>
+
+    <!-- 主视图区 1：钱包主资产界面 (默认) -->
+    <main id="view-wallet" class="flex-1 flex flex-col">
+      <!-- 核心资产卡片 (珍珠虹彩微晕) -->
+      <div class="ios-glass-card rounded-[28px] p-6 mb-5 relative overflow-hidden">
+        <div class="absolute -right-10 -top-10 w-44 h-44 pearl-sheen pointer-events-none rounded-full blur-2xl"></div>
+        
+        <div class="flex items-center justify-between text-xs font-medium text-white/40 mb-2">
+          <span>总资产净值</span>
+          <span id="market-price-tag" class="flex items-center gap-1 text-cyan-400 font-semibold bg-cyan-500/10 px-2.5 py-0.5 rounded-full text-[11px]">
+            <span>1 PRL ≈ $0.0227</span>
+          </span>
+        </div>
+
+        <!-- 主余额大数字展示 -->
+        <div class="flex items-baseline gap-2 mb-1">
+          <span id="wallet-balance" class="text-4xl font-extrabold tracking-tight tabular-numbers text-white">0.00</span>
+          <span class="text-lg font-bold text-cyan-400">PRL</span>
+        </div>
+        <div id="wallet-fiat" class="text-xs text-white/40 font-medium mb-6 tabular-numbers">≈ ¥0.00 CNY ($0.00 USD)</div>
+
+        <!-- 快捷操作胶囊 (转账 / 收款 / 钱包管理 / 助记词安全查看) -->
+        <div class="grid grid-cols-4 gap-2 pt-2 border-t border-white/[0.08]">
+          <!-- 转账 -->
+          <button onclick="openSheet('sheet-send')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-11 h-11 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
+            </div>
+            <span class="text-[11px] font-medium text-white/80">转账</span>
+          </button>
+
+          <!-- 收款 -->
+          <button onclick="openSheet('sheet-receive')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-11 h-11 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+            </div>
+            <span class="text-[11px] font-medium text-white/80">收款</span>
+          </button>
+
+          <!-- 钱包管理 (多钱包添加与删除) -->
+          <button onclick="openSheet('sheet-wallet-manager')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+            </div>
+            <span class="text-[11px] font-medium text-white/80">多钱包</span>
+          </button>
+
+          <!-- 助记词安全备份 (多重提醒验证后才可看) -->
+          <button onclick="startSecureMnemonicFlow()" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+            </div>
+            <span class="text-[11px] font-medium text-white/80">助记词</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 快捷横幅：展示来自 Kryptex API 的真实链上全网数据 -->
+      <div class="p-3.5 mb-5 rounded-2xl bg-gradient-to-r from-cyan-950/30 to-purple-950/30 border border-cyan-500/15 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></div>
+          <div>
+            <div class="text-xs font-semibold text-cyan-200">
+              全网区块高度: <span id="banner-block-height" class="font-mono font-bold">135,232</span>
+            </div>
+            <div class="text-[11px] text-white/40">
+              全网矿工: <span id="banner-active-miners" class="text-white/60 font-semibold">32,111</span> 人 · 块奖励: <span id="banner-block-reward" class="text-cyan-300">2,213 PRL</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="refreshChainData()" class="text-xs text-cyan-400 font-medium px-2.5 py-1 rounded-lg bg-cyan-500/10 btn-active flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          刷新
+        </button>
+      </div>
+
+      <!-- 近期动态与交易列表 -->
+      <div class="flex-1 flex flex-col">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <span class="text-xs font-bold text-white/60 tracking-wider uppercase">活动明细</span>
+          <span onclick="triggerHaptic('light'); refreshChainData();" class="text-xs text-cyan-400 font-medium cursor-pointer">同步链上</span>
+        </div>
+        <div id="tx-list-container" class="space-y-2 overflow-y-auto no-scrollbar flex-1 pb-4">
+          <!-- 动态注入交易 -->
+        </div>
+      </div>
+    </main>
+
+    <!-- 主视图区 2：矿池与 PoUW 真实网络监控 -->
+    <main id="view-mining" class="flex-1 flex flex-col hidden">
+      <div class="ios-glass-card rounded-[28px] p-6 mb-5">
+        <div class="flex items-center justify-between mb-4">
+          <span class="text-xs font-bold text-white/50">Kryptex 官方矿池全网状态</span>
+          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">105,699 矿机在线</span>
+        </div>
+        <div class="text-2xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">38.76 EH/s</div>
+        <div class="text-xs text-white/40 mb-5">全网 PearlHash / PoUW 矩阵算力速率</div>
+
+        <div class="grid grid-cols-2 gap-3 pt-4 border-t border-white/[0.08]">
+          <div class="p-3 rounded-xl bg-white/[0.03]">
+            <div class="text-[11px] text-white/40 mb-1">矿池费率</div>
+            <div class="text-sm font-bold text-cyan-300 tabular-numbers">PPS+ 3% (SOLO 1%)</div>
+          </div>
+          <div class="p-3 rounded-xl bg-white/[0.03]">
+            <div class="text-[11px] text-white/40 mb-1">最低起付</div>
+            <div class="text-sm font-bold text-white/80">1.0 PRL</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 矿池输入查询绑定的矿工钱包 -->
+      <div class="ios-glass-card rounded-2xl p-4 mb-4">
+        <h4 class="text-xs font-bold text-white mb-2">查询我的矿工收益与算力</h4>
+        <div class="flex gap-2">
+          <input id="custom-miner-address" type="text" placeholder="输入 Pearl 矿工收款地址..." class="flex-1 p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+          <button onclick="queryMinerByAddress()" class="px-3.5 py-2.5 rounded-xl bg-cyan-500/10 text-cyan-300 font-bold text-xs btn-active border border-cyan-400/20">查询</button>
+        </div>
+        <div id="miner-query-result" class="hidden mt-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs space-y-1">
+          <!-- 动态展示矿工查询收益 -->
+        </div>
+      </div>
+
+      <div class="p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] text-xs text-white/60 leading-relaxed mb-4">
+        💡 数据源：实时直连 Kryptex Pool REST API（`https://pool.kryptex.com/prl/api/v1/pool/info`）。
+      </div>
+    </main>
+
+    <!-- 主视图区 3：设置与离线说明 -->
+    <main id="view-settings" class="flex-1 flex flex-col hidden space-y-3">
+      <div class="ios-glass-card rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-3">钱包安全与自托管</h3>
+        <div class="space-y-3 text-xs text-white/70">
+          <div class="flex items-center justify-between py-2 border-b border-white/[0.05]">
+            <span>私钥存储方式</span>
+            <span class="text-cyan-400 font-mono">本地设备沙箱加密</span>
+          </div>
+          <div class="flex items-center justify-between py-2 border-b border-white/[0.05]">
+            <span>离线支持 (PWA)</span>
+            <span class="text-emerald-400">Service Worker 已激活</span>
+          </div>
+          <div class="flex items-center justify-between py-2">
+            <span>多钱包支持</span>
+            <span class="text-cyan-300 font-semibold" id="settings-wallets-count">1 个活跃钱包</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 只要手机就能用的离线使用说明 -->
+      <div class="ios-glass-card rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-2">随时随地只要手机就能用？</h3>
+        <p class="text-xs text-white/60 leading-relaxed mb-3">
+          1. <strong>免电脑离线运行</strong>：只要在 Safari 中点击「分享 -> 添加到主屏幕」，Service Worker 已将整个钱包离线持久化在你的 iPhone 中，就算电脑关机或手机无信号，也能随时秒开。<br><br>
+          2. <strong>公网随时访问</strong>：因为钱包完全无中心化服务器，你可以将其一键发布到 Vercel 或 Cloudflare Pages，便能获得专属的 HTTPS 网址，出门在 5G/4G 网络下随时随地使用！
+        </p>
+      </div>
+
+      <!-- 多钱包管理入口 -->
+      <button onclick="openSheet('sheet-wallet-manager')" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-between btn-active text-left">
+        <div>
+          <div class="text-sm font-bold text-white">管理钱包 (添加 / 切换 / 删除)</div>
+          <div class="text-xs text-white/40">多地址自由切换，支持电脑助记词导入</div>
+        </div>
+        <svg class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+      </button>
+
+      <!-- 查看助记词安全入口 (严格多次提醒与 PIN 码) -->
+      <button onclick="startSecureMnemonicFlow()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-amber-500/20 flex items-center justify-between btn-active text-left">
+        <div>
+          <div class="text-sm font-bold text-amber-300">安全查看当前钱包助记词</div>
+          <div class="text-xs text-white/40">需验证 6 位保护密码与环境防窥</div>
+        </div>
+        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+      </button>
+    </main>
+
+    <!-- 底部悬浮手势胶囊导航栏 (完全避开底部指示横条区域) -->
+    <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] max-w-sm ios-glass rounded-full p-1.5 shadow-2xl flex items-center justify-around border border-white/10">
+      <!-- 钱包主页 -->
+      <button id="tab-btn-wallet" onclick="switchTab('wallet')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-cyan-400 btn-active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+        <span class="text-[10px] font-semibold">钱包</span>
+      </button>
+
+      <!-- 矿池行情 -->
+      <button id="tab-btn-mining" onclick="switchTab('mining')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-white/40 hover:text-white/80 btn-active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        <span class="text-[10px] font-semibold">矿池</span>
+      </button>
+
+      <!-- 设置 -->
+      <button id="tab-btn-settings" onclick="switchTab('settings')" class="flex-1 py-2 rounded-full flex flex-col items-center gap-0.5 text-white/40 hover:text-white/80 btn-active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="text-[10px] font-semibold">自托管</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- 全局遮罩层 -->
+  <div id="modal-backdrop" onclick="closeSheet()" class="fixed inset-0 z-50 sheet-backdrop hidden opacity-0"></div>
+
+  <!-- ======================== 抽屉模块集 ======================== -->
+
+  <!-- 抽屉 1：收款 Bottom Sheet (带珍珠二维码与一键复制) -->
+  <div id="sheet-receive" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5"></div>
+    <div class="text-center mb-4">
+      <h3 class="text-base font-bold text-white">接收 Pearl 珍珠币</h3>
+      <p class="text-xs text-white/40 mt-0.5">向下方地址付款以充值到当前钱包</p>
+    </div>
+
+    <!-- 艺术二维码容器 -->
+    <div class="flex justify-center mb-5">
+      <div id="qrcode-canvas-container" class="p-3 bg-[#111422] rounded-3xl border border-cyan-400/20 shadow-xl shadow-cyan-500/10"></div>
+    </div>
+
+    <!-- 完整地址与复制按钮 -->
+    <div class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-5">
+      <div class="text-[10px] text-white/40 mb-1">Pearl Taproot 主网地址</div>
+      <div id="receive-full-address" class="text-xs font-mono text-cyan-200 break-all select-all leading-relaxed"></div>
+    </div>
+
+    <button onclick="copyAddress()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-sm shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+      复制地址
+    </button>
+  </div>
+
+  <!-- 抽屉 2：转账 Bottom Sheet (含 iOS 经典手势滑动确认发送) -->
+  <div id="sheet-send" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5"></div>
+    <div class="text-center mb-5">
+      <h3 class="text-base font-bold text-white">转账 Pearl</h3>
+      <p class="text-xs text-white/40 mt-0.5">本地离线签名，私钥永不上网</p>
+    </div>
+
+    <!-- 接收地址输入框 -->
+    <div class="mb-4">
+      <label class="block text-xs font-medium text-white/60 mb-1.5">收款方地址</label>
+      <div class="relative">
+        <input id="send-address-input" type="text" placeholder="prl1p..." class="w-full p-3.5 pr-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+        <button onclick="pasteToAddress()" class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-cyan-400 font-medium">粘贴</button>
+      </div>
+    </div>
+
+    <!-- 金额输入框 -->
+    <div class="mb-6">
+      <div class="flex items-center justify-between text-xs font-medium text-white/60 mb-1.5">
+        <span>转账数量</span>
+        <span class="text-white/40">可用: <span id="send-available-balance" class="text-cyan-300 font-semibold">0.00 PRL</span></span>
+      </div>
+      <div class="relative">
+        <input id="send-amount-input" type="number" step="0.01" placeholder="0.00" class="w-full p-3.5 pr-20 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-bold tabular-numbers text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+        <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+          <button onclick="setMaxSendAmount()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">最大</button>
+          <span class="text-xs font-bold text-white/60">PRL</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 现代 iOS 滑动确认轨道 (Slide to Confirm) -->
+    <div id="swipe-track" class="relative w-full h-14 rounded-full swipe-track p-1 flex items-center justify-center select-none overflow-hidden">
+      <span class="text-xs font-semibold text-white/40 tracking-wider">右滑以确认转账 &gt;&gt;</span>
+      
+      <!-- 拖拽手柄 -->
+      <div id="swipe-thumb" class="absolute left-1 top-1 bottom-1 w-12 rounded-full bg-gradient-to-r from-cyan-400 to-indigo-500 flex items-center justify-center shadow-lg shadow-cyan-500/30 cursor-pointer">
+        <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 抽屉 3：【多钱包管理】添加钱包、切换钱包、安全删除钱包 -->
+  <div id="sheet-wallet-manager" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    <div class="text-center mb-4">
+      <h3 class="text-base font-bold text-white">多钱包账户管理</h3>
+      <p class="text-xs text-white/40 mt-0.5">独立管理多个助记词账户，支持自由增删与切换</p>
+    </div>
+
+    <!-- 钱包列表动态容器 -->
+    <div id="wallets-list-container" class="space-y-2.5 max-h-60 overflow-y-auto no-scrollbar mb-5">
+      <!-- 动态注入钱包列表项 -->
+    </div>
+
+    <!-- 添加新钱包操作区 -->
+    <div class="grid grid-cols-2 gap-2.5">
+      <button onclick="createNewWalletModal()" class="py-3.5 px-3 rounded-2xl bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 font-bold text-xs btn-active flex items-center justify-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        创建新钱包
+      </button>
+      <button onclick="openImportWalletModal()" class="py-3.5 px-3 rounded-2xl bg-white/[0.05] border border-white/[0.1] text-white font-bold text-xs btn-active flex items-center justify-center gap-1.5">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        导入已有助记词
+      </button>
+    </div>
+  </div>
+
+  <!-- 抽屉 4-A：【助记词安全查看 - 警告与防窥承诺】 -->
+  <div id="sheet-backup-warning" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    
+    <div class="w-14 h-14 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-amber-500/10">
+      <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+    </div>
+
+    <div class="text-center mb-5">
+      <h3 class="text-lg font-bold text-white">安全查看前提示 (1/2)</h3>
+      <p class="text-xs text-white/50 mt-1">助记词是资产的唯一凭证，绝不可向任何人出示</p>
+    </div>
+
+    <!-- 强制安全勾选承诺 -->
+    <div class="space-y-3 mb-6">
+      <label class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] cursor-pointer">
+        <input id="chk-backup-warn-1" type="checkbox" onchange="checkBackupConditions()" class="mt-0.5 rounded border-white/20 text-cyan-400 focus:ring-0">
+        <div class="text-xs text-white/80">
+          <span class="font-semibold text-white">我周围没有摄像头，也没有任何人在旁窥</span>
+          <div class="text-[11px] text-white/40 mt-0.5">任何人一旦获取你的 12 个单词，便能直接转走该钱包资产。</div>
+        </div>
+      </label>
+
+      <label class="flex items-start gap-3 p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] cursor-pointer">
+        <input id="chk-backup-warn-2" type="checkbox" onchange="checkBackupConditions()" class="mt-0.5 rounded border-white/20 text-cyan-400 focus:ring-0">
+        <div class="text-xs text-white/80">
+          <span class="font-semibold text-white">我绝不截屏、录屏或将其发送到聊天软件</span>
+          <div class="text-[11px] text-white/40 mt-0.5">请准备好纸和笔，离线手工抄写并在安全地点物理保存。</div>
+        </div>
+      </label>
+    </div>
+
+    <div class="flex gap-3">
+      <button onclick="closeSheet()" class="flex-1 py-3.5 rounded-2xl bg-white/[0.06] text-white/60 font-semibold text-xs btn-active">
+        放弃查看
+      </button>
+      <button id="btn-proceed-backup" disabled onclick="showBackupPinStep()" class="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-xs btn-active opacity-40 cursor-not-allowed">
+        我已知晓，继续验证
+      </button>
+    </div>
+  </div>
+
+  <!-- 抽屉 4-B：【助记词安全查看 - 6位数字 PIN 码安全解锁】 -->
+  <div id="sheet-backup-pin" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    <div class="text-center mb-6">
+      <h3 class="text-base font-bold text-white">输入钱包解锁密码 (2/2)</h3>
+      <p class="text-xs text-white/40 mt-0.5">初始默认密码为 <span class="font-mono text-cyan-300">123456</span></p>
+    </div>
+
+    <div class="flex justify-center gap-3 mb-8">
+      <div id="pin-dot-1" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+      <div id="pin-dot-2" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+      <div id="pin-dot-3" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+      <div id="pin-dot-4" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+      <div id="pin-dot-5" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+      <div id="pin-dot-6" class="w-3.5 h-3.5 rounded-full border border-white/30 transition-all"></div>
+    </div>
+
+    <!-- 九宫格数字键盘 -->
+    <div class="grid grid-cols-3 gap-3 max-w-xs mx-auto mb-4">
+      <button onclick="pressPinKey('1')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">1</button>
+      <button onclick="pressPinKey('2')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">2</button>
+      <button onclick="pressPinKey('3')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">3</button>
+      <button onclick="pressPinKey('4')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">4</button>
+      <button onclick="pressPinKey('5')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">5</button>
+      <button onclick="pressPinKey('6')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">6</button>
+      <button onclick="pressPinKey('7')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">7</button>
+      <button onclick="pressPinKey('8')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">8</button>
+      <button onclick="pressPinKey('9')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">9</button>
+      <button onclick="closeSheet()" class="py-3 text-xs font-semibold text-white/40 btn-active">取消</button>
+      <button onclick="pressPinKey('0')" class="py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.1] text-lg font-bold text-white btn-active">0</button>
+      <button onclick="pressPinKey('delete')" class="py-3 flex items-center justify-center text-white/50 btn-active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414-6.414A2 2 0 0110.828 5H19a2 2 0 012 2v10a2 2 0 01-2 2h-8.172a2 2 0 01-1.414-.586L3 12z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 抽屉 4-C：【助记词安全展示】带 45s 自动锁闭与防窥遮罩 -->
+  <div id="sheet-backup-display" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-3"></div>
+    
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h3 class="text-base font-bold text-white">助记词安全明文</h3>
+        <p class="text-[11px] text-emerald-400 mt-0.5">安全保护: <span id="auto-lock-countdown" class="font-mono font-bold">45s</span> 后自动锁闭</p>
+      </div>
+      <button onclick="toggleWordsBlur()" id="btn-toggle-blur" class="px-3 py-1.5 rounded-xl bg-white/[0.06] text-xs text-white/70 font-medium btn-active">
+        隐藏明文
+      </button>
+    </div>
+
+    <!-- 12 词网格 -->
+    <div id="mnemonic-words-container" class="relative mb-4">
+      <div id="mnemonic-words-grid" class="grid grid-cols-3 gap-2 transition-all duration-300">
+        <!-- 动态注入 12 词 -->
+      </div>
+    </div>
+
+    <!-- 私钥 Hex 提取折叠项 -->
+    <div class="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-5">
+      <div class="flex items-center justify-between cursor-pointer" onclick="togglePrivateHex()">
+        <span class="text-xs font-semibold text-white/70">Taproot 派生私钥 (Hex)</span>
+        <span id="label-hex-status" class="text-[11px] text-cyan-400">点击显露</span>
+      </div>
+      <div id="box-private-hex" class="hidden mt-2 pt-2 border-t border-white/[0.05]">
+        <div id="display-private-hex" class="text-[11px] font-mono text-cyan-200/90 break-all select-all"></div>
+      </div>
+    </div>
+
+    <button onclick="closeSheet()" class="w-full py-3.5 rounded-2xl bg-white/[0.08] text-white font-bold text-xs btn-active">
+      完成并安全锁定
+    </button>
+  </div>
+
+  <!-- 抽屉 5：导入已有助记词 -->
+  <div id="sheet-import-wallet" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    <div class="text-center mb-4">
+      <h3 class="text-base font-bold text-white">导入已有助记词</h3>
+      <p class="text-xs text-white/40 mt-0.5">将你在电脑客户端上已有的 12 位助记词同步到手机</p>
+    </div>
+
+    <div class="mb-3">
+      <label class="block text-xs text-white/60 mb-1">钱包备注名称</label>
+      <input id="import-wallet-name" type="text" placeholder="例如: 电脑挖矿主钱包" class="w-full p-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+    </div>
+
+    <div class="mb-4">
+      <label class="block text-xs text-white/60 mb-1">12 位英文助记词</label>
+      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: abandon ability able about above absent absorb abstract absurd abuse access accident" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <div class="text-[11px] text-white/40 mt-1">每个单词用英文空格隔开。</div>
+    </div>
+
+    <button onclick="executeImportWallet()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-bold text-xs btn-active mb-2.5">
+      验证并添加到我的钱包列表
+    </button>
+    <button onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/50 text-xs btn-active">
+      取消
+    </button>
+  </div>
+
+  <!-- 抽屉 6：创建新钱包命名确认 -->
+  <div id="sheet-create-wallet" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    <div class="text-center mb-4">
+      <h3 class="text-base font-bold text-white">添加新 Pearl 钱包</h3>
+      <p class="text-xs text-white/40 mt-0.5">将在设备本地随机生成独立的全新 12 词助记词</p>
+    </div>
+
+    <div class="mb-5">
+      <label class="block text-xs text-white/60 mb-1.5">钱包名称</label>
+      <input id="create-wallet-name" type="text" placeholder="例如: 冷钱包-02" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+    </div>
+
+    <button onclick="executeCreateNewWallet()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs btn-active mb-2.5">
+      立即生成新钱包
+    </button>
+    <button onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/50 text-xs btn-active">
+      取消
+    </button>
+  </div>
+
+  <!-- 抽屉 7：RPC 节点连接设置 -->
+  <div id="sheet-rpc-settings" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
+    <div class="text-center mb-4">
+      <h3 class="text-base font-bold text-white">RPC 节点与主网连接</h3>
+      <p class="text-xs text-white/40 mt-0.5">轻钱包直接请求公共节点广播，手机无需运行全节点</p>
+    </div>
+
+    <div class="space-y-2 mb-5">
+      <div onclick="selectRpc('https://rpc.pearl.org', '官方公共节点 (Mainnet)')" class="p-3.5 rounded-2xl bg-white/[0.03] border border-cyan-400/30 flex items-center justify-between cursor-pointer btn-active">
+        <div>
+          <div class="text-xs font-semibold text-white">官方公共节点 (Mainnet)</div>
+          <div class="text-[11px] font-mono text-white/40">https://rpc.pearl.org</div>
+        </div>
+        <span class="text-xs font-bold text-emerald-400">已连接</span>
+      </div>
+
+      <div onclick="selectRpc('https://pool.kryptex.com/prl', 'Kryptex 矿池公共节点')" class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between cursor-pointer btn-active">
+        <div>
+          <div class="text-xs font-semibold text-white">Kryptex 矿池公共节点</div>
+          <div class="text-[11px] font-mono text-white/40">https://pool.kryptex.com/prl</div>
+        </div>
+        <span class="text-xs font-bold text-cyan-400">活跃</span>
+      </div>
+    </div>
+
+    <button onclick="closeSheet()" class="w-full py-3.5 rounded-2xl bg-white/[0.08] text-white font-bold text-xs btn-active">
+      保存配置
+    </button>
+  </div>
+
+  <!-- 注册 Service Worker (实现 iPhone 离线持久化与脱机使用) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then((reg) => {
+          console.log('[PWA] Service Worker 注册成功:', reg.scope);
+        }).catch((err) => {
+          console.warn('[PWA] Service Worker 注册跳过:', err);
+        });
+      });
+    }
+  </script>
+
+  <!-- 业务核心脚本 -->
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --pearl-primary: #00F0FF;
+  --pearl-glow: rgba(0, 240, 255, 0.15);
+  --pearl-accent: #8A2BE2;
+  --pearl-iridescent: linear-gradient(135deg, #E0F7FA 0%, #E8EAF6 50%, #F3E5F5 100%);
+  --safe-top: env(safe-area-inset-top, 20px);
+  --safe-bottom: env(safe-area-inset-bottom, 20px);
+}
+
+/* 现代 iOS 原生 App 触控和视区重置 */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+  background-color: #07080B;
+  color: #F3F4F6;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 等宽数字排版，避免余额跳动 */
+.tabular-numbers {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* 苹果级高品质微晶毛玻璃 */
+.ios-glass {
+  background: rgba(18, 20, 29, 0.72);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ios-glass-card {
+  background: linear-gradient(145deg, rgba(26, 29, 44, 0.6) 0%, rgba(13, 15, 24, 0.8) 100%);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+/* 珍珠真彩微晕光 */
+.pearl-sheen {
+  background: radial-gradient(circle at 50% 0%, rgba(0, 240, 255, 0.18) 0%, rgba(138, 43, 226, 0.08) 45%, transparent 70%);
+}
+
+.pearl-tag {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.12) 0%, rgba(147, 51, 234, 0.12) 100%);
+  border: 1px solid rgba(0, 240, 255, 0.25);
+}
+
+/* iOS 弹性动效曲线 */
+.ios-spring {
+  transition: all 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.btn-active:active {
+  transform: scale(0.96);
+  opacity: 0.88;
+}
+
+/* 现代 iOS 手势抽屉 Bottom Sheet */
+.sheet-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.3s ease;
+}
+
+.bottom-sheet {
+  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  border-top-left-radius: 28px;
+  border-top-right-radius: 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 底部安全区与灵动岛顶留白 */
+.safe-area-top {
+  padding-top: max(env(safe-area-inset-top), 16px);
+}
+
+.safe-area-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 18px);
+}
+
+/* iOS 滚动条隐藏与流畅惯性滑动 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 滑动确认发送轨道动效 */
+.swipe-track {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
