@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="h-full bg-[#07080B]">
+<html lang="zh-CN" class="min-h-full bg-[#07080B]">
 <head>
   <meta charset="UTF-8">
   <title>Pearl 珍珠币移动钱包</title>
@@ -32,15 +32,15 @@
     }
   </script>
 </head>
-<body class="h-full flex flex-col justify-between selection:bg-cyan-500/30 selection:text-white">
+<body class="min-h-full bg-[#07080B] text-white flex flex-col selection:bg-cyan-500/30 selection:text-white overflow-y-auto">
 
   <!-- 顶部 iOS 灵动悬浮 Toast 通知 -->
   <div id="ios-toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full ios-glass border border-cyan-400/30 text-xs font-medium text-cyan-200 shadow-2xl transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none flex items-center gap-2">
     <span>通知内容</span>
   </div>
 
-  <!-- 外层容器 -->
-  <div class="w-full max-w-md mx-auto min-h-screen flex flex-col relative px-4 safe-area-top safe-area-bottom pb-28">
+  <!-- 外层容器 (留足底部滑动空间，确保内容绝不被底部导航胶囊遮挡) -->
+  <div class="w-full max-w-md mx-auto min-h-screen flex flex-col relative px-4 safe-area-top safe-area-bottom pb-48">
 
     <!-- 顶部状态导航栏 -->
     <header class="flex items-center justify-between py-3 mb-3">
@@ -394,18 +394,19 @@
   <div id="sheet-create-confirm" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom">
     <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4"></div>
     <div class="text-center mb-4">
-      <span class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">步骤 3 / 3 · 核验</span>
-      <h3 class="text-base font-bold text-white mt-1.5">核验助记词备份</h3>
-      <p class="text-xs text-white/40 mt-0.5">请核对刚才抄写的助记词，以确保备份准确无误</p>
+      <span class="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">步骤 3 / 3 · 真实核验</span>
+      <h3 class="text-base font-bold text-white mt-1.5">核验手写助记词</h3>
+      <p class="text-xs text-white/40 mt-0.5">请根据刚才手写抄录的助记词，点选以下对应序号</p>
     </div>
 
-    <div id="create-verify-question-box" class="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] mb-4 space-y-3">
-      <!-- 动态核对问题 -->
+    <!-- 真实交互选择核验区 (杜绝任何直接显示答案的假核验) -->
+    <div id="create-verify-question-box" class="space-y-3.5 mb-4">
+      <!-- 动态注入选择题 -->
     </div>
 
     <div class="p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-5">
       <label class="flex items-start gap-2.5 cursor-pointer">
-        <input type="checkbox" id="chk-confirm-backup-done" onchange="toggleConfirmDoneButton()" class="mt-0.5 rounded border-white/20 bg-white/5 text-cyan-400 focus:ring-0">
+        <input type="checkbox" id="chk-confirm-backup-done" onchange="checkVerifyCompletion()" class="mt-0.5 rounded border-white/20 bg-white/5 text-cyan-400 focus:ring-0">
         <span class="text-xs text-white/70 leading-relaxed">
           我确认已用纸笔完整抄写 12 个助记词并存放在安全私密处，我清楚知晓丢失助记词将永久损失资产。
         </span>
@@ -413,7 +414,7 @@
     </div>
 
     <button id="btn-finish-create-wallet" onclick="finalizeWalletCreation()" disabled class="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-sm shadow-xl shadow-cyan-500/20 btn-active opacity-40 cursor-not-allowed mb-3">
-      完成创建并进入钱包
+      完成核验并进入钱包
     </button>
   </div>
 

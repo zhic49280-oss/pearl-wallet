@@ -703,7 +703,7 @@
     });
   };
 
-  // 步骤 2 ➔ 步骤 3：用户抄写完毕，前往核验
+  // 步骤 2 ➔ 步骤 3：进入真实防伪核验（随机生成 2 道选择题，用户必须亲自点选正确单词）
   window.proceedToCreateConfirm = function () {
     if (!state.pendingWallet) return;
     triggerHaptic('light');
@@ -719,21 +719,65 @@
     }
 
     const words = state.pendingWallet.mnemonic;
+    const wordlist = (window.BIP39_WORDLIST && window.BIP39_WORDLIST.length >= 2048) ? window.BIP39_WORDLIST : BIP39_WORDS_FALLBACK;
+
+    // 随机挑选前部与后部两个不同的助记词序号 (如第 2~5 词 和 第 7~11 词)
+    const idx1 = Math.floor(Math.random() * 4) + 1; // 1 ~ 4 (对应第 2 ~ 5 词)
+    const idx2 = Math.floor(Math.random() * 4) + 6; // 6 ~ 9 (对应第 7 ~ 10 词)
+
+    const correct1 = words[idx1];
+    const correct2 = words[idx2];
+
+    // 生成混淆项
+    function generateChoices(correctWord) {
+      const choices = [correctWord];
+      while (choices.length < 4) {
+        const randWord = wordlist[Math.floor(Math.random() * wordlist.length)];
+        if (!choices.includes(randWord) && !words.includes(randWord)) {
+          choices.push(randWord);
+        }
+      }
+      return choices.sort(() => Math.random() - 0.5);
+    }
+
+    const choices1 = generateChoices(correct1);
+    const choices2 = generateChoices(correct2);
+
+    state.verifyStep = {
+      q1: { pos: idx1 + 1, correct: correct1, selected: null, done: false },
+      q2: { pos: idx2 + 1, correct: correct2, selected: null, done: false }
+    };
+
     if (box) {
       box.innerHTML = `
-        <div class="text-xs font-semibold text-white/90 mb-1">助记词快照核验：</div>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-            <span class="text-white/40 text-[11px]">第 1 个单词:</span>
-            <span class="text-cyan-300 font-mono font-bold ml-1">${words[0]}</span>
+        <!-- 题目 1 -->
+        <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-xs font-semibold text-white">1. 请点选手写记录的第 <span class="text-cyan-300 font-bold font-mono text-sm">#${state.verifyStep.q1.pos}</span> 个单词：</span>
+            <span id="q1-badge" class="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-full">待选择</span>
           </div>
-          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-            <span class="text-white/40 text-[11px]">第 12 个单词:</span>
-            <span class="text-cyan-300 font-mono font-bold ml-1">${words[11]}</span>
+          <div class="grid grid-cols-2 gap-2" id="q1-btn-group">
+            ${choices1.map(w => `
+              <button type="button" onclick="handleVerifyChoice(1, '${w}')" id="btn-verify-1-${w}" class="py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white hover:border-cyan-400 btn-active text-center">
+                ${w}
+              </button>
+            `).join('')}
           </div>
         </div>
-        <div class="text-[11px] text-white/40 mt-1">
-          已派生主网 Taproot 地址: <span class="font-mono text-cyan-200">${state.pendingWallet.address.slice(0, 10)}...${state.pendingWallet.address.slice(-6)}</span>
+
+        <!-- 题目 2 -->
+        <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-xs font-semibold text-white">2. 请点选手写记录的第 <span class="text-cyan-300 font-bold font-mono text-sm">#${state.verifyStep.q2.pos}</span> 个单词：</span>
+            <span id="q2-badge" class="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-full">待选择</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2" id="q2-btn-group">
+            ${choices2.map(w => `
+              <button type="button" onclick="handleVerifyChoice(2, '${w}')" id="btn-verify-2-${w}" class="py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white hover:border-cyan-400 btn-active text-center">
+                ${w}
+              </button>
+            `).join('')}
+          </div>
         </div>
       `;
     }
@@ -741,18 +785,70 @@
     openSheet('sheet-create-confirm');
   };
 
-  window.toggleConfirmDoneButton = function () {
+  // 用户点击核验选项
+  window.handleVerifyChoice = function (qNum, selectedWord) {
+    const q = state.verifyStep ? state.verifyStep['q' + qNum] : null;
+    if (!q) return;
+
+    const badge = document.getElementById(`q${qNum}-badge`);
+    const btn = document.getElementById(`btn-verify-${qNum}-${selectedWord}`);
+
+    if (selectedWord === q.correct) {
+      triggerHaptic('success');
+      q.selected = selectedWord;
+      q.done = true;
+
+      // 锁定该题目选项
+      document.querySelectorAll(`#q${qNum}-btn-group button`).forEach(b => {
+        b.disabled = true;
+        b.className = "py-2.5 px-2 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-white/20 text-center";
+      });
+
+      if (btn) {
+        btn.disabled = false;
+        btn.className = "py-2.5 px-2 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-bold text-xs font-mono text-center shadow-lg shadow-emerald-500/20";
+      }
+
+      if (badge) {
+        badge.innerText = "正确 ✓";
+        badge.className = "text-[10px] text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full font-bold";
+      }
+
+      checkVerifyCompletion();
+    } else {
+      triggerHaptic('error');
+      if (btn) {
+        btn.className = "py-2.5 px-2 rounded-xl bg-rose-500/20 border border-rose-400 text-rose-300 font-bold text-xs font-mono text-center";
+        setTimeout(() => {
+          btn.className = "py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white text-center";
+        }, 700);
+      }
+      if (badge) {
+        badge.innerText = "错误 ✗";
+        badge.className = "text-[10px] text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full font-bold";
+      }
+      showToast(`⚠️ 答案错误！与手抄第 #${q.pos} 个单词不符，请核对`);
+    }
+  };
+
+  // 检查是否已完成全部核验与勾选
+  window.checkVerifyCompletion = function () {
+    const q1Done = state.verifyStep?.q1?.done;
+    const q2Done = state.verifyStep?.q2?.done;
     const chk = document.getElementById('chk-confirm-backup-done');
     const btn = document.getElementById('btn-finish-create-wallet');
-    if (!btn) return;
 
-    if (chk && chk.checked) {
-      triggerHaptic('light');
-      btn.disabled = false;
-      btn.classList.remove('opacity-40', 'cursor-not-allowed');
+    if (q1Done && q2Done && chk && chk.checked) {
+      triggerHaptic('success');
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove('opacity-40', 'cursor-not-allowed');
+      }
     } else {
-      btn.disabled = true;
-      btn.classList.add('opacity-40', 'cursor-not-allowed');
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add('opacity-40', 'cursor-not-allowed');
+      }
     }
   };
 
@@ -1317,6 +1413,25 @@
     showToast(`已连接至: ${label}`);
   };
 
+  // 底部导航栏高亮动态刷新 (消除模糊不更新的问题)
+  function renderNavTabs(activeTab) {
+    const tabs = [
+      { id: 'wallet', el: document.getElementById('tab-btn-wallet') },
+      { id: 'mining', el: document.getElementById('tab-btn-mining') },
+      { id: 'settings', el: document.getElementById('tab-btn-settings') }
+    ];
+
+    tabs.forEach(({ id, el }) => {
+      if (!el) return;
+      const isActive = (id === activeTab);
+      if (isActive) {
+        el.className = "flex-1 py-2.5 rounded-full flex flex-col items-center gap-0.5 text-cyan-300 font-bold bg-cyan-500/20 border border-cyan-400/40 shadow-lg shadow-cyan-500/20 transition-all btn-active";
+      } else {
+        el.className = "flex-1 py-2.5 rounded-full flex flex-col items-center gap-0.5 text-white/40 font-medium hover:text-white/80 transition-all btn-active border border-transparent";
+      }
+    });
+  }
+
   window.switchTab = function (tab) {
     triggerHaptic('light');
     const viewWallet = document.getElementById('view-wallet');
@@ -1324,12 +1439,7 @@
     const viewSettings = document.getElementById('view-settings');
     const viewOnboarding = document.getElementById('view-onboarding');
 
-    const tabWallet = document.getElementById('tab-btn-wallet');
-    const tabMining = document.getElementById('tab-btn-mining');
-    const tabSettings = document.getElementById('tab-btn-settings');
-
     [viewWallet, viewMining, viewSettings, viewOnboarding].forEach(v => v?.classList.add('hidden'));
-    [tabWallet, tabMining, tabSettings].forEach(t => t?.classList.remove('text-cyan-400'));
 
     if (tab === 'wallet') {
       if (state.wallets.length === 0) {
@@ -1337,19 +1447,20 @@
       } else {
         viewWallet?.classList.remove('hidden');
       }
-      tabWallet?.classList.add('text-cyan-400');
     } else if (tab === 'mining') {
       viewMining?.classList.remove('hidden');
-      tabMining?.classList.add('text-cyan-400');
     } else if (tab === 'settings') {
       viewSettings?.classList.remove('hidden');
-      tabSettings?.classList.add('text-cyan-400');
     }
+
+    renderNavTabs(tab);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   window.addEventListener('DOMContentLoaded', () => {
     initWallets();
     setupSwipeToSend();
+    renderNavTabs('wallet');
   });
 
 })();
