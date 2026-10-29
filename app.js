@@ -1479,6 +1479,22 @@
 
   window.showBackupPinStep = function () {
     triggerHaptic('light');
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const titleEl = document.getElementById('verify-auth-title');
+    const labelEl = document.getElementById('verify-auth-btn-label');
+    const reasonEl = document.getElementById('verify-auth-reason');
+
+    if (titleEl) {
+      titleEl.innerText = isIOS ? "Apple Face ID 面容认证" : (isAndroid ? "安卓生物识别 (指纹 / 面部)" : "安全身份验证");
+    }
+    if (labelEl) {
+      labelEl.innerText = isIOS ? "立即唤起 Face ID 扫描" : (isAndroid ? "验证指纹以确认" : "点击确认放行");
+    }
+    if (reasonEl) {
+      reasonEl.innerText = isIOS ? "请验证面容以确认签名操作" : "请验证指纹或面容以确认操作";
+    }
+
     state.enteredPin = "";
     updateVerifyPinDots();
     openSheet('sheet-verify-auth');
@@ -1560,13 +1576,14 @@
     return true;
   };
 
-  // 唤起 Apple 官方 Face ID / 触控 ID / 通行密钥 (WebAuthn 平台认证规范)
+  // 唤起原生生物识别 (Face ID / 指纹) 或网页免扰确认
   window.authenticateWithFaceID = async function () {
     triggerHaptic('medium');
-    const passed = await requestBiometricAuth("请验证 Face ID 以解锁查看助记词");
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const passed = await requestBiometricAuth("请验证身份以解锁查看助记词");
     if (passed) {
       triggerHaptic('success');
-      showToast("🎉 Face ID 验证成功");
+      showToast(isIOS ? "🎉 Face ID 验证成功" : "🎉 身份认证成功");
       revealMnemonicDisplaySheet();
     }
   };

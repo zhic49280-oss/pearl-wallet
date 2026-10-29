@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=3.9">
+  <link rel="stylesheet" href="style.css?v=4.0">
   <script>
     tailwind.config = {
       theme: {
@@ -423,34 +423,22 @@
         </div>
       </div>
 
-      <!-- 移动系统跨端支持 (iOS / Android 双端原生适配) -->
+      <!-- 安卓客户端 APK 下载专区 -->
       <div class="ios-glass-card rounded-2xl p-4">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
-            <span class="text-base">📱</span>
-            <h3 class="text-sm font-bold text-white" data-i18n="settings.platformTitle">跨平台移动端支持</h3>
-          </div>
-          <span class="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">iOS &amp; Android</span>
-        </div>
-        <p class="text-xs text-white/50 leading-relaxed mb-3" data-i18n="settings.platformDesc">
-          本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。
-        </p>
-        <div class="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
-          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center gap-2">
             <span class="text-base">🤖</span>
-            <div>
-              <div class="text-white/80 font-bold">Android 安卓</div>
-              <div class="text-emerald-400 text-[10px]">APK / PWA 离线运行</div>
-            </div>
+            <h3 class="text-sm font-bold text-white">安卓客户端 (Android APK)</h3>
           </div>
-          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center gap-2">
-            <span class="text-base">🍎</span>
-            <div>
-              <div class="text-white/80 font-bold">Apple iOS</div>
-              <div class="text-cyan-300 text-[10px]">PWA / IPA 原生运行</div>
-            </div>
-          </div>
+          <span class="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">原生运行</span>
         </div>
+        <p class="text-xs text-white/50 leading-relaxed mb-3">
+          安卓手机用户推荐下载官方原生 APK 安装包，支持硬件级防截屏保护与指纹/人脸极速解锁。
+        </p>
+        <a href="https://github.com/zhic49280-oss/pearl-wallet/actions" target="_blank" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-bold text-xs flex items-center justify-center gap-2 btn-active shadow-lg shadow-emerald-500/15">
+          <svg class="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          下载官方安卓 APK 安装包 ↗
+        </a>
       </div>
 
       <div class="ios-glass-card rounded-2xl p-4">
@@ -654,15 +642,15 @@
       <div class="w-14 h-14 rounded-3xl bg-cyan-500/10 border border-cyan-400/30 text-cyan-300 flex items-center justify-center mx-auto mb-3 shadow-xl shadow-cyan-500/20">
         <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h.01M15 9h.01M9 15c.5 1 2 1.5 3 1.5s2.5-.5 3-1.5"/></svg>
       </div>
-      <h3 class="text-base font-bold text-white">Apple Face ID 认证</h3>
-      <p id="verify-auth-reason" class="text-xs text-white/50 mt-1">请验证面容以确认签名操作</p>
+      <h3 id="verify-auth-title" class="text-base font-bold text-white">安全身份认证</h3>
+      <p id="verify-auth-reason" class="text-xs text-white/50 mt-1">验证 Face ID / 指纹以确认操作</p>
     </div>
 
-    <!-- Face ID 触发生物识别 -->
+    <!-- 触发生物识别 / 确认 -->
     <div class="mb-5">
       <button onclick="authenticateWithFaceID()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-sm shadow-xl shadow-cyan-500/20 btn-active flex items-center justify-center gap-2">
         <svg class="w-5 h-5 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h.01M15 9h.01M9 15c.5 1 2 1.5 3 1.5s2.5-.5 3-1.5"/></svg>
-        立即唤起 Face ID 扫描
+        <span id="verify-auth-btn-label">立即确认</span>
       </button>
       <button onclick="closeSheet()" class="w-full py-3 text-xs text-white/40 btn-active mt-2">
         取消
@@ -986,10 +974,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=3.9"></script>
+  <script src="bip39-wordlist.js?v=4.0"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=3.9"></script>
+  <script src="qrcode.min.js?v=4.0"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=3.9"></script>
+  <script src="app.js?v=4.0"></script>
 </body>
 </html>
