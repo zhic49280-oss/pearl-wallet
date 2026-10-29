@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=3.8">
+  <link rel="stylesheet" href="style.css?v=3.9">
   <script>
     tailwind.config = {
       theme: {
@@ -34,8 +34,8 @@
 </head>
 <body class="min-h-full bg-[#07080B] text-white flex flex-col selection:bg-cyan-500/30 selection:text-white overflow-y-auto">
 
-  <!-- 顶部 iOS 灵动悬浮 Toast 通知 -->
-  <div id="ios-toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full ios-glass border border-cyan-400/30 text-xs font-medium text-cyan-200 shadow-2xl transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none flex items-center gap-2">
+  <!-- 顶部 iOS 灵动悬浮 Toast 通知 (最高层级 z-[100] 确保决不被抽屉遮挡) -->
+  <div id="ios-toast" class="fixed left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-full ios-glass border border-cyan-400/30 text-xs font-medium text-cyan-200 shadow-2xl transition-all duration-300 opacity-0 -translate-y-4 pointer-events-none flex items-center gap-2">
     <span>通知内容</span>
   </div>
 
@@ -75,7 +75,7 @@
         </div>
       </div>
 
-      <h2 class="text-xl font-bold text-white mb-2">Pearl 珍珠币官方移动轻钱包</h2>
+      <h2 class="text-xl font-bold text-white mb-2">Pearl 珍珠币移动轻钱包</h2>
       <p class="text-xs text-white/50 leading-relaxed mb-8 max-w-xs">
         当前设备尚未绑定任何钱包。<br>请选择以下真实方式开始：
       </p>
@@ -404,8 +404,57 @@
 
     <!-- 主视图区 3：设置与自托管说明 -->
     <main id="view-settings" class="flex-1 flex flex-col hidden space-y-3">
+      <!-- 语言设置卡片 (默认简体中文，支持英文切换) -->
       <div class="ios-glass-card rounded-2xl p-4">
-        <h3 class="text-sm font-bold text-white mb-3">钱包安全与自托管</h3>
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🌐</span>
+            <h3 class="text-sm font-bold text-white" data-i18n="settings.languageTitle">系统语言 / Language</h3>
+          </div>
+          <span id="current-lang-pill" class="text-[10px] text-cyan-300 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-full">简体中文</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="setAppLanguage('zh')" id="btn-lang-zh" class="py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active flex items-center justify-center gap-2 transition-all">
+            <span>🇨🇳</span> 简体中文 (默认)
+          </button>
+          <button type="button" onclick="setAppLanguage('en')" id="btn-lang-en" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active flex items-center justify-center gap-2 transition-all">
+            <span>🇺🇸</span> English
+          </button>
+        </div>
+      </div>
+
+      <!-- 移动系统跨端支持 (iOS / Android 双端原生适配) -->
+      <div class="ios-glass-card rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="text-base">📱</span>
+            <h3 class="text-sm font-bold text-white" data-i18n="settings.platformTitle">跨平台移动端支持</h3>
+          </div>
+          <span class="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full">iOS &amp; Android</span>
+        </div>
+        <p class="text-xs text-white/50 leading-relaxed mb-3" data-i18n="settings.platformDesc">
+          本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。
+        </p>
+        <div class="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
+          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center gap-2">
+            <span class="text-base">🤖</span>
+            <div>
+              <div class="text-white/80 font-bold">Android 安卓</div>
+              <div class="text-emerald-400 text-[10px]">APK / PWA 离线运行</div>
+            </div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center gap-2">
+            <span class="text-base">🍎</span>
+            <div>
+              <div class="text-white/80 font-bold">Apple iOS</div>
+              <div class="text-cyan-300 text-[10px]">PWA / IPA 原生运行</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ios-glass-card rounded-2xl p-4">
+        <h3 class="text-sm font-bold text-white mb-3" data-i18n="settings.securityTitle">钱包安全与自托管</h3>
         <div class="space-y-3 text-xs text-white/70">
           <div class="flex items-center justify-between py-2 border-b border-white/[0.05]">
             <span>安全认证</span>
@@ -689,18 +738,13 @@
     </div>
 
     <div class="mb-3">
-      <label class="block text-xs text-white/60 mb-1">钱包备注名称</label>
-      <input id="import-wallet-name" type="text" placeholder="例如: 电脑官方主钱包" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
-    </div>
-
-    <div class="mb-3">
-      <label class="block text-xs text-white/60 mb-1">助记词 (英文空格或换行隔开)</label>
-      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: lottery girl rain peasant fold ankle combine quote supply source can season..." class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <label class="block text-xs text-white/60 mb-1" data-i18n="import.nameLabel">钱包备注名称</label>
+      <input id="import-wallet-name" type="text" placeholder="例如: 我的 Pearl 主钱包" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
     </div>
 
     <div class="mb-4">
-      <label class="block text-xs text-white/60 mb-1">设定 6 位解锁密码 (选填，留空默认为 123456)</label>
-      <input id="import-wallet-pin" type="password" maxlength="6" inputmode="numeric" placeholder="选填：默认 123456 (可自定)" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-center text-xs font-bold tracking-widest text-cyan-300 focus:outline-none focus:border-cyan-400">
+      <label class="block text-xs text-white/60 mb-1" data-i18n="import.wordsLabel">助记词 (英文空格隔开)</label>
+      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: lottery girl rain peasant fold ankle combine quote supply source can season..." class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
     </div>
 
     <!-- 显式错误提示区 (让用户第一时间看清任何格式问题，绝不静默拦截) -->
@@ -942,10 +986,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=3.8"></script>
+  <script src="bip39-wordlist.js?v=3.9"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=3.8"></script>
+  <script src="qrcode.min.js?v=3.9"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=3.8"></script>
+  <script src="app.js?v=3.9"></script>
 </body>
 </html>

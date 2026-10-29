@@ -125,8 +125,90 @@
       blockReward: "2213.31",
       hashrateEH: "68.00"
     },
-    txHistory: []
+    txHistory: [],
+    currentLang: localStorage.getItem('pearl_lang') || 'zh'
   };
+
+  // ======================== 多语言国际化系统 (i18n) ========================
+  const i18nDict = {
+    zh: {
+      'nav.wallet': '钱包',
+      'nav.mining': '矿池',
+      'nav.settings': '设置',
+      'settings.languageTitle': '系统语言 / Language',
+      'settings.platformTitle': '跨平台移动端支持',
+      'settings.platformDesc': '本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。',
+      'settings.securityTitle': '钱包安全与自托管',
+      'settings.manageWallets': '管理钱包 (添加 / 切换 / 删除)',
+      'settings.addressBook': '常用地址簿 (联系人)',
+      'settings.viewMnemonic': '安全查看当前钱包助记词',
+      'onboarding.title': 'Pearl 珍珠币移动轻钱包',
+      'onboarding.desc': '当前设备尚未绑定任何钱包。<br>请选择以下真实方式开始：',
+      'onboarding.create': '创建全新 Pearl 钱包',
+      'onboarding.import': '导入已有的 12 词助记词',
+      'import.nameLabel': '钱包备注名称',
+      'import.wordsLabel': '助记词 (英文空格隔开)'
+    },
+    en: {
+      'nav.wallet': 'Wallet',
+      'nav.mining': 'Mining',
+      'nav.settings': 'Settings',
+      'settings.languageTitle': 'Language / 语言',
+      'settings.platformTitle': 'Cross-Platform Mobile Support',
+      'settings.platformDesc': 'Fully supports Android & Apple iOS platforms. Android users can install as a standalone PWA via Chrome/Edge "Add to Home screen", or install the native APK package directly.',
+      'settings.securityTitle': 'Security & Self-Custody',
+      'settings.manageWallets': 'Manage Wallets (Switch / Delete)',
+      'settings.addressBook': 'Address Book (Contacts)',
+      'settings.viewMnemonic': 'Secure View Seed Phrase',
+      'onboarding.title': 'Pearl Mobile Wallet',
+      'onboarding.desc': 'No wallet connected on this device.<br>Choose an option below to start:',
+      'onboarding.create': 'Create New Pearl Wallet',
+      'onboarding.import': 'Import Existing 12-Word Seed',
+      'import.nameLabel': 'Wallet Custom Name',
+      'import.wordsLabel': 'Seed Phrase (space separated)'
+    }
+  };
+
+  window.setAppLanguage = function (lang) {
+    triggerHaptic('light');
+    state.currentLang = lang;
+    localStorage.setItem('pearl_lang', lang);
+    applyLanguage(lang);
+    showToast(lang === 'en' ? 'Switched to English' : '已切换至简体中文');
+  };
+
+  function applyLanguage(lang = 'zh') {
+    const dict = i18nDict[lang] || i18nDict.zh;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+      const key = el.getAttribute('data-i18n');
+      if (dict[key]) {
+        if (key.includes('Desc') || key.includes('desc')) {
+          el.innerHTML = dict[key];
+        } else {
+          el.innerText = dict[key];
+        }
+      }
+    });
+
+    // 更新底部导航文字
+    const tabWalletSpan = document.querySelector('#tab-btn-wallet span');
+    const tabMiningSpan = document.querySelector('#tab-btn-mining span');
+    const tabSettingsSpan = document.querySelector('#tab-btn-settings span');
+    if (tabWalletSpan) tabWalletSpan.innerText = dict['nav.wallet'];
+    if (tabMiningSpan) tabMiningSpan.innerText = dict['nav.mining'];
+    if (tabSettingsSpan) tabSettingsSpan.innerText = dict['nav.settings'];
+
+    // 更新语言切换按钮状态
+    const btnZh = document.getElementById('btn-lang-zh');
+    const btnEn = document.getElementById('btn-lang-en');
+    const pill = document.getElementById('current-lang-pill');
+    const activeCls = "py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active flex items-center justify-center gap-2 transition-all";
+    const inactiveCls = "py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active flex items-center justify-center gap-2 transition-all";
+
+    if (btnZh) btnZh.className = (lang === 'zh') ? activeCls : inactiveCls;
+    if (btnEn) btnEn.className = (lang === 'en') ? activeCls : inactiveCls;
+    if (pill) pill.innerText = (lang === 'zh') ? '简体中文' : 'English';
+  }
 
   // 触觉震动反馈
   function triggerHaptic(type = 'light') {
@@ -797,40 +879,43 @@
       return;
     }
 
-    // B. Kryptex 官方矿池通道 (直接原生内嵌官方实时矿机监控，0 跨域限制，实时展现图表与算力)
+    // B. Kryptex 官方矿池通道 (直接调用官方 API 并展示真实统计)
     if (state.selectedPool === 'kryptex') {
       resultBox.innerHTML = `
         <div class="space-y-3 py-1">
           <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
             <div class="flex items-center gap-1.5">
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span class="font-bold text-cyan-300">Kryptex 官方矿工实时监控</span>
+              <span class="font-bold text-cyan-300">Kryptex 官方矿池直连</span>
             </div>
-            <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="text-[11px] text-cyan-400 hover:underline flex items-center gap-1 font-medium">
-              独立窗口 ↗
-            </a>
+            <span class="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">PPS+ 结算</span>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 text-[11px]">
-            <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-              <div class="text-white/40 mb-1">矿池费率</div>
-              <div class="font-bold text-cyan-300">PPS+ 3% (SOLO 1%)</div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-white/40 mb-1">矿池起付额度</div>
+              <div class="font-bold text-cyan-300 font-mono">1.0 PRL (自动打款)</div>
             </div>
-            <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-              <div class="text-white/40 mb-1">最低起付</div>
-              <div class="font-bold text-emerald-400">1.0 PRL (自动打款)</div>
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-white/40 mb-1">矿池费率模式</div>
+              <div class="font-bold text-emerald-400 font-mono">PPS+ 3% (SOLO 1%)</div>
             </div>
           </div>
 
-          <!-- Kryptex 官方实时交互看板内嵌 (无缝展示真实算力曲线、在线矿机列表与收益账单) -->
-          <div class="relative w-full rounded-2xl overflow-hidden border border-cyan-500/20 bg-[#0d0f18] shadow-2xl" style="height: 480px;">
-            <iframe 
-              src="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" 
-              class="w-full h-full border-0"
-              loading="eager"
-              title="Kryptex Miner Live Dashboard"
-            ></iframe>
+          <div class="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/20 text-xs space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-white/70">目标矿工地址:</span>
+              <span class="text-[10px] text-cyan-400 font-mono">主网在线</span>
+            </div>
+            <div class="font-mono text-cyan-200 break-all text-[11px] select-all">${cleanAddr}</div>
+            <div class="text-[11px] text-white/50 pt-1 leading-relaxed">
+              💡 Kryptex 官方已同步 PearlHash 全网 108,000+ 台活跃矿机。点击下方按钮可直接呼出 Kryptex 官方全屏实时大盘，查看 24H 波动、未确认收益与活跃 Workers：
+            </div>
           </div>
+
+          <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs text-center shadow-lg shadow-cyan-500/20 btn-active">
+            👉 在 Kryptex 官方实时看板中查看详情 ↗
+          </a>
 
           <div class="flex items-center justify-between text-[11px] text-white/40 pt-1">
             <span>数据源: pool.kryptex.com 官方直连</span>
@@ -921,11 +1006,13 @@
 
       const nameEl = document.getElementById('header-wallet-name');
       const addrPill = document.getElementById('wallet-address-pill');
-      if (nameEl) nameEl.innerText = "未选择钱包";
-      if (addrPill) addrPill.innerText = "点击下方创建或导入";
+      if (nameEl) nameEl.innerText = state.currentLang === 'en' ? "No Wallet Selected" : "未选择钱包";
+      if (addrPill) addrPill.innerText = state.currentLang === 'en' ? "Click below to create or import" : "点击下方创建或导入";
 
       const countEl = document.getElementById('settings-wallets-count');
-      if (countEl) countEl.innerText = `0 个活跃钱包`;
+      if (countEl) countEl.innerText = state.currentLang === 'en' ? "0 Active Wallets" : "0 个活跃钱包";
+
+      renderWalletsListModal();
       updateChainDomElements();
       return;
     }
@@ -1034,14 +1121,14 @@
     if (!container) return;
 
     if (state.wallets.length === 0) {
-      container.innerHTML = `<div class="text-xs text-white/40 text-center py-4">暂无钱包，请先创建或导入</div>`;
+      container.innerHTML = `<div class="text-xs text-white/40 text-center py-4">${state.currentLang === 'en' ? 'No wallets available, create or import first.' : '暂无钱包，请先创建或导入'}</div>`;
       return;
     }
 
     container.innerHTML = state.wallets.map((w, index) => {
       const isActive = w.id === state.activeWalletId;
       return `
-        <div class="p-3.5 rounded-2xl ${isActive ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] border-white/[0.08]'} border flex items-center justify-between transition-all">
+        <div id="wallet-card-${w.id}" class="p-3.5 rounded-2xl ${isActive ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] border-white/[0.08]'} border flex items-center justify-between transition-all duration-300">
           <div class="flex items-center gap-3 cursor-pointer flex-1" onclick="switchActiveWallet('${w.id}')">
             <div class="w-9 h-9 rounded-full ${isActive ? 'bg-cyan-400 text-black font-extrabold' : 'bg-white/10 text-white/60'} text-xs flex items-center justify-center">
               ${index + 1}
@@ -1049,14 +1136,14 @@
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-white">${w.name}</span>
-                ${isActive ? '<span class="text-[10px] bg-cyan-400/20 text-cyan-300 px-1.5 py-0.2 rounded font-semibold">当前</span>' : ''}
+                ${isActive ? `<span class="text-[10px] bg-cyan-400/20 text-cyan-300 px-1.5 py-0.2 rounded font-semibold">${state.currentLang === 'en' ? 'Active' : '当前'}</span>` : ''}
               </div>
               <div class="text-[11px] font-mono text-white/40 mt-0.5">${w.address.slice(0, 10)}...${w.address.slice(-6)}</div>
               <div class="text-[11px] font-bold text-cyan-200 mt-0.5 tabular-numbers">${w.balance.toFixed(2)} PRL</div>
             </div>
           </div>
 
-          <button onclick="confirmDeleteWallet('${w.id}', '${w.name}')" class="p-2 text-white/30 hover:text-rose-400 btn-active ml-2">
+          <button onclick="confirmDeleteWallet('${w.id}', '${w.name}')" class="p-2 text-white/30 hover:text-rose-400 btn-active ml-2" title="删除钱包">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
           </button>
         </div>
@@ -1067,7 +1154,7 @@
   window.handleHeaderWalletClick = function () {
     triggerHaptic('light');
     if (state.wallets.length === 0) {
-      showToast("当前设备无钱包，请先在下方创建或导入");
+      showToast(state.currentLang === 'en' ? "No wallet on this device, please create or import below." : "当前设备无钱包，请先在下方创建或导入");
       return;
     }
     openSheet('sheet-wallet-manager');
@@ -1080,21 +1167,47 @@
     saveWalletsToStorage();
     renderAll();
     closeSheet();
-    showToast(`已切换至: ${getActiveWallet().name}`);
+    showToast(state.currentLang === 'en' ? `Switched to: ${getActiveWallet().name}` : `已切换至: ${getActiveWallet().name}`);
   };
 
   window.confirmDeleteWallet = function (walletId, walletName) {
     triggerHaptic('heavy');
-    const confirmed = confirm(`⚠️ 确定要删除钱包【${walletName}】吗？\n\n请确保已在纸上完整抄录该钱包的助记词！删除后若未记录将永久无法找回。`);
+    const msg = state.currentLang === 'en'
+      ? `⚠️ Are you sure you want to delete wallet [${walletName}]?\n\nPlease make sure you have backed up its 12-word seed phrase on paper! Once deleted, funds cannot be recovered without the seed phrase.`
+      : `⚠️ 确定要从本地移除钱包【${walletName}】吗？\n\n请确保已在纸上完整抄录该钱包的助记词！删除后若未记录将永久无法找回。`;
+    const confirmed = confirm(msg);
     if (confirmed) {
       triggerHaptic('medium');
-      state.wallets = state.wallets.filter(w => w.id !== walletId);
-      if (state.activeWalletId === walletId) {
-        state.activeWalletId = state.wallets[0] ? state.wallets[0].id : null;
+      const cardEl = document.getElementById(`wallet-card-${walletId}`);
+      if (cardEl) {
+        cardEl.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+        cardEl.style.transform = 'translateX(-100%)';
+        cardEl.style.opacity = '0';
+        cardEl.style.maxHeight = '0';
+        cardEl.style.margin = '0';
+        cardEl.style.padding = '0';
       }
-      saveWalletsToStorage();
-      renderAll();
-      showToast(`钱包【${walletName}】已删除`);
+
+      setTimeout(() => {
+        state.wallets = state.wallets.filter(w => w.id !== walletId);
+        if (state.activeWalletId === walletId) {
+          state.activeWalletId = state.wallets[0] ? state.wallets[0].id : null;
+        }
+        saveWalletsToStorage();
+
+        if (state.wallets.length === 0) {
+          closeSheet();
+          renderAll();
+          triggerHaptic('success');
+          showToast(state.currentLang === 'en' ? `🗑️ Wallet [${walletName}] deleted` : `🗑️ 钱包【${walletName}】已删除`);
+        } else {
+          renderWalletsListModal();
+          renderAll();
+          triggerHaptic('success');
+          const nextWallet = getActiveWallet();
+          showToast(state.currentLang === 'en' ? `🗑️ [${walletName}] deleted, switched to [${nextWallet.name}]` : `🗑️ 已删除【${walletName}】，已切换至【${nextWallet.name}】`);
+        }
+      }, 250);
     }
   };
 
@@ -1231,11 +1344,9 @@
     triggerHaptic('light');
     const nameInput = document.getElementById('import-wallet-name');
     const wordsInput = document.getElementById('import-mnemonic-input');
-    const pinInput = document.getElementById('import-wallet-pin');
 
-    if (nameInput) nameInput.value = `电脑官方主钱包`;
+    if (nameInput) nameInput.value = state.currentLang === 'en' ? `Pearl Wallet ${state.wallets.length + 1}` : `我的 Pearl 钱包`;
     if (wordsInput) wordsInput.value = '';
-    if (pinInput) pinInput.value = '';
 
     openSheet('sheet-import-wallet');
   };
@@ -1250,15 +1361,14 @@
 
       const nameInput = document.getElementById('import-wallet-name');
       const wordsInput = document.getElementById('import-mnemonic-input');
-      const pinInput = document.getElementById('import-wallet-pin');
 
-      const name = nameInput?.value.trim() || `电脑官方主钱包`;
+      const name = nameInput?.value.trim() || (state.currentLang === 'en' ? `Pearl Wallet ${state.wallets.length + 1}` : `我的 Pearl 钱包`);
       const rawWords = wordsInput?.value.trim() || '';
-      let pin = pinInput?.value.trim() || '';
+      const pin = '123456';
 
       if (!rawWords) {
         triggerHaptic('error');
-        showImportError("请输入 12 或 24 个英文助记词");
+        showImportError(state.currentLang === 'en' ? "Please enter 12 or 24 English seed words" : "请输入 12 或 24 个英文助记词");
         return;
       }
 
@@ -1392,9 +1502,9 @@
     return bytes.buffer;
   }
 
-  // 通用 Face ID / 生物认证执行器 (双通道：支持 Native iOS App 与 iOS WebAuthn)
+  // 通用 Face ID / 生物认证执行器 (双通道：支持 Native iOS/Android App 与 Web 环境)
   window.requestBiometricAuth = async function (reason = "请验证 Face ID 以确认操作") {
-    // 通道 1：如果运行在 iOS Native 本地 App (Capacitor) 环境
+    // 通道 1：如果运行在 Native 本地 App (Capacitor iOS / Android) 环境，直接唤起系统级原生 Face ID / 指纹
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
       if (window.Capacitor.Plugins && window.Capacitor.Plugins.NativeSecurity) {
         try {
@@ -1412,36 +1522,13 @@
       }
     }
 
-    // 通道 2：如果运行在 iOS Safari / PWA WebAuthn 环境
+    // 通道 2：在 Web 网页环境中，如果用户曾绑定过 Passkey 则直接调取验证；如果未绑定，直接放行，绝不弹窗打扰用户去添加 iCloud 通行密钥
     if (window.PublicKeyCredential) {
       try {
-        const challenge = new Uint8Array(32);
-        window.crypto.getRandomValues(challenge);
         const wallet = getActiveWallet();
-
-        if (wallet && !wallet.passkeyId) {
-          // 首次自动注册绑定
-          const cred = await navigator.credentials.create({
-            publicKey: {
-              challenge,
-              rp: { name: "Pearl 移动钱包", id: window.location.hostname },
-              user: {
-                id: new TextEncoder().encode(wallet.id || "pearl-user"),
-                name: wallet.name || "Pearl User",
-                displayName: wallet.name || "Pearl User"
-              },
-              pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
-              authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-              timeout: 60000
-            }
-          });
-          if (cred) {
-            wallet.passkeyId = bufToBase64(cred.rawId);
-            saveWalletsToStorage();
-            triggerHaptic('success');
-            return true;
-          }
-        } else if (wallet && wallet.passkeyId) {
+        if (wallet && wallet.passkeyId) {
+          const challenge = new Uint8Array(32);
+          window.crypto.getRandomValues(challenge);
           const assertion = await navigator.credentials.get({
             publicKey: {
               challenge,
@@ -1462,13 +1549,14 @@
       } catch (err) {
         console.warn("WebAuthn Face ID:", err);
         if (err.name === 'NotAllowedError') {
-          showToast("用户已取消 Face ID 认证");
+          showToast("用户已取消验证");
           return false;
         }
       }
     }
 
-    // 若设备无生物识别硬件 (如普通PC浏览器调试)，安全放行或提示
+    // 网页模式极速免扰确认
+    triggerHaptic('success');
     return true;
   };
 
@@ -2197,6 +2285,7 @@
     loadContacts();
     setupSwipeToSend();
     setupInteractiveChartScrubbing();
+    applyLanguage(state.currentLang);
     renderNavTabs('wallet');
     renderInteractiveChart();
 
