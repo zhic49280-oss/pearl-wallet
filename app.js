@@ -273,6 +273,117 @@
     }
   };
 
+  // 全网算力历史趋势数据与平滑 SVG 曲线引擎
+  const hashrateHistoryData = {
+    '24h': {
+      change: '+8.42% (24H)',
+      min: '61.20 EH/s',
+      avg: '65.18 EH/s',
+      max: '69.45 EH/s',
+      points: [
+        { time: '00:00', val: 61.2 }, { time: '02:00', val: 62.1 },
+        { time: '04:00', val: 63.5 }, { time: '06:00', val: 62.8 },
+        { time: '08:00', val: 64.2 }, { time: '10:00', val: 65.0 },
+        { time: '12:00', val: 66.3 }, { time: '14:00', val: 65.8 },
+        { time: '16:00', val: 67.2 }, { time: '18:00', val: 66.9 },
+        { time: '20:00', val: 68.5 }, { time: '22:00', val: 67.8 },
+        { time: '现在', val: 68.0 }
+      ]
+    },
+    '7d': {
+      change: '+14.65% (7D)',
+      min: '55.30 EH/s',
+      avg: '62.40 EH/s',
+      max: '69.45 EH/s',
+      points: [
+        { time: '10-23', val: 55.3 }, { time: '10-24', val: 57.8 },
+        { time: '10-25', val: 60.1 }, { time: '10-26', val: 62.4 },
+        { time: '10-27', val: 63.9 }, { time: '10-28', val: 66.5 },
+        { time: '今天', val: 68.0 }
+      ]
+    },
+    '30d': {
+      change: '+38.20% (30D)',
+      min: '42.10 EH/s',
+      avg: '56.80 EH/s',
+      max: '69.45 EH/s',
+      points: [
+        { time: '09-30', val: 42.1 }, { time: '10-05', val: 47.5 },
+        { time: '10-10', val: 52.0 }, { time: '10-15', val: 58.4 },
+        { time: '10-20', val: 61.2 }, { time: '10-25', val: 65.0 },
+        { time: '今天', val: 68.0 }
+      ]
+    }
+  };
+
+  window.switchHashrateRange = function (range) {
+    triggerHaptic('light');
+    ['24h', '7d', '30d'].forEach(r => {
+      const btn = document.getElementById(`btn-hashrate-${r}`);
+      if (btn) {
+        if (r === range) {
+          btn.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 transition-all";
+        } else {
+          btn.className = "px-2 py-0.5 rounded text-[10px] font-medium text-white/50 transition-all";
+        }
+      }
+    });
+
+    renderHashrateChart(range);
+  };
+
+  function renderHashrateChart(range = '24h') {
+    const data = hashrateHistoryData[range] || hashrateHistoryData['24h'];
+    const minEl = document.getElementById('chart-min-val');
+    const avgEl = document.getElementById('chart-avg-val');
+    const maxEl = document.getElementById('chart-max-val');
+    const changeEl = document.getElementById('chart-change-rate');
+    const hoverVal = document.getElementById('chart-hover-val');
+    const hoverTime = document.getElementById('chart-hover-time');
+
+    if (minEl) minEl.innerText = `最低: ${data.min}`;
+    if (avgEl) avgEl.innerText = `平均: ${data.avg}`;
+    if (maxEl) maxEl.innerText = `最高: ${data.max}`;
+    if (changeEl) changeEl.innerText = data.change;
+    if (hoverVal) hoverVal.innerText = `${state.chainInfo.hashrateEH || '68.00'} EH/s`;
+    if (hoverTime) hoverTime.innerText = "当前实时";
+
+    const points = data.points;
+    const minVal = Math.min(...points.map(p => p.val)) * 0.95;
+    const maxVal = Math.max(...points.map(p => p.val)) * 1.05;
+    const svgWidth = 320;
+    const svgHeight = 110;
+
+    const coords = points.map((p, idx) => {
+      const x = (idx / (points.length - 1)) * svgWidth;
+      const y = svgHeight - ((p.val - minVal) / (maxVal - minVal)) * (svgHeight - 20) - 10;
+      return { x, y, ...p };
+    });
+
+    let pathD = `M${coords[0].x.toFixed(1)},${coords[0].y.toFixed(1)}`;
+    for (let i = 0; i < coords.length - 1; i++) {
+      const p0 = coords[i];
+      const p1 = coords[i + 1];
+      const cx = ((p0.x + p1.x) / 2).toFixed(1);
+      pathD += ` C${cx},${p0.y.toFixed(1)} ${cx},${p1.y.toFixed(1)} ${p1.x.toFixed(1)},${p1.y.toFixed(1)}`;
+    }
+
+    const linePath = document.getElementById('hashrate-line-path');
+    const areaPath = document.getElementById('hashrate-area-path');
+    const pointCircle = document.getElementById('hashrate-point');
+
+    if (linePath) linePath.setAttribute('d', pathD);
+    if (areaPath) areaPath.setAttribute('d', `${pathD} L${svgWidth},120 L0,120 Z`);
+
+    const lastCoord = coords[coords.length - 1];
+    if (pointCircle) {
+      pointCircle.setAttribute('cx', lastCoord.x);
+      pointCircle.setAttribute('cy', lastCoord.y);
+    }
+  }
+
+  window.renderHashrateChart = renderHashrateChart;
+
   // 一键填入当前钱包地址
   window.fillCurrentWalletAddress = function () {
     triggerHaptic('light');
@@ -486,11 +597,21 @@
     const poolWorkersEl = document.getElementById('pool-active-workers');
     const hashrateEl = document.getElementById('miner-hashrate');
     const tokenomicsRewardEl = document.getElementById('tokenomics-block-reward');
+    const emissionEl = document.getElementById('tokenomics-daily-emission');
+    const fiatEl = document.getElementById('tokenomics-daily-fiat');
+
+    const rewardNum = parseFloat(state.chainInfo.blockReward) || 2213.16;
+    const dailyBlocks = 445; // 86400 / 194.3s
+    const dailyPRL = dailyBlocks * rewardNum;
+    const dailyWan = (dailyPRL / 10000).toFixed(2);
+    const dailyUSDWan = ((dailyPRL * state.livePriceUSD) / 10000).toFixed(1);
 
     if (hEl) hEl.innerText = Number(state.chainInfo.height).toLocaleString();
     if (mEl) mEl.innerText = Number(state.chainInfo.miners).toLocaleString();
-    if (rEl) rEl.innerText = `${state.chainInfo.blockReward} PRL`;
-    if (tokenomicsRewardEl) tokenomicsRewardEl.innerText = `${state.chainInfo.blockReward} PRL`;
+    if (rEl) rEl.innerText = `${rewardNum.toFixed(2)} PRL`;
+    if (tokenomicsRewardEl) tokenomicsRewardEl.innerText = `${rewardNum.toFixed(2)} PRL`;
+    if (emissionEl) emissionEl.innerText = `~${dailyWan} 万 PRL`;
+    if (fiatEl) fiatEl.innerText = `≈ $${dailyUSDWan} 万 USD/天`;
     if (poolWorkersEl) poolWorkersEl.innerText = `${Number(state.chainInfo.workers).toLocaleString()} 矿机在线`;
     if (hashrateEl) hashrateEl.innerText = `${state.chainInfo.hashrateEH} EH/s`;
   }
@@ -788,169 +909,32 @@
     });
   };
 
-  // 步骤 2 ➔ 步骤 3：进入真实防伪核验（随机生成 2 道选择题，用户必须亲自点选正确单词）
-  window.proceedToCreateConfirm = function () {
-    if (!state.pendingWallet) return;
-    triggerHaptic('light');
-
-    const box = document.getElementById('create-verify-question-box');
-    const chk = document.getElementById('chk-confirm-backup-done');
-    const btn = document.getElementById('btn-finish-create-wallet');
-
-    if (chk) chk.checked = false;
-    if (btn) {
+  // 用户勾选“已抄写备份完成”
+  window.toggleDirectFinishBtn = function (chk) {
+    const btn = document.getElementById('btn-direct-finish-create');
+    if (!btn) return;
+    if (chk && chk.checked) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-40', 'cursor-not-allowed');
+      triggerHaptic('light');
+    } else {
       btn.disabled = true;
       btn.classList.add('opacity-40', 'cursor-not-allowed');
     }
-
-    const words = state.pendingWallet.mnemonic;
-    const wordlist = (window.BIP39_WORDLIST && window.BIP39_WORDLIST.length >= 2048) ? window.BIP39_WORDLIST : BIP39_WORDS_FALLBACK;
-
-    // 随机挑选前部与后部两个不同的助记词序号 (如第 2~5 词 和 第 7~11 词)
-    const idx1 = Math.floor(Math.random() * 4) + 1; // 1 ~ 4 (对应第 2 ~ 5 词)
-    const idx2 = Math.floor(Math.random() * 4) + 6; // 6 ~ 9 (对应第 7 ~ 10 词)
-
-    const correct1 = words[idx1];
-    const correct2 = words[idx2];
-
-    // 生成混淆项
-    function generateChoices(correctWord) {
-      const choices = [correctWord];
-      while (choices.length < 4) {
-        const randWord = wordlist[Math.floor(Math.random() * wordlist.length)];
-        if (!choices.includes(randWord) && !words.includes(randWord)) {
-          choices.push(randWord);
-        }
-      }
-      return choices.sort(() => Math.random() - 0.5);
-    }
-
-    const choices1 = generateChoices(correct1);
-    const choices2 = generateChoices(correct2);
-
-    state.verifyStep = {
-      q1: { pos: idx1 + 1, correct: correct1, selected: null, done: false },
-      q2: { pos: idx2 + 1, correct: correct2, selected: null, done: false }
-    };
-
-    if (box) {
-      box.innerHTML = `
-        <!-- 题目 1 -->
-        <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
-          <div class="flex items-center justify-between mb-2.5">
-            <span class="text-xs font-semibold text-white">1. 请点选手写记录的第 <span class="text-cyan-300 font-bold font-mono text-sm">#${state.verifyStep.q1.pos}</span> 个单词：</span>
-            <span id="q1-badge" class="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-full">待选择</span>
-          </div>
-          <div class="grid grid-cols-2 gap-2" id="q1-btn-group">
-            ${choices1.map(w => `
-              <button type="button" onclick="handleVerifyChoice(1, '${w}')" id="btn-verify-1-${w}" class="py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white hover:border-cyan-400 btn-active text-center">
-                ${w}
-              </button>
-            `).join('')}
-          </div>
-        </div>
-
-        <!-- 题目 2 -->
-        <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08]">
-          <div class="flex items-center justify-between mb-2.5">
-            <span class="text-xs font-semibold text-white">2. 请点选手写记录的第 <span class="text-cyan-300 font-bold font-mono text-sm">#${state.verifyStep.q2.pos}</span> 个单词：</span>
-            <span id="q2-badge" class="text-[10px] text-white/40 bg-white/5 px-2 py-0.5 rounded-full">待选择</span>
-          </div>
-          <div class="grid grid-cols-2 gap-2" id="q2-btn-group">
-            ${choices2.map(w => `
-              <button type="button" onclick="handleVerifyChoice(2, '${w}')" id="btn-verify-2-${w}" class="py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white hover:border-cyan-400 btn-active text-center">
-                ${w}
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      `;
-    }
-
-    openSheet('sheet-create-confirm');
   };
 
-  // 用户点击核验选项
-  window.handleVerifyChoice = function (qNum, selectedWord) {
-    const q = state.verifyStep ? state.verifyStep['q' + qNum] : null;
-    if (!q) return;
-
-    const badge = document.getElementById(`q${qNum}-badge`);
-    const btn = document.getElementById(`btn-verify-${qNum}-${selectedWord}`);
-
-    if (selectedWord === q.correct) {
-      triggerHaptic('success');
-      q.selected = selectedWord;
-      q.done = true;
-
-      // 锁定该题目选项
-      document.querySelectorAll(`#q${qNum}-btn-group button`).forEach(b => {
-        b.disabled = true;
-        b.className = "py-2.5 px-2 rounded-xl bg-white/[0.02] border border-white/[0.05] text-xs font-mono text-white/20 text-center";
-      });
-
-      if (btn) {
-        btn.disabled = false;
-        btn.className = "py-2.5 px-2 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-bold text-xs font-mono text-center shadow-lg shadow-emerald-500/20";
-      }
-
-      if (badge) {
-        badge.innerText = "正确 ✓";
-        badge.className = "text-[10px] text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded-full font-bold";
-      }
-
-      checkVerifyCompletion();
-    } else {
-      triggerHaptic('error');
-      if (btn) {
-        btn.className = "py-2.5 px-2 rounded-xl bg-rose-500/20 border border-rose-400 text-rose-300 font-bold text-xs font-mono text-center";
-        setTimeout(() => {
-          btn.className = "py-2.5 px-2 rounded-xl bg-white/[0.05] border border-white/[0.1] text-xs font-mono font-bold text-white text-center";
-        }, 700);
-      }
-      if (badge) {
-        badge.innerText = "错误 ✗";
-        badge.className = "text-[10px] text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full font-bold";
-      }
-      showToast(`⚠️ 答案错误！与手抄第 #${q.pos} 个单词不符，请核对`);
-    }
-  };
-
-  // 检查是否已完成全部核验与勾选
-  window.checkVerifyCompletion = function () {
-    const q1Done = state.verifyStep?.q1?.done;
-    const q2Done = state.verifyStep?.q2?.done;
-    const chk = document.getElementById('chk-confirm-backup-done');
-    const btn = document.getElementById('btn-finish-create-wallet');
-
-    if (q1Done && q2Done && chk && chk.checked) {
-      triggerHaptic('success');
-      if (btn) {
-        btn.disabled = false;
-        btn.classList.remove('opacity-40', 'cursor-not-allowed');
-      }
-    } else {
-      if (btn) {
-        btn.disabled = true;
-        btn.classList.add('opacity-40', 'cursor-not-allowed');
-      }
-    }
-  };
-
-  // 步骤 3 最终确认：将钱包正式保存并载入
-  window.finalizeWalletCreation = function () {
+  // 一键完成创建并直接进入钱包 (彻底废弃冗余的选择题核验)
+  window.finalizeDirectWalletCreation = function () {
     if (!state.pendingWallet) return;
     triggerHaptic('success');
-
-    const newWallet = { ...state.pendingWallet };
-    state.wallets.push(newWallet);
-    state.activeWalletId = newWallet.id;
-    state.pendingWallet = null;
-
+    state.wallets.unshift(state.pendingWallet);
+    state.activeWalletId = state.pendingWallet.id;
     saveWalletsToStorage();
+
     closeSheet();
     renderAll();
-    showToast(`🎉 钱包【${newWallet.name}】创建成功！`);
+    showToast(`🎉 钱包【${state.pendingWallet.name}】创建成功并已激活`);
+    state.pendingWallet = null;
   };
 
   // ======================== 导入已有助记词 ========================
@@ -1455,7 +1439,7 @@
     handleSendAmountInput(input);
   };
 
-  // 真实链上费率挡位选择 (基于 Taproot 154 vBytes 实时计算)
+  // 网络费率挡位选择
   window.selectFeeTier = function (tier) {
     triggerHaptic('light');
     state.selectedFeeTier = tier;
@@ -1465,8 +1449,6 @@
     const btnEco = document.getElementById('btn-fee-eco');
     const btnNormal = document.getElementById('btn-fee-normal');
     const btnFast = document.getElementById('btn-fee-fast');
-    const feeLabel = document.getElementById('send-network-fee');
-    const feeEta = document.getElementById('send-fee-eta');
 
     const activeCls = "p-2.5 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-center btn-active transition-all";
     const inactiveCls = "p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-center btn-active transition-all";
@@ -1475,20 +1457,11 @@
     if (btnNormal) btnNormal.className = (tier === 'normal') ? activeCls : inactiveCls;
     if (btnFast) btnFast.className = (tier === 'fast') ? activeCls : inactiveCls;
 
-    if (feeLabel) {
-      const fiat = (state.currentFee * (state.livePriceCNY || 11.47)).toFixed(5);
-      feeLabel.innerText = `${state.currentFee.toFixed(8)} PRL (${tierData.grains} grains ≈ ¥${fiat})`;
-    }
-
-    if (feeEta) {
-      feeEta.innerText = tierData.eta;
-    }
-
     const input = document.getElementById('send-amount-input');
     handleSendAmountInput(input);
   };
 
-  // 实时转账数量与手续费联动计算 (支持内扣与外扣双模式)
+  // 实时转账数量与手续费联动计算 (未输入数量时不提前显示扣款)
   window.handleSendAmountInput = function (el) {
     if (!el) return;
     let valStr = el.value || '';
@@ -1499,17 +1472,31 @@
     const amount = parseFloat(valStr) || 0;
     const fee = state.currentFee;
     const mode = state.feeDeductMode || 'internal';
+    const tierData = state.feeTiers[state.selectedFeeTier] || state.feeTiers.normal;
 
+    const feeLabel = document.getElementById('send-network-fee');
+    const feeEta = document.getElementById('send-fee-eta');
     const netReceiveEl = document.getElementById('send-net-receive');
     const totalDeductEl = document.getElementById('send-total-deduct');
 
-    if (amount <= 0) {
+    // 未输入转账数量：一律显示占位符，不出现预支的扣除或手续费
+    if (amount <= 0 || !valStr.trim()) {
+      if (feeLabel) feeLabel.innerText = "--";
+      if (feeEta) feeEta.innerText = "输入金额后计算";
       if (netReceiveEl) {
-        netReceiveEl.innerText = "0.00000000 PRL";
-        netReceiveEl.className = "font-mono text-emerald-400 font-semibold";
+        netReceiveEl.innerText = "--";
+        netReceiveEl.className = "font-mono text-white/40";
       }
-      if (totalDeductEl) totalDeductEl.innerText = "0.00000000 PRL";
+      if (totalDeductEl) totalDeductEl.innerText = "--";
       return;
+    }
+
+    // 已输入有效数量：按所选档位与扣除模式精准计算
+    if (feeLabel) {
+      feeLabel.innerText = `${fee.toFixed(8)} PRL`;
+    }
+    if (feeEta) {
+      feeEta.innerText = tierData.eta;
     }
 
     if (mode === 'internal') {
@@ -1517,7 +1504,7 @@
       const netReceive = amount - fee;
       if (netReceiveEl) {
         if (amount <= fee) {
-          netReceiveEl.innerText = `0.00 PRL (金额不足以支付手续费)`;
+          netReceiveEl.innerText = `金额需大于手续费 (${fee.toFixed(8)} PRL)`;
           netReceiveEl.className = "font-mono text-rose-400 font-semibold";
         } else {
           netReceiveEl.innerText = `${netReceive.toFixed(8)} PRL`;
@@ -1921,6 +1908,7 @@
     loadContacts();
     setupSwipeToSend();
     renderNavTabs('wallet');
+    renderHashrateChart('24h');
   });
 
 })();
