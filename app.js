@@ -98,7 +98,7 @@
     wallets: [],
     activeWalletId: null,
     pendingWallet: null, // 创建流程中的临时状态 { name, pin, mnemonic, address, privateKeyHex }
-    selectedPool: 'kryptex',
+    selectedPool: 'herominers',
     enteredPin: "",
     autoLockTimer: null,
     countdownSeconds: 45,
@@ -453,22 +453,72 @@
       })
       .catch(() => {
         if (!resultBox) return;
-        resultBox.innerHTML = `
-          <div class="space-y-2 py-1">
-            <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-              <span class="text-white/60">目标矿工</span>
-              <span class="font-mono text-cyan-300 text-[11px]">${cleanAddr.slice(0, 10)}...${cleanAddr.slice(-6)}</span>
-            </div>
-            <div class="p-3 rounded-xl bg-white/[0.04] border border-cyan-400/20 text-xs">
-              <div class="text-white/60 mb-2">
-                Kryptex 官方实时矿机监控：
+        // 若 Kryptex 因苹果/安卓浏览器跨域限制，先自动联动 HeroMiners 探测，同时提供 Kryptex 完整监控卡片
+        fetch(`https://pearl.herominers.com/api/stats_address?address=${cleanAddr}`)
+          .then(r => r.json())
+          .then(hData => {
+            const hStats = (hData && hData.stats) ? hData.stats : null;
+            if (hStats && (hStats.hashrate > 0 || hStats.paid > 0)) {
+              const hashrate = formatHashrate(hStats.hashrate);
+              const unpaid = hStats.balance ? (hStats.balance / 1e8).toFixed(4) : "0.0000";
+              const paid = hStats.paid ? (hStats.paid / 1e8).toFixed(4) : "0.0000";
+              resultBox.innerHTML = `
+                <div class="space-y-2 py-1">
+                  <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+                    <span class="text-white/60">检测到该矿工在 HeroMiners 活跃</span>
+                    <span class="font-bold text-purple-300">HeroMiners (Prop)</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
+                    <span class="text-white/70">实时算力:</span>
+                    <span class="text-cyan-300 font-bold font-mono text-sm">${hashrate}</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
+                    <span class="text-white/70">待结收益 (Unpaid):</span>
+                    <span class="text-amber-300 font-bold font-mono">${unpaid} PRL</span>
+                  </div>
+                  <div class="flex justify-between border-b border-white/[0.05] pb-1.5">
+                    <span class="text-white/70">已支付收益 (Paid):</span>
+                    <span class="text-emerald-400 font-bold font-mono">${paid} PRL</span>
+                  </div>
+                  <div class="pt-2">
+                    <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-center border border-cyan-400/40 btn-active">
+                      👉 亦可在 Kryptex 官方实时看板核对 ↗
+                    </a>
+                  </div>
+                </div>
+              `;
+              return;
+            }
+            throw new Error("No HeroMiners data");
+          })
+          .catch(() => {
+            resultBox.innerHTML = `
+              <div class="space-y-2.5 py-1">
+                <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+                  <span class="text-white/60">目标矿工</span>
+                  <span class="font-mono text-cyan-300 text-[11px]">${cleanAddr.slice(0, 10)}...${cleanAddr.slice(-6)}</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                  <div class="p-2.5 rounded-xl bg-white/[0.03]">
+                    <div class="text-white/40 mb-1">Kryptex 全网算力</div>
+                    <div class="font-bold text-cyan-300">${state.chainInfo.hashrateEH} EH/s</div>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-white/[0.03]">
+                    <div class="text-white/40 mb-1">矿池起付阈值</div>
+                    <div class="font-bold text-emerald-400">1.0 PRL (PPS+ 3%)</div>
+                  </div>
+                </div>
+                <div class="p-3 rounded-xl bg-cyan-500/10 border border-cyan-400/30 text-xs">
+                  <div class="text-cyan-200 font-medium mb-2 leading-relaxed">
+                    由于苹果/安卓浏览器启用跨域防护，Kryptex 专属矿机数据已就绪：
+                  </div>
+                  <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/30 text-cyan-200 font-bold text-center border border-cyan-400/40 btn-active">
+                    👉 在 Kryptex 官方实时看板中打开此矿工 ↗
+                  </a>
+                </div>
               </div>
-              <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-center border border-cyan-400/40 btn-active">
-                👉 在 Kryptex 官方实时看板中打开此矿工 ↗
-              </a>
-            </div>
-          </div>
-        `;
+            `;
+          });
       });
   };
 
@@ -1453,15 +1503,24 @@
 
     function executeSend() {
       const wallet = getActiveWallet();
-      const amountVal = parseFloat(sendAmountInput?.value || 0);
+      const rawVal = sendAmountInput?.value || '';
+      const amountVal = parseFloat(rawVal);
       const toAddr = sendAddrInput?.value.trim() || '';
 
       if (!toAddr) {
+        triggerHaptic('error');
         showToast("请输入收款方地址");
         resetThumb();
         return;
       }
-      if (amountVal <= 0 || amountVal > (wallet ? wallet.balance : 0)) {
+      if (isNaN(amountVal) || amountVal <= 0) {
+        triggerHaptic('error');
+        showToast("转账金额必须大于 0，禁止负数或空值");
+        resetThumb();
+        return;
+      }
+      if (amountVal > (wallet ? wallet.balance : 0)) {
+        triggerHaptic('error');
         showToast("转账数量超出可用余额 (当前为0)");
         resetThumb();
         return;

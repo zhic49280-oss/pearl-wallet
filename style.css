@@ -37,6 +37,17 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 彻底隐藏 Chrome/Safari/Firefox 丑陋的原生数字加减上下微调键 (Spinners) */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+input[type="number"] {
+  -moz-appearance: textfield !important;
+  appearance: textfield !important;
+}
+
 /* 核心视口外层容器：保证底部有足够 150px 滑动安全空间，决不遮挡卡片 */
 .app-container {
   width: 100%;

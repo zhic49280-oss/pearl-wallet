@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=3.1">
+  <link rel="stylesheet" href="style.css?v=3.2">
   <script>
     tailwind.config = {
       theme: {
@@ -218,13 +218,13 @@
         </div>
 
         <div class="mb-3">
-          <label class="block text-[11px] text-white/60 mb-1">选择矿池</label>
+          <label class="block text-[11px] text-white/60 mb-1">选择矿池 (支持多矿池直连)</label>
           <div class="grid grid-cols-2 gap-2" id="miner-pool-selector">
-            <button type="button" onclick="selectMinerPool('kryptex')" id="btn-pool-kryptex" class="py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active">
-              Kryptex 官方矿池
-            </button>
-            <button type="button" onclick="selectMinerPool('herominers')" id="btn-pool-herominers" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active">
+            <button type="button" onclick="selectMinerPool('herominers')" id="btn-pool-herominers" class="py-2.5 px-3 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-xs border border-purple-400/40 btn-active">
               HeroMiners 矿池
+            </button>
+            <button type="button" onclick="selectMinerPool('kryptex')" id="btn-pool-kryptex" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active">
+              Kryptex 官方矿池
             </button>
           </div>
         </div>
@@ -639,7 +639,7 @@
         <span class="text-white/40">可用: <span id="send-available-balance" class="text-cyan-300 font-semibold">0.00 PRL</span></span>
       </div>
       <div class="relative">
-        <input id="send-amount-input" type="number" step="0.01" placeholder="0.00" class="w-full p-3.5 pr-20 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-bold tabular-numbers text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+        <input id="send-amount-input" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00" oninput="if(parseFloat(this.value)<0||this.value.includes('-')) this.value='';" class="w-full p-3.5 pr-20 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-bold tabular-numbers text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
         <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           <button onclick="setMaxSendAmount()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">最大</button>
           <span class="text-xs font-bold text-white/60">PRL</span>
@@ -671,10 +671,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=3.1"></script>
+  <script src="bip39-wordlist.js?v=3.2"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=3.1"></script>
+  <script src="qrcode.min.js?v=3.2"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=3.1"></script>
+  <script src="app.js?v=3.2"></script>
 </body>
 </html>
