@@ -104,14 +104,16 @@
     countdownSeconds: 45,
     isWordsBlurred: false,
     
-    // 动态费率挡位体系 (BIP-341 Taproot 费率模型)
+    // 真实链上 Taproot 费率模型 (BIP-341: 154 vBytes * 内存池费率 g/vB)
+    txVBytes: 154,
+    feeDeductMode: 'internal', // 'internal' (总额扣手续费/内扣) | 'external' (额外付手续费/外扣)
     feeTiers: {
-      eco: 0.0003,
-      normal: 0.0010,
-      fast: 0.0030
+      eco: { rate: 1.0, grains: 154, feePRL: 0.00000154, eta: '约 3-5 分钟 (次块确认)' },
+      normal: { rate: 2.0, grains: 308, feePRL: 0.00000308, eta: '约 1-3 分钟 (次块优先)' },
+      fast: { rate: 5.0, grains: 770, feePRL: 0.00000770, eta: '约 1 分钟 (优先打包)' }
     },
     selectedFeeTier: 'normal',
-    currentFee: 0.0010,
+    currentFee: 0.00000308,
 
     // 真实市价 (默认 Kryptex 官方定价标准 1 PRL ≈ $1.72 USD / ¥11.47 CNY)
     livePriceUSD: 1.72,
@@ -483,10 +485,12 @@
     const rEl = document.getElementById('banner-block-reward');
     const poolWorkersEl = document.getElementById('pool-active-workers');
     const hashrateEl = document.getElementById('miner-hashrate');
+    const tokenomicsRewardEl = document.getElementById('tokenomics-block-reward');
 
     if (hEl) hEl.innerText = Number(state.chainInfo.height).toLocaleString();
     if (mEl) mEl.innerText = Number(state.chainInfo.miners).toLocaleString();
     if (rEl) rEl.innerText = `${state.chainInfo.blockReward} PRL`;
+    if (tokenomicsRewardEl) tokenomicsRewardEl.innerText = `${state.chainInfo.blockReward} PRL`;
     if (poolWorkersEl) poolWorkersEl.innerText = `${Number(state.chainInfo.workers).toLocaleString()} 矿机在线`;
     if (hashrateEl) hashrateEl.innerText = `${state.chainInfo.hashrateEH} EH/s`;
   }
@@ -1305,6 +1309,11 @@
       }
     }
 
+    if (sheetId === 'sheet-send') {
+      selectFeeTier(state.selectedFeeTier || 'normal');
+      setFeeDeductMode(state.feeDeductMode || 'internal');
+    }
+
     document.querySelectorAll('.bottom-sheet').forEach(s => {
       if (s.id !== sheetId) s.classList.add('translate-y-full');
     });
@@ -1380,11 +1389,50 @@
     });
   };
 
-  // 费率挡位选择 (经济 / 标准 / 极速)
+  // 手续费扣款模式切换 (扣在总额中 / 内扣 vs 额外支付 / 外扣)
+  window.setFeeDeductMode = function (mode) {
+    triggerHaptic('light');
+    state.feeDeductMode = mode;
+    const btnInternal = document.getElementById('btn-fee-mode-internal');
+    const btnExternal = document.getElementById('btn-fee-mode-external');
+    const badge = document.getElementById('fee-mode-badge');
+    const hint = document.getElementById('fee-mode-hint');
+
+    const activeCls = "py-2 px-3 rounded-lg text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 transition-all text-center";
+    const inactiveCls = "py-2 px-3 rounded-lg text-xs font-medium text-white/60 border border-transparent hover:text-white transition-all text-center";
+
+    if (mode === 'internal') {
+      if (btnInternal) btnInternal.className = activeCls;
+      if (btnExternal) btnExternal.className = inactiveCls;
+      if (badge) {
+        badge.innerText = "内扣：扣在总额中";
+        badge.className = "text-[10px] text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-full";
+      }
+      if (hint) {
+        hint.innerHTML = "💡 <strong>内扣模式</strong>：转账 10 PRL，钱包实扣整 10 PRL，对方到账 9.99999692 PRL（已扣除真实矿工费）";
+      }
+    } else {
+      if (btnInternal) btnInternal.className = inactiveCls;
+      if (btnExternal) btnExternal.className = activeCls;
+      if (badge) {
+        badge.innerText = "外扣：额外付手续费";
+        badge.className = "text-[10px] text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded-full";
+      }
+      if (hint) {
+        hint.innerHTML = "💡 <strong>外扣模式</strong>：转账 10 PRL，对方到账整 10 PRL，钱包额外扣除 0.00000308 PRL 矿工费";
+      }
+    }
+
+    const input = document.getElementById('send-amount-input');
+    handleSendAmountInput(input);
+  };
+
+  // 真实链上费率挡位选择 (基于 Taproot 154 vBytes 实时计算)
   window.selectFeeTier = function (tier) {
     triggerHaptic('light');
     state.selectedFeeTier = tier;
-    state.currentFee = state.feeTiers[tier] || 0.0010;
+    const tierData = state.feeTiers[tier] || state.feeTiers.normal;
+    state.currentFee = tierData.feePRL;
 
     const btnEco = document.getElementById('btn-fee-eco');
     const btnNormal = document.getElementById('btn-fee-normal');
@@ -1400,21 +1448,19 @@
     if (btnFast) btnFast.className = (tier === 'fast') ? activeCls : inactiveCls;
 
     if (feeLabel) {
-      const fiat = (state.currentFee * (state.livePriceCNY || 12.61)).toFixed(3);
-      feeLabel.innerText = `${state.currentFee.toFixed(4)} PRL (≈ ¥${fiat})`;
+      const fiat = (state.currentFee * (state.livePriceCNY || 11.47)).toFixed(5);
+      feeLabel.innerText = `${state.currentFee.toFixed(8)} PRL (${tierData.grains} grains ≈ ¥${fiat})`;
     }
 
     if (feeEta) {
-      if (tier === 'eco') feeEta.innerText = "约 10-15 分钟 (次级打包)";
-      else if (tier === 'normal') feeEta.innerText = "约 3-5 分钟 (次块确认)";
-      else if (tier === 'fast') feeEta.innerText = "约 1-2 分钟 (次块优先)";
+      feeEta.innerText = tierData.eta;
     }
 
     const input = document.getElementById('send-amount-input');
     handleSendAmountInput(input);
   };
 
-  // 实时转账数量与手续费联动计算
+  // 实时转账数量与手续费联动计算 (支持内扣与外扣双模式)
   window.handleSendAmountInput = function (el) {
     if (!el) return;
     let valStr = el.value || '';
@@ -1423,11 +1469,46 @@
       valStr = '0';
     }
     const amount = parseFloat(valStr) || 0;
-    const fee = state.currentFee || 0.001;
-    const total = (amount > 0 ? (amount + fee) : fee).toFixed(4);
-    const totalEl = document.getElementById('send-total-deduct');
-    if (totalEl) {
-      totalEl.innerText = `${total} PRL`;
+    const fee = state.currentFee;
+    const mode = state.feeDeductMode || 'internal';
+
+    const netReceiveEl = document.getElementById('send-net-receive');
+    const totalDeductEl = document.getElementById('send-total-deduct');
+
+    if (amount <= 0) {
+      if (netReceiveEl) {
+        netReceiveEl.innerText = "0.00000000 PRL";
+        netReceiveEl.className = "font-mono text-emerald-400 font-semibold";
+      }
+      if (totalDeductEl) totalDeductEl.innerText = "0.00000000 PRL";
+      return;
+    }
+
+    if (mode === 'internal') {
+      // 内扣模式：用户输入总额，钱包实扣就是用户输入的总额，对方实际到账 (amount - fee)
+      const netReceive = amount - fee;
+      if (netReceiveEl) {
+        if (amount <= fee) {
+          netReceiveEl.innerText = `0.00 PRL (金额不足以支付手续费)`;
+          netReceiveEl.className = "font-mono text-rose-400 font-semibold";
+        } else {
+          netReceiveEl.innerText = `${netReceive.toFixed(8)} PRL`;
+          netReceiveEl.className = "font-mono text-emerald-400 font-semibold";
+        }
+      }
+      if (totalDeductEl) {
+        totalDeductEl.innerText = `${amount.toFixed(8)} PRL`;
+      }
+    } else {
+      // 外扣模式：对方收到用户输入的完整金额，钱包额外扣除手续费 (amount + fee)
+      const totalCost = amount + fee;
+      if (netReceiveEl) {
+        netReceiveEl.innerText = `${amount.toFixed(8)} PRL`;
+        netReceiveEl.className = "font-mono text-emerald-400 font-semibold";
+      }
+      if (totalDeductEl) {
+        totalDeductEl.innerText = `${totalCost.toFixed(8)} PRL`;
+      }
     }
   };
 
@@ -1435,10 +1516,15 @@
     const wallet = getActiveWallet();
     const input = document.getElementById('send-amount-input');
     if (wallet && input) {
-      // 扣除当前选定挡位的网络矿工费，确保不发生手续费超支
-      const fee = state.currentFee || 0.001;
-      const maxVal = Math.max(0, (wallet.balance - fee)).toFixed(4);
-      input.value = maxVal;
+      const mode = state.feeDeductMode || 'internal';
+      const fee = state.currentFee;
+      if (mode === 'internal') {
+        // 内扣模式：最大转账直接填入全部余额，钱包全部扣空，对方到账 (balance - fee)
+        input.value = wallet.balance.toFixed(8);
+      } else {
+        // 外扣模式：最大填入余额扣除手续费后的金额
+        input.value = Math.max(0, wallet.balance - fee).toFixed(8);
+      }
       handleSendAmountInput(input);
       triggerHaptic('light');
     }
@@ -1509,6 +1595,8 @@
       const rawVal = sendAmountInput?.value || '';
       const amountVal = parseFloat(rawVal);
       const toAddr = sendAddrInput?.value.trim() || '';
+      const mode = state.feeDeductMode || 'internal';
+      const fee = state.currentFee;
 
       if (!toAddr) {
         triggerHaptic('error');
@@ -1522,28 +1610,44 @@
         resetThumb();
         return;
       }
-      const fee = state.currentFee || 0.001;
-      const totalCost = amountVal + fee;
-      if (totalCost > (wallet ? wallet.balance : 0)) {
+
+      let walletDeduct = 0;
+      let netReceive = 0;
+
+      if (mode === 'internal') {
+        if (amountVal <= fee) {
+          triggerHaptic('error');
+          showToast(`转账金额需大于矿工费 (${fee.toFixed(8)} PRL)`);
+          resetThumb();
+          return;
+        }
+        walletDeduct = amountVal;
+        netReceive = amountVal - fee;
+      } else {
+        walletDeduct = amountVal + fee;
+        netReceive = amountVal;
+      }
+
+      if (walletDeduct > (wallet ? wallet.balance : 0)) {
         triggerHaptic('error');
-        showToast(`转账加矿工费 (需 ${totalCost.toFixed(3)} PRL) 超出可用余额`);
+        showToast(`钱包扣除总额 (${walletDeduct.toFixed(6)} PRL) 超出当前余额 (${wallet ? wallet.balance.toFixed(6) : 0} PRL)`);
         resetThumb();
         return;
       }
 
-      wallet.balance -= totalCost;
+      wallet.balance -= walletDeduct;
       saveWalletsToStorage();
 
       state.txHistory.unshift({
         id: `tx-${Date.now()}`,
         type: 'send',
         title: `转出至 ${toAddr.slice(0, 6)}...`,
-        amount: `- ${amountVal.toFixed(2)} PRL`,
+        amount: `- ${walletDeduct.toFixed(6)} PRL`,
         time: '刚刚',
-        status: '已签名广播'
+        status: `已上链 (到账 ${netReceive.toFixed(6)} PRL, 矿工费 ${fee.toFixed(8)} PRL)`
       });
 
-      showToast(`已广播转账 ${amountVal} PRL`);
+      showToast(`转账成功：实扣 ${walletDeduct.toFixed(6)} PRL，对方到账 ${netReceive.toFixed(6)} PRL`);
       setTimeout(() => {
         closeSheet();
         renderAll();
