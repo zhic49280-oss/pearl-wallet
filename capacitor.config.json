@@ -1,0 +1,13 @@
+{
+  "appId": "io.pearl.wallet",
+  "appName": "Pearl Wallet",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "LocalAuthentication": {
+      "biometryType": "FaceID"
+    }
+  }
+}

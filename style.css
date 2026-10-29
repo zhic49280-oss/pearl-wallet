@@ -165,6 +165,11 @@ input[type="number"] {
   border-top-left-radius: 28px;
   border-top-right-radius: 28px;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 /* 底部安全区与灵动岛顶留白 */
@@ -172,8 +177,14 @@ input[type="number"] {
   padding-top: max(env(safe-area-inset-top), 16px);
 }
 
+/* 主视图滚动留白 (给底部浮动导航栏留出 120px 空间) */
 .safe-area-bottom {
-  padding-bottom: calc(max(env(safe-area-inset-bottom), 24px) + 140px) !important;
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 24px) + 120px) !important;
+}
+
+/* 抽屉弹出层专用安全区 (贴合屏幕底部，杜绝多余 140px 空白) */
+.sheet-safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 24px) !important;
 }
 
 /* iOS 滚动条隐藏与流畅惯性滑动 */
@@ -186,8 +197,21 @@ input[type="number"] {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 滑动确认发送轨道动效 */
+/* 滑动确认发送轨道动效与手势防冲突 */
 .swipe-track {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
+  touch-action: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#swipe-thumb {
+  touch-action: none !important;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grab;
+}
+#swipe-thumb:active {
+  cursor: grabbing;
 }
