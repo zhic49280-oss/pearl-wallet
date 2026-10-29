@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
@@ -19,34 +22,42 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - name: Install Dependencies
+      - name: Sync Web Assets to Android Assets
         run: |
-          npm install
-          mkdir -p dist
-          cp -r index.html app.js style.css bip39-wordlist.js qrcode.min.js manifest.json sw.js dist/
+          mkdir -p android/app/src/main/assets/public
+          cp -r index.html app.js style.css bip39-wordlist.js qrcode.min.js manifest.json sw.js android/app/src/main/assets/public/
 
       - name: Grant Execute Permission for Gradlew
         run: |
           chmod +x android/gradlew
-
-      - name: Sync Capacitor Android
-        run: |
-          npx cap sync android
 
       - name: Build Android Debug APK
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace
 
+      - name: Prepare APK for Release
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk ./pearl-wallet.apk
+
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Pearl-Wallet-Android-Debug-APK
-          path: android/app/build/outputs/apk/debug/*.apk
-          retention-days: 14
+          name: pearl-wallet-apk
+          path: ./pearl-wallet.apk
+          retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: v1.0.0
+          name: "Pearl 移动轻钱包 v1.0.0 (Android APK)"
+          body: |
+            ### 🤖 Pearl 移动轻钱包 Android 原生安装包
+            - **文件名**：`pearl-wallet.apk`
+            - **功能**：原生支持 PearlHash 链上资产管理、Taproot 离线签名、全网算力/难度监控、硬件级指纹安全。
+            - **安装说明**：下载后在安卓手机上直接打开即可安装（支持小米、华为、OPPO、vivo、三星、荣耀等全系机型）。
+          files: ./pearl-wallet.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
