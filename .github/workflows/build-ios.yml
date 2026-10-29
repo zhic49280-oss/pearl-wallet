@@ -1,0 +1,49 @@
+name: Build iOS App (Cloud Mac)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 准备 Web 资源并同步 Capacitor iOS
+        run: |
+          npm install
+          mkdir -p dist
+          cp index.html app.js style.css bip39-wordlist.js qrcode.min.js manifest.json sw.js dist/
+          npx cap sync ios
+
+      - name: 使用 Xcode 编译 iOS 原生程序 (无证书编译)
+        run: |
+          cd ios/App
+          xcodebuild clean build \
+            -scheme App \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO
+
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -r PearlWallet-iOS.ipa Payload/
+
+      - name: 上传编译好的 .ipa 安装包供用户下载
+        uses: actions/upload-artifact@v4
+        with:
+          name: PearlWallet-iOS-IPA
+          path: ios/App/PearlWallet-iOS.ipa
+          retention-days: 7
