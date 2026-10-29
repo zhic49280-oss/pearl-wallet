@@ -104,6 +104,15 @@
     countdownSeconds: 45,
     isWordsBlurred: false,
     
+    // 动态费率挡位体系 (BIP-341 Taproot 费率模型)
+    feeTiers: {
+      eco: 0.0003,
+      normal: 0.0010,
+      fast: 0.0030
+    },
+    selectedFeeTier: 'normal',
+    currentFee: 0.0010,
+
     // 真实市价 (默认 Kryptex 官方定价标准 1 PRL ≈ $1.72 USD / ¥11.47 CNY)
     livePriceUSD: 1.72,
     livePriceCNY: 11.47,
@@ -1371,6 +1380,40 @@
     });
   };
 
+  // 费率挡位选择 (经济 / 标准 / 极速)
+  window.selectFeeTier = function (tier) {
+    triggerHaptic('light');
+    state.selectedFeeTier = tier;
+    state.currentFee = state.feeTiers[tier] || 0.0010;
+
+    const btnEco = document.getElementById('btn-fee-eco');
+    const btnNormal = document.getElementById('btn-fee-normal');
+    const btnFast = document.getElementById('btn-fee-fast');
+    const feeLabel = document.getElementById('send-network-fee');
+    const feeEta = document.getElementById('send-fee-eta');
+
+    const activeCls = "p-2.5 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-center btn-active transition-all";
+    const inactiveCls = "p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-center btn-active transition-all";
+
+    if (btnEco) btnEco.className = (tier === 'eco') ? activeCls : inactiveCls;
+    if (btnNormal) btnNormal.className = (tier === 'normal') ? activeCls : inactiveCls;
+    if (btnFast) btnFast.className = (tier === 'fast') ? activeCls : inactiveCls;
+
+    if (feeLabel) {
+      const fiat = (state.currentFee * (state.livePriceCNY || 12.61)).toFixed(3);
+      feeLabel.innerText = `${state.currentFee.toFixed(4)} PRL (≈ ¥${fiat})`;
+    }
+
+    if (feeEta) {
+      if (tier === 'eco') feeEta.innerText = "约 10-15 分钟 (次级打包)";
+      else if (tier === 'normal') feeEta.innerText = "约 3-5 分钟 (次块确认)";
+      else if (tier === 'fast') feeEta.innerText = "约 1-2 分钟 (次块优先)";
+    }
+
+    const input = document.getElementById('send-amount-input');
+    handleSendAmountInput(input);
+  };
+
   // 实时转账数量与手续费联动计算
   window.handleSendAmountInput = function (el) {
     if (!el) return;
@@ -1380,7 +1423,7 @@
       valStr = '0';
     }
     const amount = parseFloat(valStr) || 0;
-    const fee = 0.001;
+    const fee = state.currentFee || 0.001;
     const total = (amount > 0 ? (amount + fee) : fee).toFixed(4);
     const totalEl = document.getElementById('send-total-deduct');
     if (totalEl) {
@@ -1392,8 +1435,9 @@
     const wallet = getActiveWallet();
     const input = document.getElementById('send-amount-input');
     if (wallet && input) {
-      // 扣除 0.001 PRL 网络矿工费，确保不发生手续费超支
-      const maxVal = Math.max(0, (wallet.balance - 0.001)).toFixed(4);
+      // 扣除当前选定挡位的网络矿工费，确保不发生手续费超支
+      const fee = state.currentFee || 0.001;
+      const maxVal = Math.max(0, (wallet.balance - fee)).toFixed(4);
       input.value = maxVal;
       handleSendAmountInput(input);
       triggerHaptic('light');
@@ -1478,7 +1522,7 @@
         resetThumb();
         return;
       }
-      const fee = 0.001;
+      const fee = state.currentFee || 0.001;
       const totalCost = amountVal + fee;
       if (totalCost > (wallet ? wallet.balance : 0)) {
         triggerHaptic('error');

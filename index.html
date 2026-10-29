@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=3.4">
+  <link rel="stylesheet" href="style.css?v=3.5">
   <script>
     tailwind.config = {
       theme: {
@@ -248,6 +248,49 @@
 
         <div id="miner-query-result" class="hidden mt-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-2">
           <!-- 动态展示矿工真实数据 -->
+        </div>
+      </div>
+
+      <!-- Pearl 官方主网代币经济模型与每日产出统计卡片 -->
+      <div class="ios-glass-card rounded-2xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-base">📊</span>
+            <h4 class="text-xs font-bold text-white">Pearl 主网代币经济与每日产出</h4>
+          </div>
+          <span class="text-[10px] text-cyan-400 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-full">PoUW 算力证明</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+            <div class="text-[11px] text-white/40 mb-1">每日总产出 (Daily Emission)</div>
+            <div class="text-sm font-bold text-cyan-300 font-mono">~98.48 万 PRL</div>
+            <div class="text-[10px] text-white/30 mt-0.5">≈ $171.3 万 USD/天</div>
+          </div>
+          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+            <div class="text-[11px] text-white/40 mb-1">单块产出 (Block Reward)</div>
+            <div class="text-sm font-bold text-emerald-400 font-mono">2,213.16 PRL</div>
+            <div class="text-[10px] text-white/30 mt-0.5">连续平滑衰减 (无断崖半衰)</div>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-xs text-white/70 pt-1">
+          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+            <span class="text-white/50">平均出块时间</span>
+            <span class="font-mono text-white/90">~194 秒 (~3.2 分钟 / 块)</span>
+          </div>
+          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+            <span class="text-white/50">全网每日出块数</span>
+            <span class="font-mono text-white/90">~445 个区块 / 天</span>
+          </div>
+          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+            <span class="text-white/50">最大硬顶总供应量</span>
+            <span class="font-mono text-cyan-300 font-semibold">21 亿 PRL (100x BTC)</span>
+          </div>
+          <div class="flex items-center justify-between py-1.5">
+            <span class="text-white/50">初始预挖 / ICO 比例</span>
+            <span class="font-mono text-emerald-400 font-semibold">0% (100% 纯算力公平启动)</span>
+          </div>
         </div>
       </div>
     </main>
@@ -665,19 +708,44 @@
       </div>
     </div>
 
+    <!-- 动态费率挡位选择 (经济 / 标准 / 极速) -->
+    <div class="mb-4">
+      <div class="flex items-center justify-between text-xs font-medium text-white/60 mb-2">
+        <span>网络费率档位</span>
+        <span class="text-[10px] text-cyan-400 font-mono">BIP-341 Taproot 动态算力费</span>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button" onclick="selectFeeTier('eco')" id="btn-fee-eco" class="p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-center btn-active transition-all">
+          <div class="text-[10px] text-white/50">🍃 经济</div>
+          <div class="text-xs font-bold text-white font-mono mt-0.5">0.0003</div>
+          <div class="text-[9px] text-white/30">~10-15分</div>
+        </button>
+        <button type="button" onclick="selectFeeTier('normal')" id="btn-fee-normal" class="p-2.5 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-center btn-active transition-all">
+          <div class="text-[10px] text-cyan-300 font-bold">🚀 标准 (推荐)</div>
+          <div class="text-xs font-bold text-cyan-200 font-mono mt-0.5">0.0010</div>
+          <div class="text-[9px] text-cyan-400/60">~3-5分钟</div>
+        </button>
+        <button type="button" onclick="selectFeeTier('fast')" id="btn-fee-fast" class="p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-center btn-active transition-all">
+          <div class="text-[10px] text-white/50">⚡ 极速</div>
+          <div class="text-xs font-bold text-white font-mono mt-0.5">0.0030</div>
+          <div class="text-[9px] text-white/30">次块优先</div>
+        </button>
+      </div>
+    </div>
+
     <!-- 真实手续费明细卡片 (完全透明公开) -->
     <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-5 text-xs space-y-2">
       <div class="flex items-center justify-between text-white/60">
         <span>主网矿工手续费 (Gas Fee)</span>
-        <span id="send-network-fee" class="font-mono text-cyan-300 font-semibold">0.001 PRL (≈ ¥0.01)</span>
+        <span id="send-network-fee" class="font-mono text-cyan-300 font-semibold">0.0010 PRL (≈ ¥0.01)</span>
       </div>
       <div class="flex items-center justify-between text-white/60">
         <span>到账预估耗时</span>
-        <span class="text-emerald-400 font-medium">约 1-3 分钟 (次块确认)</span>
+        <span id="send-fee-eta" class="text-emerald-400 font-medium">约 3-5 分钟 (次块确认)</span>
       </div>
       <div class="border-t border-white/[0.05] pt-2 flex items-center justify-between font-bold text-white">
         <span>实际扣除总计 (含矿工费)</span>
-        <span id="send-total-deduct" class="font-mono text-white tracking-wide">0.001 PRL</span>
+        <span id="send-total-deduct" class="font-mono text-white tracking-wide">0.0010 PRL</span>
       </div>
     </div>
 
@@ -747,10 +815,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=3.4"></script>
+  <script src="bip39-wordlist.js?v=3.5"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=3.4"></script>
+  <script src="qrcode.min.js?v=3.5"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=3.4"></script>
+  <script src="app.js?v=3.5"></script>
 </body>
 </html>
