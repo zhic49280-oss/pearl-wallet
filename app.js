@@ -3345,6 +3345,116 @@
     return state.nearSwap.tokensList.find(t => t.assetId === state.nearSwap.targetTokenId) || state.nearSwap.tokensList[0];
   }
 
+  function getChainBadge(token) {
+    if (!token) return { text: 'EVM', cls: 'bg-white/10 text-white/70 border border-white/20' };
+    if (token.blockchain === 'tron') return { text: 'TRC20', cls: 'bg-rose-500/15 text-rose-300 border border-rose-500/30' };
+    if (token.blockchain === 'eth') return { text: token.symbol === 'ETH' ? 'Mainnet' : 'ERC20', cls: 'bg-blue-500/15 text-blue-300 border border-blue-500/30' };
+    if (token.blockchain === 'near') return { text: 'NEAR', cls: 'bg-cyan-500/15 text-cyan-300 border border-cyan-400/30' };
+    if (token.blockchain === 'base') return { text: 'Base EVM', cls: 'bg-indigo-500/15 text-indigo-300 border border-indigo-400/30' };
+    if (token.blockchain === 'sol') return { text: 'SPL', cls: 'bg-purple-500/15 text-purple-300 border border-purple-400/30' };
+    if (token.blockchain === 'btc') return { text: 'Bitcoin', cls: 'bg-amber-500/15 text-amber-300 border border-amber-400/30' };
+    return { text: token.blockchain.toUpperCase(), cls: 'bg-white/10 text-white/70 border border-white/20' };
+  }
+
+  window.openSwapTokenPickerModal = function () {
+    triggerHaptic('light');
+    const modal = document.getElementById('modal-swap-token-picker');
+    const input = document.getElementById('swap-token-search-input');
+    if (input) input.value = '';
+    renderSwapTokenPickerList('');
+    if (modal) {
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0');
+      });
+    }
+  };
+
+  window.closeSwapTokenPickerModal = function () {
+    const modal = document.getElementById('modal-swap-token-picker');
+    if (!modal) return;
+    modal.classList.add('opacity-0');
+    setTimeout(() => {
+      modal.classList.add('hidden');
+    }, 200);
+  };
+
+  window.selectSwapTokenFromPicker = function (assetId) {
+    triggerHaptic('success');
+    window.selectSwapTargetToken(assetId);
+    window.closeSwapTokenPickerModal();
+  };
+
+  window.filterSwapTokens = function (query) {
+    renderSwapTokenPickerList(query);
+  };
+
+  function renderSwapTokenPickerList(filterText = '') {
+    const container = document.getElementById('swap-token-list-container');
+    if (!container) return;
+
+    const currentAssetId = state.nearSwap.targetTokenId;
+    const prlPrice = state.nearSwap.prlPrice || 1.59;
+    const query = (filterText || '').trim().toLowerCase();
+
+    const filtered = state.nearSwap.tokensList.filter(t => {
+      if (!query) return true;
+      return (
+        t.symbol.toLowerCase().includes(query) ||
+        t.name.toLowerCase().includes(query) ||
+        t.blockchain.toLowerCase().includes(query) ||
+        t.networkName.toLowerCase().includes(query)
+      );
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div class="py-10 text-center text-white/40 text-xs">
+          <div class="text-2xl mb-1.5">🔍</div>
+          未找到匹配代币，请尝试搜索 USDT、TRON、ETH 等
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = filtered.map(t => {
+      const isSelected = t.assetId === currentAssetId;
+      const badge = getChainBadge(t);
+      const targetPrice = t.price || 1.0;
+      const rate = targetPrice > 0 ? (prlPrice / targetPrice) : 1.0;
+
+      return `
+        <div onclick="selectSwapTokenFromPicker('${t.assetId}')" class="p-3 rounded-2xl ${isSelected ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06]'} border flex items-center justify-between cursor-pointer transition-all btn-active">
+          <div class="flex items-center gap-3">
+            <div class="text-2xl w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center">
+              ${t.icon}
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-white">${t.symbol}</span>
+                <span class="text-[9px] px-1.5 py-0.2 rounded font-medium ${badge.cls}">${badge.text}</span>
+              </div>
+              <div class="text-[10px] text-white/50">${t.networkName}</div>
+            </div>
+          </div>
+          <div class="text-right flex items-center gap-2">
+            <div>
+              <div class="text-[11px] font-mono font-bold text-cyan-300">1 PRL ≈ ${rate.toFixed(4)}</div>
+              <div class="text-[9px] text-white/40 font-mono">$${targetPrice.toLocaleString()} USD</div>
+            </div>
+            ${isSelected ? `
+              <div class="w-5 h-5 rounded-full bg-cyan-400 text-black flex items-center justify-center font-bold text-xs ml-1 shadow-sm">
+                ✓
+              </div>
+            ` : `
+              <div class="w-5 h-5 rounded-full border border-white/20 ml-1"></div>
+            `}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   function toBaseUnits(amountStr, decimals) {
     const num = Number(amountStr);
     if (isNaN(num) || num <= 0) return '0';
@@ -3643,14 +3753,24 @@
       </option>
     `).join('');
 
+    const badge = getChainBadge(targetToken);
     const tokenSelectHTML = `
       <div class="relative">
-        <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="appearance-none bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 pr-7 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 cursor-pointer">
+        <button type="button" onclick="openSwapTokenPickerModal()" id="btn-swap-token-picker" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-cyan-400/50 text-white transition-all btn-active shadow-sm group">
+          <span class="text-xl">${targetToken.icon}</span>
+          <div class="text-left">
+            <div class="text-xs font-bold leading-tight group-hover:text-cyan-300 transition-colors flex items-center gap-1">
+              <span>${targetToken.symbol}</span>
+              <span class="text-[9px] px-1 py-0.2 rounded font-medium ${badge.cls}">${badge.text}</span>
+            </div>
+            <div class="text-[9px] text-white/50 leading-tight">${targetToken.networkName}</div>
+          </div>
+          <svg class="w-3.5 h-3.5 text-white/40 group-hover:text-cyan-300 ml-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <!-- 保持与测试和 DOM 规范兼容的辅助节点 -->
+        <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="sr-only hidden" tabindex="-1">
           ${tokenOptionsHTML}
         </select>
-        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/40">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </div>
       </div>
     `;
 
@@ -3889,6 +4009,18 @@
     }
     if (addrEl) {
       addrEl.innerText = order.depositAddress;
+    }
+
+    const senderAddrEl = document.getElementById('swap-order-sender-addr');
+    const destAddrEl = document.getElementById('swap-order-dest-addr');
+    const wallet = getActiveWallet();
+    const isSell = order.originSymbol === 'PRL';
+
+    if (senderAddrEl) {
+      senderAddrEl.innerText = isSell ? (wallet ? wallet.address : '--') : (state.nearSwap.recipientAddress || '做市商自动核对');
+    }
+    if (destAddrEl) {
+      destAddrEl.innerText = isSell ? (state.nearSwap.recipientAddress || '--') : (wallet ? `${wallet.name} (${wallet.address})` : '--');
     }
 
     if (memoContainer && memoText) {

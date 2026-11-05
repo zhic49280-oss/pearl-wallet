@@ -128,7 +128,11 @@ test('T6.4: Window global functions exposure for DOM and native event dispatcher
     'pasteToSwapTxHash',
     'submitSwapDepositTxHash',
     'openAddressBookForSwap',
-    'saveSwapRecipientToAddressBook'
+    'saveSwapRecipientToAddressBook',
+    'openSwapTokenPickerModal',
+    'closeSwapTokenPickerModal',
+    'selectSwapTokenFromPicker',
+    'filterSwapTokens'
   ];
 
   for (const fn of requiredFns) {
@@ -352,4 +356,49 @@ test('T6.10: Address book integration and localStorage persistence across reboot
   assert.ok(Array.isArray(savedContacts), 'Contacts in localStorage must be an array');
   const found = savedContacts.find(c => c.address === '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06');
   assert.ok(found, 'Newly saved recipient address must persist in localStorage');
+});
+
+test('T6.11: Custom Web3 token picker modal lifecycle, search filtering, and selection dispatch', () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_picker',
+        name: 'Picker Test',
+        address: VALID_PEARL_ADDR,
+        balance: 100.0
+      }],
+      activeWalletId: 'w_picker'
+    })
+  });
+
+  const {
+    openSwapTokenPickerModal,
+    closeSwapTokenPickerModal,
+    filterSwapTokens,
+    selectSwapTokenFromPicker,
+    state
+  } = sandbox.window;
+
+  // Open modal
+  openSwapTokenPickerModal();
+  const modal = sandbox.document.getElementById('modal-swap-token-picker');
+  assert.ok(!modal.classList.contains('hidden'), 'Modal should be unhidden after openSwapTokenPickerModal');
+
+  // Filter search
+  filterSwapTokens('TRON');
+  const listContainer = sandbox.document.getElementById('swap-token-list-container');
+  assert.ok(listContainer.innerHTML.includes('TRON'), 'List should render TRON tokens');
+  assert.ok(!listContainer.innerHTML.includes('Solana'), 'Solana should be filtered out when searching TRON');
+
+  // Filter reset
+  filterSwapTokens('');
+  assert.ok(listContainer.innerHTML.includes('Solana'), 'Solana should reappear when search is cleared');
+
+  // Select token from picker
+  const ethToken = state.nearSwap.tokensList.find(t => t.symbol === 'ETH');
+  selectSwapTokenFromPicker(ethToken.assetId);
+  assert.equal(state.nearSwap.targetTokenId, ethToken.assetId, 'Selected target token should be ETH');
+
+  // Modal closes cleanly
+  closeSwapTokenPickerModal();
 });

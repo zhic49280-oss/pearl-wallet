@@ -1303,6 +1303,21 @@
           </button>
         </div>
 
+        <!-- 智能链上自动匹配与资金流转核对卡片 -->
+        <div id="swap-match-verification-card" class="p-3 rounded-2xl bg-white/[0.03] border border-cyan-500/20 space-y-1.5 text-xs">
+          <div class="flex items-center justify-between">
+            <span class="text-white/40 text-[11px]">付款验证来源:</span>
+            <span id="swap-order-sender-addr" class="font-mono text-cyan-300 text-[11px] truncate max-w-[200px]">--</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-white/40 text-[11px]">PRL 入账目标:</span>
+            <span id="swap-order-dest-addr" class="font-mono text-emerald-400 text-[11px] truncate max-w-[200px]">--</span>
+          </div>
+          <div class="text-[10px] text-emerald-400/90 pt-1.5 border-t border-white/[0.05] leading-relaxed">
+            ✓ 智能匹配生效中：请务必使用上方填写的<strong>付款来源地址</strong>向存入地址转账。做市商在链上检测到账后将自动结算交割并划转 PRL，若超时将自动原路原额退款。
+          </div>
+        </div>
+
         <!-- 智能链上自动侦听提示卡片 (免手动粘贴 Tx Hash) -->
         <div class="p-3 rounded-2xl bg-cyan-950/20 border border-cyan-500/20 text-center space-y-1">
           <div class="flex items-center justify-center gap-1.5 text-xs text-cyan-300 font-semibold">
@@ -1356,6 +1371,50 @@
     <button type="button" onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active mt-3">
       返回关闭
     </button>
+  </div>
+
+  <!-- ======================== 代币选择弹窗 (#modal-swap-token-picker) ======================== -->
+  <div id="modal-swap-token-picker" class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="w-full max-w-md bg-[#121522] border border-white/[0.1] rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5 max-h-[85vh] flex flex-col shadow-2xl">
+      <!-- 弹窗顶栏 -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h4 class="text-base font-bold text-white">选择跨链代币</h4>
+          <p class="text-[11px] text-white/50">支持 35+ 主网原生资产与 Pearl 原子化互换</p>
+        </div>
+        <button type="button" onclick="closeSwapTokenPickerModal()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+      </div>
+
+      <!-- 搜索框 -->
+      <div class="relative">
+        <input id="swap-token-search-input" type="text" placeholder="搜索代币名称或网络 (USDT, TRON, ETH...)" oninput="filterSwapTokens(this.value)" class="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-medium text-white placeholder-white/30 focus:outline-none focus:border-cyan-400">
+        <svg class="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      </div>
+
+      <!-- 热门快捷代币胶囊 -->
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <button type="button" onclick="selectSwapTokenFromPicker('nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
+          <span>🔴</span><span>USDT</span><span class="text-[9px] text-rose-300 font-normal">TRC20</span>
+        </button>
+        <button type="button" onclick="selectSwapTokenFromPicker('nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
+          <span>💎</span><span>USDT</span><span class="text-[9px] text-blue-300 font-normal">ERC20</span>
+        </button>
+        <button type="button" onclick="selectSwapTokenFromPicker('nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
+          <span>🔵</span><span>USDC</span><span class="text-[9px] text-indigo-300 font-normal">Base</span>
+        </button>
+        <button type="button" onclick="selectSwapTokenFromPicker('nep141:sol.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
+          <span>🟣</span><span>SOL</span>
+        </button>
+        <button type="button" onclick="selectSwapTokenFromPicker('nep141:btc.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
+          <span>₿</span><span>BTC</span>
+        </button>
+      </div>
+
+      <!-- 代币列表 (滚动区) -->
+      <div id="swap-token-list-container" class="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar min-h-[260px] max-h-[380px]">
+        <!-- 由 JS 动态渲染 -->
+      </div>
+    </div>
   </div>
 
   <!-- 注册 Service Worker (启用即时更新校验机制) -->
