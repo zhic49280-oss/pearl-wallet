@@ -120,9 +120,13 @@ test('T6.4: Window global functions exposure for DOM and native event dispatcher
     'setSwapSlippage',
     'executeNearSwap',
     'copySwapDepositAddress',
+    'copySwapMemo',
     'paySwapWithCurrentWallet',
     'openNearOfficialSwap',
-    'resetSwapForm'
+    'resetSwapForm',
+    'switchNearSwapMode',
+    'pasteToSwapTxHash',
+    'submitSwapDepositTxHash'
   ];
 
   for (const fn of requiredFns) {
@@ -174,4 +178,92 @@ test('T6.6: Direct wallet payment prefill and navigation flow', () => {
   assert.doesNotThrow(() => {
     paySwapWithCurrentWallet();
   }, 'paySwapWithCurrentWallet must execute cleanly');
+});
+
+test('T6.7: Bilingual switching converts nav bar, settings page labels, and counts cleanly between zh and en', () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_test_lang',
+        name: 'Test Wallet',
+        address: VALID_PEARL_ADDR,
+        balance: 12.34
+      }],
+      activeWalletId: 'w_test_lang'
+    })
+  });
+
+  const { setAppLanguage, state } = sandbox.window;
+
+  // Switch to English
+  setAppLanguage('en');
+  assert.equal(state.currentLang, 'en', 'Current language must be en');
+
+  const tabSwap = sandbox.document.querySelector('#tab-btn-swap span');
+  assert.equal(tabSwap.innerText, 'Swap', 'Bottom tab #tab-btn-swap must display Swap in English');
+
+  const devFeeLabel = sandbox.document.getElementById('dev-fee-status-label');
+  assert.ok(
+    devFeeLabel.innerText.includes('Enabled') || devFeeLabel.innerText.includes('Disabled'),
+    `devFeeLabel should be English in en mode, got: ${devFeeLabel.innerText}`
+  );
+
+  const walletsCount = sandbox.document.getElementById('settings-wallets-count');
+  assert.ok(
+    walletsCount.innerText.includes('Active Wallet'),
+    `settings-wallets-count should say Active Wallets, got: ${walletsCount.innerText}`
+  );
+
+  // Switch back to Chinese
+  setAppLanguage('zh');
+  assert.equal(state.currentLang, 'zh', 'Current language must be zh');
+  assert.equal(tabSwap.innerText, '闪兑', 'Bottom tab #tab-btn-swap must display 闪兑 in Chinese');
+  assert.ok(
+    devFeeLabel.innerText.includes('已开启') || devFeeLabel.innerText.includes('已停用'),
+    `devFeeLabel should be Chinese in zh mode, got: ${devFeeLabel.innerText}`
+  );
+});
+
+test('T6.8: Active swap order rendering with foreign tx hash submission and mode switching', async () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_swap',
+        name: 'Swap Wallet',
+        address: VALID_PEARL_ADDR,
+        balance: 50.0
+      }],
+      activeWalletId: 'w_swap'
+    })
+  });
+
+  const { switchNearSwapMode, submitSwapDepositTxHash, state } = sandbox.window;
+
+  // Mode switching
+  switchNearSwapMode('aggregator');
+  const aggView = sandbox.document.getElementById('swap-mode-aggregator-view');
+  assert.ok(!aggView.classList.contains('hidden'), 'Aggregator view should be visible in aggregator mode');
+
+  switchNearSwapMode('intent');
+  assert.ok(aggView.classList.contains('hidden'), 'Aggregator view should be hidden in intent mode');
+
+  // Submit foreign tx hash
+  state.nearSwap.activeOrder = {
+    depositAddress: 'defuse.near',
+    amountIn: '10',
+    amountOut: '6.2',
+    originSymbol: 'USDT',
+    destSymbol: 'PRL'
+  };
+
+  const hashInput = sandbox.document.getElementById('swap-tx-hash-input');
+  hashInput.value = '4V78PsqYv3qfN7K9Z9aW9m2Q7x9F8s4d';
+
+  await submitSwapDepositTxHash();
+
+  const pill = sandbox.document.getElementById('swap-order-status-pill');
+  assert.ok(
+    pill.innerText.includes('充值凭证已提交') || pill.innerText.includes('已确认'),
+    `Order status pill should update on submit, got: ${pill.innerText}`
+  );
 });

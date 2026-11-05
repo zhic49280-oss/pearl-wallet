@@ -52,17 +52,19 @@ function createSandbox(initialStorage = {}) {
 
   function getOrCreateElement(id) {
     if (!elements.has(id)) {
+      const classSet = new Set();
       elements.set(id, {
         id,
         value: '',
         innerText: '',
         innerHTML: '',
         style: {},
+        className: '',
         classList: {
-          contains: () => false,
-          add: () => {},
-          remove: () => {},
-          toggle: () => {}
+          contains: (cls) => classSet.has(cls),
+          add: (...classes) => classes.forEach(c => classSet.add(c)),
+          remove: (...classes) => classes.forEach(c => classSet.delete(c)),
+          toggle: (cls) => classSet.has(cls) ? (classSet.delete(cls), false) : (classSet.add(cls), true)
         },
         setAttribute: () => {},
         getAttribute: () => null,
