@@ -126,7 +126,9 @@ test('T6.4: Window global functions exposure for DOM and native event dispatcher
     'resetSwapForm',
     'switchNearSwapMode',
     'pasteToSwapTxHash',
-    'submitSwapDepositTxHash'
+    'submitSwapDepositTxHash',
+    'openAddressBookForSwap',
+    'saveSwapRecipientToAddressBook'
   ];
 
   for (const fn of requiredFns) {
@@ -266,4 +268,88 @@ test('T6.8: Active swap order rendering with foreign tx hash submission and mode
     pill.innerText.includes('充值凭证已提交') || pill.innerText.includes('已确认'),
     `Order status pill should update on submit, got: ${pill.innerText}`
   );
+});
+
+test('T6.9: Multi-token selection slot placement and currency choice in Buy vs Sell modes', () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_test_slots',
+        name: 'Slot Test Wallet',
+        address: VALID_PEARL_ADDR,
+        balance: 100.0
+      }],
+      activeWalletId: 'w_test_slots'
+    })
+  });
+
+  const { setSwapDirection, selectSwapTargetToken, state } = sandbox.window;
+
+  // In Sell mode: Pay slot has PRL badge; Receive slot has target token dropdown
+  setSwapDirection('sell');
+  const paySlotSell = sandbox.document.getElementById('swap-pay-token-slot');
+  const recvSlotSell = sandbox.document.getElementById('swap-receive-token-slot');
+  assert.ok(paySlotSell.innerHTML.includes('PRL') && paySlotSell.innerHTML.includes('Pearl 主网'), 'In Sell mode, pay slot must render PRL badge');
+  assert.ok(recvSlotSell.innerHTML.includes('swap-target-token-select'), 'In Sell mode, receive slot must render target token select dropdown');
+
+  // Switch to Buy mode: Pay slot has multi-currency select dropdown; Receive slot has PRL badge
+  setSwapDirection('buy');
+  const paySlotBuy = sandbox.document.getElementById('swap-pay-token-slot');
+  const recvSlotBuy = sandbox.document.getElementById('swap-receive-token-slot');
+  assert.ok(paySlotBuy.innerHTML.includes('swap-target-token-select'), 'In Buy mode, pay slot must render multi-currency select dropdown');
+  assert.ok(recvSlotBuy.innerHTML.includes('PRL') && recvSlotBuy.innerHTML.includes('Pearl 主网'), 'In Buy mode, receive slot must render PRL badge');
+
+  // Verify multiple tokens exist in select options (TRON USDT, ETH USDT, NEAR USDT, USDC, ETH, SOL, BTC)
+  assert.ok(paySlotBuy.innerHTML.includes('TRON'), 'Buy pay slot options must include TRON USDT');
+  assert.ok(paySlotBuy.innerHTML.includes('Ethereum'), 'Buy pay slot options must include Ethereum USDT/ETH');
+  assert.ok(paySlotBuy.innerHTML.includes('Solana'), 'Buy pay slot options must include Solana');
+  assert.ok(paySlotBuy.innerHTML.includes('Bitcoin'), 'Buy pay slot options must include Bitcoin');
+
+  // Selecting a token in Buy mode updates targetTokenId cleanly
+  const solToken = state.nearSwap.tokensList.find(t => t.symbol === 'SOL');
+  selectSwapTargetToken(solToken.assetId);
+  assert.equal(state.nearSwap.targetTokenId, solToken.assetId, 'Selected target token should be SOL in buy mode');
+});
+
+test('T6.10: Address book integration and localStorage persistence across reboots', () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_test_addr',
+        name: 'Addr Test Wallet',
+        address: VALID_PEARL_ADDR,
+        balance: 100.0
+      }],
+      activeWalletId: 'w_test_addr'
+    }),
+    'pearl_contacts_v1': JSON.stringify([
+      {
+        id: 'contact_pre_1',
+        name: 'Saved TRON Pay Address',
+        address: 'TYDzsYUEpvnYmQk4zGP9sWWcTEd36d5f7U',
+        createdAt: '2026-11-01T00:00:00.000Z'
+      }
+    ])
+  });
+
+  const { openAddressBookForSwap, selectContactAddress, saveSwapRecipientToAddressBook, state } = sandbox.window;
+
+  // Open address book in swap mode
+  openAddressBookForSwap();
+  assert.equal(state.addressBookMode, 'swap', 'Address book mode should be swap');
+
+  // Select contact
+  selectContactAddress('TYDzsYUEpvnYmQk4zGP9sWWcTEd36d5f7U', 'Saved TRON Pay Address');
+  assert.equal(state.nearSwap.recipientAddress, 'TYDzsYUEpvnYmQk4zGP9sWWcTEd36d5f7U', 'Recipient address should update to chosen contact');
+
+  // Save new address to address book
+  const recipientInput = sandbox.document.getElementById('swap-recipient-input');
+  recipientInput.value = '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06';
+  saveSwapRecipientToAddressBook();
+
+  // Verify saved in state.contacts and serialized to localStorage
+  const savedContacts = JSON.parse(sandbox.localStorage.getItem('pearl_contacts_v1'));
+  assert.ok(Array.isArray(savedContacts), 'Contacts in localStorage must be an array');
+  const found = savedContacts.find(c => c.address === '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06');
+  assert.ok(found, 'Newly saved recipient address must persist in localStorage');
 });

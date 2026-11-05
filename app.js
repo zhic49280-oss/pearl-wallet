@@ -3036,10 +3036,53 @@
   };
 
   window.closeAddressBookSheet = function () {
+    const prevMode = state.addressBookMode;
     closeSheet();
-    if (state.addressBookMode === 'select') {
+    if (prevMode === 'select') {
       setTimeout(() => openSheet('sheet-send'), 250);
+    } else if (prevMode === 'swap') {
+      setTimeout(() => openNearSwapSheet(), 250);
     }
+  };
+
+  window.openAddressBookForSwap = function () {
+    triggerHaptic('light');
+    window.openAddressBook('swap');
+  };
+
+  window.saveSwapRecipientToAddressBook = function () {
+    triggerHaptic('light');
+    const input = document.getElementById('swap-recipient-input');
+    const addr = (input ? input.value : state.nearSwap.recipientAddress || '').trim();
+    if (!addr) {
+      triggerHaptic('error');
+      showToast('请先输入要保存的地址');
+      return;
+    }
+
+    const targetToken = getSelectedTargetToken();
+    const isSell = state.nearSwap.direction === 'sell';
+    const tag = isSell
+      ? `${targetToken.symbol}-${targetToken.blockchain.toUpperCase()}收款`
+      : `${targetToken.symbol}-${targetToken.blockchain.toUpperCase()}退款`;
+
+    const existing = state.contacts.find(c => c.address.toLowerCase() === addr.toLowerCase());
+    if (existing) {
+      triggerHaptic('error');
+      showToast(`该地址已存在常用地址簿中 (${existing.name})`);
+      return;
+    }
+
+    const newContact = {
+      id: `contact-${Date.now()}`,
+      name: `${tag} (${addr.slice(0, 6)}...${addr.slice(-4)})`,
+      address: addr,
+      createdAt: new Date().toISOString()
+    };
+    state.contacts.unshift(newContact);
+    saveContacts();
+    triggerHaptic('success');
+    showToast(`⭐ 已将地址保存至常用地址簿: ${newContact.name}`);
   };
 
   window.openAddContactModal = function () {
@@ -3132,6 +3175,17 @@
 
   window.selectContactAddress = function (addr, name) {
     triggerHaptic('success');
+    if (state.addressBookMode === 'swap') {
+      state.nearSwap.recipientAddress = addr;
+      const input = document.getElementById('swap-recipient-input');
+      if (input) input.value = addr;
+      closeSheet();
+      setTimeout(() => {
+        openNearSwapSheet();
+        showToast(`已填入【${name}】地址`);
+      }, 250);
+      return;
+    }
     const input = document.getElementById('send-address-input');
     if (input) input.value = addr;
     closeSheet();
@@ -3181,6 +3235,26 @@
     {
       symbol: 'USDT',
       name: 'Tether USD',
+      blockchain: 'tron',
+      assetId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
+      decimals: 6,
+      icon: '🔴',
+      price: 1.0,
+      networkName: 'TRON (TRC20)'
+    },
+    {
+      symbol: 'USDT',
+      name: 'Tether USD',
+      blockchain: 'eth',
+      assetId: 'nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near',
+      decimals: 6,
+      icon: '💎',
+      price: 1.0,
+      networkName: 'Ethereum (ERC20)'
+    },
+    {
+      symbol: 'USDT',
+      name: 'Tether USD',
       blockchain: 'near',
       assetId: 'nep141:usdt.tether-token.near',
       decimals: 6,
@@ -3197,26 +3271,6 @@
       icon: '🔵',
       price: 1.0,
       networkName: 'Base (EVM)'
-    },
-    {
-      symbol: 'USDT',
-      name: 'Tether USD',
-      blockchain: 'eth',
-      assetId: 'nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near',
-      decimals: 6,
-      icon: '💎',
-      price: 1.0,
-      networkName: 'Ethereum Mainnet'
-    },
-    {
-      symbol: 'USDT',
-      name: 'Tether USD',
-      blockchain: 'tron',
-      assetId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
-      decimals: 6,
-      icon: '🔴',
-      price: 1.0,
-      networkName: 'TRON'
     },
     {
       symbol: 'NEAR',
@@ -3273,7 +3327,7 @@
 
   state.nearSwap = {
     direction: 'sell', // 'sell': PRL -> Foreign; 'buy': Foreign -> PRL
-    targetTokenId: 'nep141:usdt.tether-token.near',
+    targetTokenId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
     slippageTolerance: 100, // 100 bps = 1.0%
     amountIn: '',
     amountOut: '',
@@ -3559,85 +3613,90 @@
       }
     }
 
-    // 2. 支付方卡片
+    // 锁定当前登录 Pearl 钱包信息卡片
+    const fixedWalletName = document.getElementById('swap-fixed-wallet-name');
+    const fixedWalletAddr = document.getElementById('swap-fixed-wallet-addr');
+    const fixedWalletBal = document.getElementById('swap-fixed-wallet-bal');
+    if (fixedWalletName) fixedWalletName.innerText = wallet ? wallet.name : 'Pearl-01';
+    if (fixedWalletAddr) fixedWalletAddr.innerText = wallet ? wallet.address : '未连接';
+    if (fixedWalletBal) fixedWalletBal.innerText = wallet ? `${(Number(wallet.balance) || 0).toFixed(4)} PRL` : '0.00 PRL';
+
+    // 2. 支付方与接收方槽位渲染 (买入时支付方为下拉币种选择，卖出时接收方为下拉币种选择)
     const balanceLabel = document.getElementById('swap-balance-label');
     const balanceVal = document.getElementById('swap-balance-value');
-    const payBadge = document.getElementById('swap-pay-token-badge');
+    const paySlot = document.getElementById('swap-pay-token-slot');
+    const receiveSlot = document.getElementById('swap-receive-token-slot');
+
+    const prlBadgeHTML = `
+      <div id="swap-pay-token-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white">
+        <span class="text-lg">🦪</span>
+        <div class="text-left">
+          <div class="text-xs font-bold leading-tight">PRL</div>
+          <div class="text-[9px] text-cyan-300/80 leading-tight">Pearl 主网</div>
+        </div>
+      </div>
+    `;
+
+    const tokenOptionsHTML = state.nearSwap.tokensList.map(t => `
+      <option value="${t.assetId}" ${t.assetId === targetToken.assetId ? 'selected' : ''}>
+        ${t.icon} ${t.symbol} (${t.networkName})
+      </option>
+    `).join('');
+
+    const tokenSelectHTML = `
+      <div class="relative">
+        <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="appearance-none bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 pr-7 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 cursor-pointer">
+          ${tokenOptionsHTML}
+        </select>
+        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/40">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
+    `;
 
     if (isSell) {
       if (balanceLabel) balanceLabel.innerText = 'PRL 可用余额:';
       if (balanceVal) balanceVal.innerText = wallet ? (Number(wallet.balance) || 0).toFixed(4) : '0.00';
-      if (payBadge) {
-        payBadge.innerHTML = `
-          <span class="text-lg">🦪</span>
-          <div class="text-left">
-            <div class="text-xs font-bold leading-tight">PRL</div>
-            <div class="text-[9px] text-cyan-300/80 leading-tight">Pearl 主网</div>
-          </div>
-        `;
-      }
+      if (paySlot) paySlot.innerHTML = prlBadgeHTML;
+      if (receiveSlot) receiveSlot.innerHTML = tokenSelectHTML;
     } else {
-      if (balanceLabel) balanceLabel.innerText = '外链钱包充值:';
+      if (balanceLabel) balanceLabel.innerText = '外链参考:';
       if (balanceVal) balanceVal.innerText = '--';
-      if (payBadge) {
-        payBadge.innerHTML = `
-          <span class="text-lg">${targetToken.icon}</span>
-          <div class="text-left">
-            <div class="text-xs font-bold leading-tight">${targetToken.symbol}</div>
-            <div class="text-[9px] text-cyan-300/80 leading-tight">${targetToken.networkName}</div>
-          </div>
-        `;
-      }
+      if (paySlot) paySlot.innerHTML = tokenSelectHTML;
+      if (receiveSlot) receiveSlot.innerHTML = prlBadgeHTML;
     }
 
-    // 3. 接收币种下拉菜单填充
-    const selectEl = document.getElementById('swap-target-token-select');
-    if (selectEl) {
-      if (isSell) {
-        selectEl.innerHTML = state.nearSwap.tokensList.map(t => `
-          <option value="${t.assetId}" ${t.assetId === targetToken.assetId ? 'selected' : ''}>
-            ${t.icon} ${t.symbol} (${t.blockchain.toUpperCase()})
-          </option>
-        `).join('');
-      } else {
-        selectEl.innerHTML = `
-          <option value="${PEARL_DEFUSE_TOKEN.assetId}" selected>
-            🦪 PRL (Pearl 主网)
-          </option>
-        `;
-      }
-    }
-
-    // 4. 收款地址区域动态适配
+    // 3. 收款/付款退款地址区域动态适配
     const recipientLabel = document.getElementById('swap-recipient-label');
     const recipientHint = document.getElementById('swap-recipient-chain-hint');
     const recipientInput = document.getElementById('swap-recipient-input');
     const recipientFeedback = document.getElementById('swap-recipient-feedback');
 
     if (isSell) {
-      if (recipientLabel) recipientLabel.innerText = '接收目标链钱包地址';
-      if (recipientHint) recipientHint.innerText = `${targetToken.networkName}`;
+      if (recipientLabel) recipientLabel.innerText = `外链收款钱包地址 (${targetToken.symbol} - ${targetToken.networkName})`;
+      if (recipientHint) recipientHint.innerText = `${targetToken.blockchain.toUpperCase()} 链`;
       if (recipientInput) {
         recipientInput.disabled = false;
-        recipientInput.placeholder = `输入接收 ${targetToken.symbol} 的 ${targetToken.blockchain.toUpperCase()} 链地址`;
+        recipientInput.placeholder = `输入接收 ${targetToken.symbol} 的 ${targetToken.blockchain.toUpperCase()} 钱包地址`;
         recipientInput.value = state.nearSwap.recipientAddress;
       }
       if (recipientFeedback) {
-        recipientFeedback.innerHTML = `请仔细核对您的 <strong>${targetToken.networkName}</strong> 收款地址，NEAR Intents Solvers 将直接跨链打款到该地址。`;
+        recipientFeedback.innerHTML = `做市商将在原子化交割后直接打款至该 <strong>${targetToken.networkName}</strong> 收款地址。`;
       }
     } else {
-      if (recipientLabel) recipientLabel.innerText = '接收 Pearl 钱包地址';
-      if (recipientHint) recipientHint.innerText = '当前主网钱包 (Taproot)';
+      if (recipientLabel) recipientLabel.innerText = `外链付款 / 退款地址 (${targetToken.symbol} - ${targetToken.networkName})`;
+      if (recipientHint) recipientHint.innerText = `${targetToken.blockchain.toUpperCase()} 链`;
       if (recipientInput) {
-        recipientInput.disabled = true;
-        recipientInput.value = wallet ? wallet.address : '';
+        recipientInput.disabled = false;
+        recipientInput.placeholder = `输入您付款或用于超时退款的 ${targetToken.blockchain.toUpperCase()} 钱包地址`;
+        recipientInput.value = state.nearSwap.recipientAddress;
       }
       if (recipientFeedback) {
-        recipientFeedback.innerHTML = `兑换生成的 PRL 将直接安全入账至您的当前钱包 <strong>${wallet ? wallet.name : ''}</strong>。`;
+        recipientFeedback.innerHTML = `用于核对您的链上充值；若超时或异常将自动原路原额退款。兑换生成的 PRL 将直接安全入账至上方锁定的当前钱包 <strong>${wallet ? wallet.name : ''}</strong>。`;
       }
     }
 
-    // 5. 汇率更新
+    // 4. 汇率更新
     const rateEl = document.getElementById('swap-detail-rate');
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const targetPrice = targetToken.price || 1.0;
@@ -3910,6 +3969,8 @@
 
   function startSwapStatusPolling(depositAddress) {
     if (state.nearSwap.statusPollTimer) clearInterval(state.nearSwap.statusPollTimer);
+    const wallet = getActiveWallet();
+    const initialBalance = wallet ? (Number(wallet.balance) || 0) : 0;
 
     state.nearSwap.statusPollTimer = setInterval(async () => {
       try {
@@ -3917,6 +3978,18 @@
         if (res.ok) {
           const json = await res.json();
           updateSwapOrderStatus(json.status || json.state || 'PENDING');
+          if (json.status === 'SUCCESS' || json.status === 'COMPLETED') {
+            if (wallet) fetchAddressBalance(wallet.address);
+            return;
+          }
+        }
+
+        // 智能静默侦听：买入 PRL 时，一旦侦测到当前钱包主网余额增加，立即自动交割完成
+        if (wallet && state.nearSwap.direction === 'buy') {
+          const balData = await fetchAddressBalance(wallet.address);
+          if (balData && typeof balData.balance === 'number' && balData.balance > initialBalance) {
+            updateSwapOrderStatus('SUCCESS');
+          }
         }
       } catch (e) {}
     }, 4500);
