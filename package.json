@@ -4,8 +4,12 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "test": "node --test test/*.test.js",
+    "start": "node server.js",
+    "build": "node scripts/sync-assets.js",
+    "sync": "node scripts/sync-assets.js",
+    "sync:cap": "node scripts/sync-assets.js && npx cap copy",
+    "verify:sync": "node scripts/verify-sync.js"
   },
   "repository": {
     "type": "git",

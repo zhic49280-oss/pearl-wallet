@@ -21,8 +21,7 @@ jobs:
       - name: 准备 Web 资源并同步 Capacitor iOS
         run: |
           npm install
-          mkdir -p dist
-          cp index.html app.js style.css bip39-wordlist.js qrcode.min.js manifest.json sw.js dist/
+          node scripts/sync-assets.js
           npx cap sync ios
 
       - name: 使用 Xcode 编译 iOS 原生程序 (无证书编译)

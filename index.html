@@ -108,7 +108,7 @@
         <div class="flex items-center justify-between text-xs font-medium text-white/40 mb-2">
           <span>总资产净值</span>
           <span id="market-price-tag" class="flex items-center gap-1 text-cyan-400 font-semibold bg-cyan-500/10 px-2.5 py-0.5 rounded-full text-[11px]">
-            <span>1 PRL ≈ $1.72</span>
+            <span>1 PRL ≈ --</span>
           </span>
         </div>
 
@@ -123,47 +123,75 @@
         <div class="flex items-center justify-between mb-5 text-[11px] font-mono text-white/50 bg-white/[0.03] px-3 py-1.5 rounded-xl border border-white/[0.05]">
           <div class="flex items-center gap-1.5">
             <span class="text-white/40">总产出:</span>
-            <span id="wallet-total-supply" class="text-cyan-300 font-semibold">~3.68 亿 PRL</span>
+            <span id="wallet-total-supply" class="text-cyan-300 font-semibold">-- 亿 PRL</span>
           </div>
           <div class="flex items-center gap-1.5">
             <span class="text-white/40">总市值:</span>
-            <span id="wallet-total-market-cap" class="text-emerald-300 font-semibold">$6.33 亿</span>
+            <span id="wallet-total-market-cap" class="text-emerald-300 font-semibold">--</span>
           </div>
         </div>
 
-        <!-- 快捷操作胶囊 (转账 / 收款 / 钱包管理 / 助记词安全查看) -->
-        <div class="grid grid-cols-4 gap-2 pt-2 border-t border-white/[0.08]">
+        <!-- 快捷操作胶囊 (转账 / 收款 / 跨链闪兑 / 钱包管理 / 助记词安全查看) -->
+        <div class="grid grid-cols-5 gap-1.5 pt-2 border-t border-white/[0.08]">
           <!-- 转账 -->
-          <button onclick="openSheet('sheet-send')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-11 h-11 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-500/10">
+          <button onclick="openSheet('sheet-send')" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-500/10">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"/></svg>
             </div>
-            <span class="text-[11px] font-medium text-white/80">转账</span>
+            <span class="text-[10px] font-medium text-white/80">转账</span>
           </button>
 
           <!-- 收款 -->
-          <button onclick="openSheet('sheet-receive')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-11 h-11 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/10">
+          <button onclick="openSheet('sheet-receive')" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shadow-lg shadow-purple-500/10">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
             </div>
-            <span class="text-[11px] font-medium text-white/80">收款</span>
+            <span class="text-[10px] font-medium text-white/80">收款</span>
+          </button>
+
+          <!-- 跨链兑换 (NEAR Intents) -->
+          <button onclick="openNearSwapSheet()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-gradient-to-b from-cyan-500/15 to-indigo-500/15 hover:from-cyan-500/25 hover:to-indigo-500/25 border border-cyan-400/30 btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+            </div>
+            <span class="text-[10px] font-bold text-cyan-300">跨链闪兑</span>
           </button>
 
           <!-- 钱包管理 -->
-          <button onclick="openSheet('sheet-wallet-manager')" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-11 h-11 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+          <button onclick="openSheet('sheet-wallet-manager')" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
             </div>
-            <span class="text-[11px] font-medium text-white/80">多钱包</span>
+            <span class="text-[10px] font-medium text-white/80">多钱包</span>
           </button>
 
           <!-- 助记词安全备份 (仅在有钱包时才可点击) -->
-          <button onclick="startSecureMnemonicFlow()" class="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
+          <button onclick="startSecureMnemonicFlow()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
             </div>
-            <span class="text-[11px] font-medium text-white/80">助记词</span>
+            <span class="text-[10px] font-medium text-white/80">助记词</span>
           </button>
+        </div>
+      </div>
+
+      <!-- NEAR 链抽象跨链兑换快捷横幅 -->
+      <div onclick="openNearSwapSheet()" class="p-3 mb-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/40 to-purple-950/40 border border-cyan-400/25 hover:border-cyan-400/50 flex items-center justify-between cursor-pointer btn-active transition-all shadow-lg shadow-cyan-950/30">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 border border-cyan-400/30 text-cyan-300 flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-500/10">
+            ⚡
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-white">NEAR 链抽象跨链闪兑</span>
+              <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">NEAR Intents</span>
+            </div>
+            <div class="text-[11px] text-white/50 mt-0.5">免跨链桥与原生Gas · 支持 PRL 与 35+ 公链资产原子化意图兑换</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 text-cyan-300 text-xs font-bold bg-cyan-500/15 px-2.5 py-1 rounded-lg border border-cyan-400/30">
+          <span>闪兑</span>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </div>
       </div>
 
@@ -173,10 +201,10 @@
           <div class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></div>
           <div>
             <div class="text-xs font-semibold text-cyan-200">
-              全网区块高度: <span id="banner-block-height" class="font-mono font-bold">135,232</span>
+              全网区块高度: <span id="banner-block-height" class="font-mono font-bold">--</span>
             </div>
             <div class="text-[11px] text-white/40">
-              全网矿工: <span id="banner-active-miners" class="text-white/60 font-semibold">32,111</span> 人 · 块奖励: <span id="banner-block-reward" class="text-cyan-300">2,213 PRL</span>
+              全网矿工: <span id="banner-active-miners" class="text-white/60 font-semibold">--</span> 人 · 块奖励: <span id="banner-block-reward" class="text-cyan-300">-- PRL</span>
             </div>
           </div>
         </div>
@@ -205,9 +233,9 @@
       <div class="ios-glass-card rounded-[28px] p-6 relative overflow-hidden">
         <div class="flex items-center justify-between mb-4">
           <span class="text-xs font-bold text-white/50">Pearl PoUW 全网总算力</span>
-          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">105,699+ 矿机在线</span>
+          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">-- 矿机在线</span>
         </div>
-        <div class="text-3xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">83.31 EH/s</div>
+        <div class="text-3xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">-- EH/s</div>
         <div class="text-xs text-white/40 mb-4">全网 PearlHash / AI 矩阵算力集群</div>
 
         <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/[0.08]">
@@ -254,11 +282,11 @@
               <span id="chart-scrub-time" class="font-mono text-cyan-400 font-semibold">● 实时最新</span>
             </div>
             <div id="chart-scrub-val" class="text-xl font-extrabold font-mono text-cyan-300 mt-0.5 tracking-tight">
-              83.31 EH/s
+              --
             </div>
           </div>
           <div class="text-right">
-            <div id="chart-trend-tag" class="text-xs font-semibold text-emerald-400">+8.42% 动态波动</div>
+            <div id="chart-trend-tag" class="text-xs font-semibold text-emerald-400">--</div>
             <div id="chart-scrub-hint" class="text-[9px] text-white/30 mt-0.5">👆 左右滑动查看任意时点</div>
           </div>
         </div>
@@ -288,9 +316,9 @@
 
         <!-- 底部数据统计条 -->
         <div class="flex items-center justify-between text-[10px] text-white/40 font-mono pt-1.5 border-t border-white/[0.04]">
-          <span id="chart-stat-min">最低: 58.20</span>
-          <span id="chart-stat-avg">平均: 68.45</span>
-          <span id="chart-stat-max" class="text-amber-400">峰值: 82.40</span>
+          <span id="chart-stat-min">最低: --</span>
+          <span id="chart-stat-avg">平均: --</span>
+          <span id="chart-stat-max" class="text-amber-400">最高/峰值: --</span>
         </div>
       </div>
 
@@ -317,8 +345,6 @@
           <div class="flex items-center justify-between text-[11px] text-white/60 mb-1">
             <span>矿工钱包收款地址</span>
             <div class="flex items-center gap-2">
-              <button type="button" onclick="fillTestMinerAddress()" class="text-purple-300 font-medium hover:underline text-[11px]">填入主网活跃矿工</button>
-              <span class="text-white/20">|</span>
               <button type="button" onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
             </div>
           </div>
@@ -345,7 +371,7 @@
           <!-- 实时价格与刷新按钮 -->
           <div onclick="triggerHaptic('light'); refreshChainData();" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 text-[10px] font-semibold cursor-pointer btn-active">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span id="tokenomics-live-price">1 PRL ≈ $1.72</span>
+            <span id="tokenomics-live-price">1 PRL ≈ --</span>
             <svg class="w-3 h-3 text-cyan-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           </div>
         </div>
@@ -355,28 +381,28 @@
           <!-- 1. 全网已开采总产出 -->
           <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
             <div class="text-[11px] text-white/40 mb-1">全网总产出 (Circulating)</div>
-            <div id="tokenomics-total-supply" class="text-sm font-bold text-cyan-300 font-mono">~3.68 亿 PRL</div>
-            <div id="tokenomics-supply-pct" class="text-[10px] text-white/30 mt-0.5">占总硬顶 17.53%</div>
+            <div id="tokenomics-total-supply" class="text-sm font-bold text-cyan-300 font-mono">-- 亿 PRL</div>
+            <div id="tokenomics-supply-pct" class="text-[10px] text-white/30 mt-0.5">占总硬顶 --%</div>
           </div>
 
           <!-- 2. 全网总市值 -->
           <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
             <div class="text-[11px] text-white/40 mb-1">全网总市值 (Market Cap)</div>
-            <div id="tokenomics-market-cap" class="text-sm font-bold text-emerald-400 font-mono">≈ $6.33 亿 USD</div>
-            <div id="tokenomics-market-cap-cny" class="text-[10px] text-white/30 mt-0.5">≈ ¥45.9 亿 CNY</div>
+            <div id="tokenomics-market-cap" class="text-sm font-bold text-emerald-400 font-mono">-- USD</div>
+            <div id="tokenomics-market-cap-cny" class="text-[10px] text-white/30 mt-0.5">-- CNY</div>
           </div>
 
           <!-- 3. 每日总产出 -->
           <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
             <div class="text-[11px] text-white/40 mb-1">每日总产出 (Daily Emission)</div>
-            <div id="tokenomics-daily-emission" class="text-sm font-bold text-cyan-300 font-mono">~98.48 万 PRL</div>
-            <div id="tokenomics-daily-fiat" class="text-[10px] text-white/30 mt-0.5">≈ $169.4 万 USD/天</div>
+            <div id="tokenomics-daily-emission" class="text-sm font-bold text-cyan-300 font-mono">-- 万 PRL</div>
+            <div id="tokenomics-daily-fiat" class="text-[10px] text-white/30 mt-0.5">--</div>
           </div>
 
           <!-- 4. 单块产出 -->
           <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
             <div class="text-[11px] text-white/40 mb-1">单块产出 (Block Reward)</div>
-            <div id="tokenomics-block-reward" class="text-sm font-bold text-emerald-400 font-mono">2,213.16 PRL</div>
+            <div id="tokenomics-block-reward" class="text-sm font-bold text-emerald-400 font-mono">-- PRL</div>
             <div class="text-[10px] text-white/30 mt-0.5">平滑递减 (无断崖半衰)</div>
           </div>
         </div>
@@ -530,6 +556,11 @@
       <button id="tab-btn-wallet" type="button" onclick="switchTab('wallet')" class="nav-tab-btn active btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
         <span class="text-[10px]">钱包</span>
+      </button>
+
+      <button id="tab-btn-swap" type="button" onclick="openNearSwapSheet()" class="nav-tab-btn btn-active">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+        <span class="text-[10px]">闪兑</span>
       </button>
 
       <button id="tab-btn-mining" type="button" onclick="switchTab('mining')" class="nav-tab-btn btn-active">
@@ -758,7 +789,7 @@
 
     <div class="mb-4">
       <label class="block text-xs text-white/60 mb-1" data-i18n="import.wordsLabel">助记词 (英文空格隔开)</label>
-      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: lottery girl rain peasant fold ankle combine quote supply source can season..." class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: word1 word2 word3 ... 填入 12 或 24 个英文单词" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
     </div>
 
     <!-- 显式错误提示区 (让用户第一时间看清任何格式问题，绝不静默拦截) -->
@@ -991,6 +1022,268 @@
     </button>
   </div>
 
+  <!-- ======================== 抽屉 I：网络与 RPC 节点配置 (#sheet-rpc-settings) ======================== -->
+  <div id="sheet-rpc-settings" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] px-5 pt-3 pb-6 max-w-md mx-auto sheet-safe-bottom max-h-[90vh] max-h-[90dvh] overflow-y-auto no-scrollbar">
+    <div class="sticky top-0 bg-[#10121B]/95 backdrop-blur z-20 py-2 flex items-center justify-between mb-2">
+      <div class="w-8"></div>
+      <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+      <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+    </div>
+
+    <div class="text-center mb-4">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] font-medium mb-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>区块链连接节点设置</span>
+      </div>
+      <h3 class="text-base font-bold text-white">网络与 RPC 节点配置</h3>
+      <p class="text-xs text-white/40 mt-0.5">选择链上数据查询网关或连接本地 Consensus 节点</p>
+    </div>
+
+    <!-- 当前连接状态与测速大盘卡片 -->
+    <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4 space-y-2">
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-white/50">当前连接状态</span>
+        <button type="button" onclick="testRpcConnection()" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold text-[10px] border border-cyan-400/30 btn-active flex items-center gap-1">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          测试延迟
+        </button>
+      </div>
+      <div class="flex items-center justify-between pt-1">
+        <div class="text-xs font-semibold text-white/90" id="rpc-current-label">prlscan.com (官方主网)</div>
+        <div id="rpc-ping-result" class="text-[11px] text-emerald-400 font-mono">⚡ 正常</div>
+      </div>
+    </div>
+
+    <!-- 预设可用节点列表 -->
+    <div class="mb-4">
+      <div class="text-xs font-bold text-white/70 mb-2 px-1">预设节点与网关</div>
+      <div id="rpc-endpoints-list" class="space-y-2">
+        <!-- 由 JavaScript 动态渲染高亮节点卡片 -->
+      </div>
+    </div>
+
+    <!-- 自定义节点接入区域 -->
+    <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06] mb-4 space-y-2.5">
+      <div class="text-xs font-bold text-white/70">自定义 RPC 节点</div>
+      <div class="relative">
+        <input id="custom-rpc-input" type="url" placeholder="https://your-node.example.com/v1" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+      </div>
+      <button type="button" onclick="connectCustomRpc()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs btn-active">
+        连接至此自定义节点
+      </button>
+    </div>
+
+    <button type="button" onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active">
+      完成并关闭
+    </button>
+  </div>
+
+  <!-- ======================== 抽屉 J：NEAR 链抽象跨链兑换 (#sheet-near-swap) ======================== -->
+  <div id="sheet-near-swap" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] px-5 pt-3 pb-6 max-w-md mx-auto sheet-safe-bottom max-h-[90vh] max-h-[90dvh] overflow-y-auto no-scrollbar">
+    <div class="sticky top-0 bg-[#10121B]/95 backdrop-blur z-20 py-2 flex items-center justify-between mb-2">
+      <div class="w-8"></div>
+      <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+      <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+    </div>
+
+    <div class="text-center mb-3">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-cyan-500/15 to-indigo-500/15 border border-cyan-400/30 text-cyan-300 text-[11px] font-medium mb-1.5 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+        <span>NEAR Intents · 链抽象跨链闪兑</span>
+      </div>
+      <h3 class="text-base font-bold text-white">跨链意图兑换 (NEAR Swap)</h3>
+      <p class="text-xs text-white/40 mt-0.5">免跨链桥与原生 Gas 费 · 支持与 35+ 公链资产原子化互换</p>
+    </div>
+
+    <!-- 兑换方向切换 Tab (卖出 PRL / 存入外链买入 PRL) -->
+    <div class="flex items-center gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3">
+      <button type="button" id="btn-swap-dir-sell" onclick="setSwapDirection('sell')" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm">
+        卖出 PRL ➔ 外链
+      </button>
+      <button type="button" id="btn-swap-dir-buy" onclick="setSwapDirection('buy')" class="flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white">
+        存入外链 ➔ 买入 PRL
+      </button>
+    </div>
+
+    <!-- 兑换表单区域 -->
+    <div id="swap-form-container" class="space-y-2 mb-3">
+      <!-- 支付方卡片 (Pay) -->
+      <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.07] focus-within:border-cyan-400/50 transition-all">
+        <div class="flex items-center justify-between text-xs text-white/50 mb-2">
+          <span>支付 (You Pay)</span>
+          <div class="flex items-center gap-1.5">
+            <span id="swap-balance-label">余额:</span>
+            <span id="swap-balance-value" class="font-mono text-cyan-300 font-semibold">0.00</span>
+            <button type="button" onclick="setSwapMaxAmount()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-400/20 hover:bg-cyan-500/25">最大</button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1">
+            <input id="swap-amount-in" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00" oninput="handleSwapAmountInput(this)" class="w-full bg-transparent text-xl font-extrabold text-white font-mono placeholder-white/20 focus:outline-none">
+            <div id="swap-fiat-in" class="text-[11px] text-white/40 mt-1 font-mono">≈ $0.00 USD</div>
+          </div>
+          <!-- 支付币种展示 / 选择器 -->
+          <div id="swap-pay-token-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white">
+            <span class="text-lg">🦪</span>
+            <div class="text-left">
+              <div class="text-xs font-bold leading-tight">PRL</div>
+              <div class="text-[9px] text-cyan-300/80 leading-tight">Pearl 主网</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中间方向对调交互按钮 -->
+      <div class="relative flex items-center justify-center -my-1 z-10">
+        <button type="button" onclick="toggleSwapDirection()" class="w-8 h-8 rounded-full bg-[#161926] border border-white/[0.15] hover:border-cyan-400/60 text-white/70 hover:text-cyan-300 flex items-center justify-center shadow-lg transition-all btn-active">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+        </button>
+      </div>
+
+      <!-- 接收方卡片 (Receive) -->
+      <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.07] focus-within:border-cyan-400/50 transition-all">
+        <div class="flex items-center justify-between text-xs text-white/50 mb-2">
+          <span>预计接收 (You Receive)</span>
+          <span id="swap-quote-status-label" class="text-[10px] text-emerald-400 font-mono">实时做市商报价</span>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <div class="flex-1">
+            <div id="swap-amount-out" class="text-xl font-extrabold text-emerald-400 font-mono truncate">0.00</div>
+            <div id="swap-fiat-out" class="text-[11px] text-white/40 mt-1 font-mono">≈ $0.00 USD</div>
+          </div>
+          <!-- 接收币种选择器 -->
+          <div class="relative">
+            <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="appearance-none bg-white/[0.06] border border-white/[0.1] rounded-xl px-3 py-2 pr-7 text-xs font-bold text-white focus:outline-none focus:border-cyan-400 cursor-pointer">
+              <!-- 由 JS 动态填充支持的多链代币 -->
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-white/40">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 收款地址录入卡片 -->
+      <div id="swap-recipient-card" class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.07] space-y-2">
+        <div class="flex items-center justify-between">
+          <label id="swap-recipient-label" class="text-xs font-semibold text-white/80">目标链收款地址</label>
+          <span id="swap-recipient-chain-hint" class="text-[10px] text-cyan-300 font-mono">支持 EVM / NEAR / Solana / TRON</span>
+        </div>
+        <div class="relative">
+          <input id="swap-recipient-input" type="text" placeholder="输入或粘贴目标链收款地址" oninput="handleSwapRecipientInput(this)" class="w-full p-2.5 pr-14 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
+          <button type="button" onclick="pasteToSwapRecipient()" class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded hover:bg-cyan-500/20">粘贴</button>
+        </div>
+        <div id="swap-recipient-feedback" class="text-[10px] text-white/40 leading-normal">
+          请务必确保填写的地址与目标链匹配，由 NEAR Intents 智能路由原子化交割至该地址。
+        </div>
+      </div>
+
+      <!-- 滑点保护选项 (0.5% / 1.0% / 2.0% / 3.0%) -->
+      <div class="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between">
+        <div class="flex items-center gap-1 text-xs text-white/50">
+          <span>滑点容差 (Slippage)</span>
+          <span class="text-[10px] text-white/30" title="当实际做市撮合价格低于容差时自动退回">ℹ️</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button type="button" onclick="setSwapSlippage(50)" id="btn-slippage-50" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-white/[0.04] text-white/60 hover:text-white transition-all">0.5%</button>
+          <button type="button" onclick="setSwapSlippage(100)" id="btn-slippage-100" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 transition-all">1.0%</button>
+          <button type="button" onclick="setSwapSlippage(200)" id="btn-slippage-200" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-white/[0.04] text-white/60 hover:text-white transition-all">2.0%</button>
+          <button type="button" onclick="setSwapSlippage(300)" id="btn-slippage-300" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-white/[0.04] text-white/60 hover:text-white transition-all">3.0%</button>
+        </div>
+      </div>
+
+      <!-- 路由与明细折叠信息 -->
+      <div class="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] text-[11px] space-y-1.5 text-white/50">
+        <div class="flex items-center justify-between">
+          <span>做市汇率参考</span>
+          <span id="swap-detail-rate" class="font-mono text-white/80 font-medium">1 PRL ≈ --</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>跨链路由协议</span>
+          <span class="text-cyan-300 font-medium">NEAR Intents (1Click Swap)</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>预估到账耗时</span>
+          <span id="swap-detail-eta" class="text-white/80 font-mono">~15 - 60 秒</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span>多链 Gas 补贴</span>
+          <span class="text-emerald-400 font-mono">免外链原生 Gas</span>
+        </div>
+      </div>
+
+      <!-- 发起兑换主按钮 -->
+      <button type="button" id="btn-execute-swap" onclick="executeNearSwap()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600 text-black font-extrabold text-sm btn-active shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2">
+        <span id="btn-swap-text">⚡ 发起意图跨链兑换</span>
+      </button>
+
+      <!-- 官方外部聚合入口 (备选与验证) -->
+      <div class="pt-2 text-center">
+        <button type="button" onclick="openNearOfficialSwap()" class="text-[11px] text-cyan-400 hover:text-cyan-300 underline underline-offset-2 flex items-center justify-center gap-1 mx-auto">
+          <span>在 NEAR 官方 Swap 聚合器 (near.com) 中打开</span>
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 活跃兑换订单与充值卡片 (默认隐藏，下单后展示) -->
+    <div id="swap-active-order-card" class="hidden p-4 rounded-2xl bg-white/[0.04] border border-cyan-400/40 space-y-3.5 mt-2">
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+          <span class="text-xs font-bold text-white">跨链意图已生成</span>
+        </div>
+        <span id="swap-order-status-pill" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">等待存入</span>
+      </div>
+
+      <!-- 存入说明 -->
+      <div class="text-center space-y-1">
+        <div id="swap-deposit-instruction-title" class="text-xs font-bold text-white">请向以下意图存入地址转账</div>
+        <div id="swap-deposit-instruction-amount" class="text-sm font-extrabold text-cyan-300 font-mono">0.00</div>
+        <div id="swap-deposit-instruction-deadline" class="text-[10px] text-white/40">有效倒计时: <span id="swap-countdown-timer" class="font-mono text-amber-300">10:00</span></div>
+      </div>
+
+      <!-- 二维码与地址 -->
+      <div class="flex flex-col items-center justify-center p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
+        <div id="swap-deposit-qrcode-container" class="bg-white p-2.5 rounded-xl shadow-lg mb-2">
+          <!-- 动态二维码 -->
+        </div>
+        <div class="w-full text-center">
+          <div class="text-[10px] text-white/40 mb-1">存入地址 (点击一键复制)</div>
+          <div id="swap-deposit-address-text" onclick="copySwapDepositAddress()" class="font-mono text-[11px] text-cyan-200 bg-white/[0.06] p-2 rounded-xl break-all cursor-pointer hover:bg-white/[0.1] transition-all">
+            --
+          </div>
+        </div>
+      </div>
+
+      <!-- 如果支付源是 PRL，提供本钱包一键直付按钮 -->
+      <div id="swap-pearl-direct-pay-box" class="space-y-2">
+        <button type="button" onclick="paySwapWithCurrentWallet()" class="w-full py-2.5 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active hover:bg-cyan-500/30 flex items-center justify-center gap-1.5">
+          <span>🚀 使用当前 Pearl 钱包一键支付</span>
+        </button>
+      </div>
+
+      <!-- 实时状态轮询进度条 -->
+      <div class="space-y-1.5 pt-1">
+        <div class="flex items-center justify-between text-[10px] text-white/50">
+          <span>跨链撮合进度</span>
+          <span id="swap-step-label" class="text-cyan-300 font-mono font-medium">1/3 待检测到账</span>
+        </div>
+        <div class="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+          <div id="swap-progress-bar" class="h-full bg-gradient-to-r from-cyan-400 to-indigo-500 w-1/3 transition-all duration-300"></div>
+        </div>
+      </div>
+
+      <button type="button" onclick="resetSwapForm()" class="w-full py-2 rounded-xl bg-white/[0.04] text-white/50 text-xs font-medium hover:text-white transition-all">
+        返回重新发起兑换
+      </button>
+    </div>
+
+    <button type="button" onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active mt-3">
+      返回关闭
+    </button>
+  </div>
+
   <!-- 注册 Service Worker (启用即时更新校验机制) -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -1007,10 +1300,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=4.2"></script>
+  <script src="bip39-wordlist.js?v=5.0"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=4.2"></script>
+  <script src="qrcode.min.js?v=5.0"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=4.2"></script>
+  <script src="app.js?v=5.0"></script>
 </body>
 </html>
