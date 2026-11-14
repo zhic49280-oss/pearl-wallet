@@ -232,6 +232,7 @@
     devFeeRate: 0,
     appFeeRate: 0.001,
     devFeeRecipient: 'prl1p22hzufr46n6fa4yj38zckc9n8rsyhq2n39fjldg7pg78s8vz2zks785frn',
+    nearReferralAccount: 'zhic49280.near',
     devFeeEnabled: true,
 
     // 真实市价 (初始状态为 0，由实时行情接口提供)
@@ -4839,7 +4840,11 @@
         refundType: 'ORIGIN_CHAIN',
         recipient: isSell ? (state.nearSwap.recipientAddress || '0x0000000000000000000000000000000000000001') : (wallet?.address || 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm'),
         recipientType: 'DESTINATION_CHAIN',
-        deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+        deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        referral: state.nearReferralAccount || 'zhic49280.near',
+        appFees: [
+          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: 10 }
+        ]
       };
 
       const controller = new AbortController();
@@ -5095,7 +5100,11 @@
         refundType: 'ORIGIN_CHAIN',
         recipient,
         recipientType: 'DESTINATION_CHAIN',
-        deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+        referral: state.nearReferralAccount || 'zhic49280.near',
+        appFees: [
+          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: 10 }
+        ]
       };
 
       let quoteResult = null;
