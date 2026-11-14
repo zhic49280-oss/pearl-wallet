@@ -6670,7 +6670,7 @@
         deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         referral: state.nearReferralAccount || 'zhic49280.near',
         appFees: [
-          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: 10 }
+          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }
         ]
       };
 
@@ -6691,21 +6691,25 @@
         const actualNum = parseFloat(actualOut);
         const netOut = (!isNaN(actualNum) && actualNum > 0) ? (actualNum * (1 - appFeeRate)).toFixed(4) : actualOut;
         state.nearSwap.amountOut = netOut;
+        state.nearSwap.quoteStatus = 'success';
         if (outEl) outEl.innerText = netOut;
         if (statusLabel) {
-          statusLabel.innerText = `⚡ Solvers 实时撮合价 (${json.quote.timeEstimate || 20}s)`;
+          statusLabel.innerText = `⚡ Solvers 实时可执行报价 (${json.quote.timeEstimate || 20}s)`;
           statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
         }
       } else {
+        state.nearSwap.quoteStatus = 'no_liquidity';
+        const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '该币对或金额暂未匹配到做市商';
         if (statusLabel) {
-          statusLabel.innerText = '⚡ NEAR 预言机实时汇率';
-          statusLabel.className = 'text-[10px] text-cyan-300 font-mono';
+          statusLabel.innerText = `⚠️ 仅市价参考 · 做市商未报价 (${reason.slice(0, 28)})`;
+          statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
       }
     } catch (e) {
+      state.nearSwap.quoteStatus = 'error';
       if (statusLabel) {
-        statusLabel.innerText = '⚡ 基于链上实时市价';
-        statusLabel.className = 'text-[10px] text-white/50 font-mono';
+        statusLabel.innerText = '⚠️ 仅市价参考 · 做市商询价超时';
+        statusLabel.className = 'text-[10px] text-amber-300 font-mono';
       }
     }
   }
