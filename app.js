@@ -1003,6 +1003,189 @@
     throw new Error('SHA-512 unavailable');
   }
 
+  const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function base58Encode(bytes) {
+    const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    if (arr.length === 0) return '';
+    let zeros = 0;
+    while (zeros < arr.length && arr[zeros] === 0) zeros++;
+    let num = 0n;
+    for (let i = zeros; i < arr.length; i++) {
+      num = (num << 8n) | BigInt(arr[i]);
+    }
+    let str = '';
+    while (num > 0n) {
+      const rem = Number(num % 58n);
+      num = num / 58n;
+      str = BASE58_ALPHABET[rem] + str;
+    }
+    return '1'.repeat(zeros) + str;
+  }
+
+  // 纯 JS 标准 Keccak-256 (用于以太坊 / Base / ARB / HYPE / ARC 地址与 EIP-55 校验)
+  const KECCAK_RC = [
+    0x0000000000000001n, 0x0000000000008082n, 0x800000000000808an, 0x8000000080008000n,
+    0x000000000000808bn, 0x0000000080000001n, 0x8000000080008081n, 0x8000000000008009n,
+    0x000000000000008an, 0x0000000000000088n, 0x0000000080008009n, 0x000000008000000an,
+    0x000000008000808bn, 0x800000000000008bn, 0x8000000000008089n, 0x8000000000008003n,
+    0x8000000000008002n, 0x8000000000000080n, 0x000000000000800an, 0x800000008000000an,
+    0x8000000080008081n, 0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n
+  ];
+  const KECCAK_ROTC = [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 2, 14, 27, 41, 56, 8, 25, 43, 62, 18, 39, 61, 20, 44];
+  const KECCAK_PILN = [10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1];
+  const MASK64 = 0xffffffffffffffffn;
+  function rotl64(x, n) {
+    const k = BigInt(n);
+    return ((x << k) | (x >> (64n - k))) & MASK64;
+  }
+  function keccak256Bytes(input) {
+    const data = input instanceof Uint8Array ? input : new TextEncoder().encode(String(input));
+    const rate = 136; // 1088 bits
+    const blockCount = Math.floor(data.length / rate) + 1;
+    const padded = new Uint8Array(blockCount * rate);
+    padded.set(data);
+    padded[data.length] ^= 0x01;
+    padded[padded.length - 1] ^= 0x80;
+
+    const st = new Array(25).fill(0n);
+    for (let off = 0; off < padded.length; off += rate) {
+      for (let i = 0; i < 17; i++) {
+        let lane = 0n;
+        for (let b = 0; b < 8; b++) {
+          lane |= BigInt(padded[off + i * 8 + b]) << BigInt(b * 8);
+        }
+        st[i] ^= lane;
+      }
+      for (let r = 0; r < 24; r++) {
+        const bc = new Array(5);
+        for (let i = 0; i < 5; i++) {
+          bc[i] = st[i] ^ st[i + 5] ^ st[i + 10] ^ st[i + 15] ^ st[i + 20];
+        }
+        for (let i = 0; i < 5; i++) {
+          const t = bc[(i + 4) % 5] ^ rotl64(bc[(i + 1) % 5], 1);
+          for (let j = 0; j < 25; j += 5) st[j + i] ^= t;
+        }
+        let t = st[1];
+        for (let i = 0; i < 24; i++) {
+          const j = KECCAK_PILN[i];
+          const tmp = st[j];
+          st[j] = rotl64(t, KECCAK_ROTC[i]);
+          t = tmp;
+        }
+        for (let j = 0; j < 25; j += 5) {
+          const s0 = st[j], s1 = st[j + 1], s2 = st[j + 2], s3 = st[j + 3], s4 = st[j + 4];
+          st[j]     = s0 ^ ((~s1 & MASK64) & s2);
+          st[j + 1] = s1 ^ ((~s2 & MASK64) & s3);
+          st[j + 2] = s2 ^ ((~s3 & MASK64) & s4);
+          st[j + 3] = s3 ^ ((~s4 & MASK64) & s0);
+          st[j + 4] = s4 ^ ((~s0 & MASK64) & s1);
+        }
+        st[0] ^= KECCAK_RC[r];
+      }
+    }
+    const out = new Uint8Array(32);
+    for (let i = 0; i < 4; i++) {
+      let lane = st[i];
+      for (let b = 0; b < 8; b++) {
+        out[i * 8 + b] = Number((lane >> BigInt(b * 8)) & 0xffn);
+      }
+    }
+    return out;
+  }
+
+  function eip55ChecksumAddress(rawHex20) {
+    const clean = rawHex20.toLowerCase().replace(/^0x/, '');
+    const hash = keccak256Bytes(clean);
+    const hashHex = Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('');
+    let out = '0x';
+    for (let i = 0; i < 40; i++) {
+      out += parseInt(hashHex[i], 16) >= 8 ? clean[i].toUpperCase() : clean[i];
+    }
+    return out;
+  }
+
+  // 同源助记词派生通用 EVM 地址 (ETH / Base / ARB / HYPE / ARC, 路径 m/44'/60'/0'/0/0)
+  async function deriveEvmFromSeedAsync(words, path = "m/44'/60'/0'/0/0") {
+    try {
+      const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
+      const seedBytes = await cryptoPbkdf2Async(mnemonicStr);
+      const master = await bip32DeriveMasterKeyAsync(seedBytes);
+      const child = await bip32DerivePathAsync(master, path);
+      let d = 0n;
+      for (let i = 0; i < 32; i++) d = (d << 8n) | BigInt(child.privateKey[i]);
+      const P = secpPointMultiply(d);
+      const xHex = P.x.toString(16).padStart(64, '0');
+      const yHex = P.y.toString(16).padStart(64, '0');
+      const pubHex = xHex + yHex;
+      const xyBytes = new Uint8Array(64);
+      for (let i = 0; i < 64; i++) {
+        xyBytes[i] = parseInt(pubHex.slice(i * 2, i * 2 + 2), 16);
+      }
+      const hash = keccak256Bytes(xyBytes);
+      const addrHex = Array.from(hash.slice(12)).map(b => b.toString(16).padStart(2, '0')).join('');
+      const privHex = Array.from(child.privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+      return {
+        address: eip55ChecksumAddress(addrHex),
+        privateKeyHex: `0x${privHex}`,
+        pubkeyHex: `0x04${pubHex}`,
+        path
+      };
+    } catch (e) {
+      console.warn('EVM derivation fallback:', e);
+      return { address: '', privateKeyHex: '', pubkeyHex: '', path };
+    }
+  }
+  window.deriveEvmFromSeedAsync = deriveEvmFromSeedAsync;
+  globalThis.deriveEvmFromSeedAsync = deriveEvmFromSeedAsync;
+
+  // 同源助记词派生 Solana 地址 (SLIP-0010 Ed25519 路径 m/44'/501'/0'/0')
+  async function deriveSolanaFromSeedAsync(words, accountIndex = 0) {
+    try {
+      const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
+      const seedBytes = await cryptoPbkdf2Async(mnemonicStr);
+      const enc = new TextEncoder();
+      let I = await cryptoHmacSha512Async(enc.encode('ed25519 seed'), seedBytes);
+      let key = I.slice(0, 32);
+      let chain = I.slice(32);
+
+      const pathIndices = [44, 501, accountIndex, 0];
+      for (const idx of pathIndices) {
+        const actualIdx = (idx + 0x80000000) >>> 0;
+        const data = new Uint8Array(1 + 32 + 4);
+        data[0] = 0;
+        data.set(key, 1);
+        new DataView(data.buffer).setUint32(33, actualIdx, false);
+        I = await cryptoHmacSha512Async(chain, data);
+        key = I.slice(0, 32);
+        chain = I.slice(32);
+      }
+
+      const h = await sha512BytesAsync(key);
+      h[0] &= 248;
+      h[31] &= 127;
+      h[31] |= 64;
+      let kBig = 0n;
+      for (let i = 31; i >= 0; i--) kBig = (kBig << 8n) | BigInt(h[i]);
+      const pubBytes = edScalarMult(kBig);
+      const secret64 = new Uint8Array(64);
+      secret64.set(key, 0);
+      secret64.set(pubBytes, 32);
+      const solAddress = base58Encode(pubBytes);
+      return {
+        solAddress,
+        solPublicKey: solAddress,
+        solPrivateKey: base58Encode(secret64),
+        solPrivateSeedHex: Array.from(key).map(b => b.toString(16).padStart(2, '0')).join(''),
+        path: `m/44'/501'/${accountIndex}'/0'`
+      };
+    } catch (e) {
+      console.warn('Solana derivation fallback:', e);
+      return { solAddress: '', solPublicKey: '', solPrivateKey: '', solPrivateSeedHex: '', path: `m/44'/501'/${accountIndex}'/0'` };
+    }
+  }
+  window.deriveSolanaFromSeedAsync = deriveSolanaFromSeedAsync;
+  globalThis.deriveSolanaFromSeedAsync = deriveSolanaFromSeedAsync;
+
   // 同源助记词派生 NEAR 隐式地址 (SLIP-0010 Ed25519 路径 m/44'/397'/0')
   async function deriveNearFromSeedAsync(words, accountIndex = 0) {
     try {
@@ -1032,14 +1215,19 @@
       let kBig = 0n;
       for (let i = 31; i >= 0; i--) kBig = (kBig << 8n) | BigInt(h[i]);
       const pubBytes = edScalarMult(kBig);
+      const secret64 = new Uint8Array(64);
+      secret64.set(key, 0);
+      secret64.set(pubBytes, 32);
       const nearImplicitAddress = Array.from(pubBytes).map(b => b.toString(16).padStart(2, '0')).join('');
       return {
         nearAddress: nearImplicitAddress,
-        nearPrivateSeedHex: Array.from(key).map(b => b.toString(16).padStart(2, '0')).join('')
+        nearPrivateSeedHex: Array.from(key).map(b => b.toString(16).padStart(2, '0')).join(''),
+        nearPublicKey: `ed25519:${base58Encode(pubBytes)}`,
+        nearPrivateKey: `ed25519:${base58Encode(secret64)}`
       };
     } catch (e) {
       console.warn('NEAR derivation fallback:', e);
-      return { nearAddress: '', nearPrivateSeedHex: '' };
+      return { nearAddress: '', nearPrivateSeedHex: '', nearPublicKey: '', nearPrivateKey: '' };
     }
   }
   window.deriveNearFromSeedAsync = deriveNearFromSeedAsync;
@@ -1282,7 +1470,8 @@
       } catch (e) {}
     }
 
-    if (!wallet.nearAddress) return;
+    const activeNearId = wallet.nearNamedAccount || wallet.nearAddress;
+    if (!activeNearId) return;
 
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1297,7 +1486,7 @@
           params: {
             request_type: 'view_account',
             finality: 'final',
-            account_id: wallet.nearAddress
+            account_id: activeNearId
           }
         }),
         signal: controller ? controller.signal : undefined
@@ -3211,8 +3400,11 @@
     // 同步渲染同源 NEAR 双链卡片
     const nearAddrEl = document.getElementById('wallet-near-address-short');
     const nearBalEl = document.getElementById('wallet-near-balance');
-    if (wallet.nearAddress) {
-      if (nearAddrEl) nearAddrEl.innerText = `${wallet.nearAddress.slice(0, 8)}...${wallet.nearAddress.slice(-6)}`;
+    if (wallet.nearNamedAccount || wallet.nearAddress) {
+      const displayNear = wallet.nearNamedAccount
+        ? wallet.nearNamedAccount
+        : `${wallet.nearAddress.slice(0, 8)}...${wallet.nearAddress.slice(-6)}`;
+      if (nearAddrEl) nearAddrEl.innerText = displayNear;
       if (nearBalEl) nearBalEl.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
     } else if (wallet.mnemonic && !wallet._nearDeriving) {
       wallet._nearDeriving = true;
@@ -4010,23 +4202,313 @@
   globalThis.switchPearlAddressIndex = window.switchPearlAddressIndex;
 
   /**
-   * 复制同源 NEAR 链账户地址
+   * 复制同源 NEAR 链账户地址 (优先使用已绑定的 .near 域名)
    */
   window.copyNearAddress = async function () {
     triggerHaptic('light');
     const wallet = getActiveWallet();
-    if (!wallet || !wallet.nearAddress) {
+    const targetNear = wallet ? (wallet.nearNamedAccount || wallet.nearAddress) : '';
+    if (!targetNear) {
       showToast('当前钱包尚未生成 NEAR 同源地址');
       return;
     }
     try {
-      await navigator.clipboard.writeText(wallet.nearAddress);
-      showToast('已复制 NEAR 链地址');
+      await navigator.clipboard.writeText(targetNear);
+      showToast(`已复制 NEAR 地址: ${targetNear}`);
     } catch (e) {
-      showToast(`NEAR 地址: ${wallet.nearAddress}`);
+      showToast(`NEAR 地址: ${targetNear}`);
     }
   };
   globalThis.copyNearAddress = window.copyNearAddress;
+
+  // ======================== 全链网络地址与公钥/私钥矩阵 ========================
+  state.multichainSecretsUnlocked = false;
+  state.multichainCache = null;
+
+  window.copyMultichainValue = async function (label, encodedVal) {
+    triggerHaptic('light');
+    const val = decodeURIComponent(encodedVal || '');
+    if (!val) {
+      showToast(`${label} 暂无数据`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(val);
+      showToast(`已复制 ${label}`);
+    } catch (e) {
+      showToast(`${label}: ${val}`);
+    }
+  };
+  globalThis.copyMultichainValue = window.copyMultichainValue;
+
+  window.unlockMultichainSecrets = function () {
+    triggerHaptic('medium');
+    if (state.multichainSecretsUnlocked) {
+      state.multichainSecretsUnlocked = false;
+      renderMultichainAddressesList();
+      showToast('已重新隐藏各链私钥');
+      return;
+    }
+    requestBiometricAuth(() => {
+      state.multichainSecretsUnlocked = true;
+      renderMultichainAddressesList();
+      showToast('已验证身份，各链公钥与私钥已显露');
+    });
+  };
+  globalThis.unlockMultichainSecrets = window.unlockMultichainSecrets;
+
+  window.bindNearNamedAccount = async function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.mnemonic) {
+      showToast('仅助记词钱包支持绑定 .near 域名');
+      return;
+    }
+    const inputEl = document.getElementById('multichain-near-domain-input');
+    const domain = (inputEl ? inputEl.value : '').trim().toLowerCase();
+    if (!/^[a-z0-9_-]+(\.[a-z0-9_-]+)*\.near$/.test(domain)) {
+      showToast('请输入合法的 .near 主网域名（例如 alice.near）');
+      return;
+    }
+    if (!wallet.nearPublicKey) {
+      const nearDerived = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+      wallet.nearAddress = nearDerived.nearAddress;
+      wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+      wallet.nearPublicKey = nearDerived.nearPublicKey;
+      wallet.nearPrivateKey = nearDerived.nearPrivateKey;
+    }
+    const statusEl = document.getElementById('multichain-near-domain-status');
+    if (statusEl) statusEl.innerText = '正在向 NEAR 主网 RPC 验签...';
+
+    try {
+      const res = await fetch('https://rpc.mainnet.near.org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'verify-near-domain',
+          method: 'query',
+          params: {
+            request_type: 'view_access_key',
+            finality: 'final',
+            account_id: domain,
+            public_key: wallet.nearPublicKey
+          }
+        })
+      });
+      const data = await res.json();
+      if (data && data.result && data.result.permission) {
+        wallet.nearNamedAccount = domain;
+        saveWalletsToStorage();
+        renderWalletBalances();
+        refreshActiveWalletNearBalance();
+        renderMultichainAddressesList();
+        showToast(`✅ 链上验签通过！已绑定 ${domain}`);
+      } else {
+        if (statusEl) statusEl.innerText = '未检测到本钱包公钥权限';
+        showToast(`${domain} 尚未添加本钱包的 ed25519 公钥，请先在 NEAR 钱包为该域名授权本公钥`);
+      }
+    } catch (e) {
+      if (statusEl) statusEl.innerText = 'RPC 网络查询失败';
+      showToast(`NEAR RPC 验签失败: ${e.message || '网络异常'}`);
+    }
+  };
+  globalThis.bindNearNamedAccount = window.bindNearNamedAccount;
+
+  window.unbindNearNamedAccount = function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+    delete wallet.nearNamedAccount;
+    saveWalletsToStorage();
+    renderWalletBalances();
+    refreshActiveWalletNearBalance();
+    renderMultichainAddressesList();
+    showToast('已解绑 .near 域名，恢复默认 64 位隐式账户');
+  };
+  globalThis.unbindNearNamedAccount = window.unbindNearNamedAccount;
+
+  function renderMultichainAddressesList() {
+    const container = document.getElementById('multichain-addresses-list');
+    const unlockBtn = document.getElementById('btn-multichain-unlock');
+    const domainBox = document.getElementById('multichain-near-domain-box');
+    const domainStatus = document.getElementById('multichain-near-domain-status');
+    const domainInput = document.getElementById('multichain-near-domain-input');
+    const unbindBtn = document.getElementById('btn-unbind-near-domain');
+    if (!container) return;
+
+    const wallet = getActiveWallet();
+    const unlocked = !!state.multichainSecretsUnlocked;
+
+    if (unlockBtn) {
+      unlockBtn.innerText = unlocked ? '🔒 隐藏私钥' : '🔐 解锁私钥';
+      unlockBtn.className = unlocked
+        ? 'px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active transition-all'
+        : 'px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold border border-amber-400/30 btn-active transition-all';
+    }
+
+    if (domainBox && wallet) {
+      if (!wallet.mnemonic) {
+        domainBox.classList.add('hidden');
+      } else {
+        domainBox.classList.remove('hidden');
+        if (wallet.nearNamedAccount) {
+          if (domainStatus) domainStatus.innerText = `已绑定：${wallet.nearNamedAccount}`;
+          if (domainInput && !domainInput.value) domainInput.value = wallet.nearNamedAccount;
+          if (unbindBtn) unbindBtn.classList.remove('hidden');
+        } else {
+          if (domainStatus) domainStatus.innerText = '当前：64位隐式账户';
+          if (unbindBtn) unbindBtn.classList.add('hidden');
+        }
+      }
+    }
+
+    if (!wallet || !wallet.mnemonic) {
+      container.innerHTML = `
+        <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] text-center text-xs text-white/50">
+          当前钱包为观察钱包或未保存助记词，无法派生多链地址与私钥。请先创建或导入助记词钱包。
+        </div>
+      `;
+      return;
+    }
+
+    const cache = state.multichainCache;
+    if (!cache || cache.walletId !== wallet.id) {
+      container.innerHTML = `
+        <div class="p-6 text-center text-xs text-white/50">
+          <div class="animate-pulse">正在离线计算 BIP-39 / BIP-44 / SLIP-0010 全链密钥...</div>
+        </div>
+      `;
+      return;
+    }
+
+    const maskSecret = (val) => (unlocked ? (val || '--') : '••••••••••••••••••••••••••••••••');
+    const items = [
+      {
+        name: 'Pearl Mainnet',
+        symbol: 'PRL',
+        badge: 'Taproot',
+        badgeCls: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/30',
+        path: wallet.derivationPath || `m/86'/808276'/0'/0/${wallet.addressIndex || 0}`,
+        address: wallet.address,
+        pubkey: wallet.pubkeyHex || cache.prlPubkey || '--',
+        privkey: wallet.privateKeyHex || '--'
+      },
+      {
+        name: 'NEAR Protocol',
+        symbol: 'NEAR',
+        badge: wallet.nearNamedAccount ? '.near 域名' : 'Implicit 隐式主网',
+        badgeCls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
+        path: "m/44'/397'/0' (Ed25519)",
+        address: wallet.nearNamedAccount ? `${wallet.nearNamedAccount} (${cache.near.nearAddress.slice(0, 10)}...)` : cache.near.nearAddress,
+        copyAddress: wallet.nearNamedAccount || cache.near.nearAddress,
+        pubkey: cache.near.nearPublicKey,
+        privkey: cache.near.nearPrivateKey
+      },
+      {
+        name: 'Solana',
+        symbol: 'SOL',
+        badge: 'SPL / Ed25519',
+        badgeCls: 'bg-purple-500/15 text-purple-300 border-purple-400/30',
+        path: "m/44'/501'/0'/0'",
+        address: cache.sol.solAddress,
+        pubkey: cache.sol.solPublicKey,
+        privkey: cache.sol.solPrivateKey
+      },
+      {
+        name: 'Ethereum / Base / ARB / HYPE / ARC',
+        symbol: 'EVM 全链通用',
+        badge: 'ETH·BASE·ARB·HYPE·ARC',
+        badgeCls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30',
+        path: "m/44'/60'/0'/0/0 (Secp256k1)",
+        address: cache.evm.address,
+        pubkey: cache.evm.pubkeyHex,
+        privkey: cache.evm.privateKeyHex
+      }
+    ];
+
+    container.innerHTML = items.map(item => {
+      const addrToCopy = item.copyAddress || item.address;
+      return `
+        <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="text-xs font-bold text-white truncate">${item.name}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded border ${item.badgeCls} whitespace-nowrap">${item.badge}</span>
+            </div>
+            <span class="text-[10px] font-mono text-white/35 whitespace-nowrap">${item.path}</span>
+          </div>
+
+          <div class="p-2 rounded-xl bg-black/30 border border-white/[0.05] flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <div class="text-[10px] text-white/40">收款地址 (${item.symbol})</div>
+              <div class="text-[11px] font-mono text-white/90 break-all leading-snug mt-0.5">${item.address}</div>
+            </div>
+            <button type="button" onclick="copyMultichainValue('${item.symbol} 地址', '${encodeURIComponent(addrToCopy)}')" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold border border-cyan-400/25 btn-active flex-shrink-0">
+              复制
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 gap-1.5">
+            <div class="p-2 rounded-xl bg-black/20 border border-white/[0.04] flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <span class="text-[10px] text-white/35">公钥: </span>
+                <span class="text-[10px] font-mono text-white/65 break-all">${item.pubkey}</span>
+              </div>
+              <button type="button" onclick="copyMultichainValue('${item.symbol} 公钥', '${encodeURIComponent(item.pubkey)}')" class="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/60 text-[10px] btn-active flex-shrink-0">
+                复制
+              </button>
+            </div>
+            <div class="p-2 rounded-xl bg-black/20 border border-white/[0.04] flex items-center justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <span class="text-[10px] text-amber-300/60">私钥: </span>
+                <span class="text-[10px] font-mono ${unlocked ? 'text-amber-300' : 'text-white/30'} break-all">${maskSecret(item.privkey)}</span>
+              </div>
+              ${unlocked ? `<button type="button" onclick="copyMultichainValue('${item.symbol} 私钥', '${encodeURIComponent(item.privkey)}')" class="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[10px] font-bold btn-active flex-shrink-0">复制</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openMultichainAddressesSheet = async function () {
+    triggerHaptic('light');
+    state.multichainSecretsUnlocked = false;
+    openSheet('sheet-multichain-addresses');
+    renderMultichainAddressesList();
+
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.mnemonic) return;
+
+    if (!state.multichainCache || state.multichainCache.walletId !== wallet.id) {
+      try {
+        const [near, sol, evm] = await Promise.all([
+          deriveNearFromSeedAsync(wallet.mnemonic, 0),
+          deriveSolanaFromSeedAsync(wallet.mnemonic, 0),
+          deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0")
+        ]);
+        if (near && near.nearAddress) {
+          wallet.nearAddress = near.nearAddress;
+          wallet.nearPrivateSeedHex = near.nearPrivateSeedHex;
+          wallet.nearPublicKey = near.nearPublicKey;
+          wallet.nearPrivateKey = near.nearPrivateKey;
+          saveWalletsToStorage();
+        }
+        state.multichainCache = {
+          walletId: wallet.id,
+          near,
+          sol,
+          evm,
+          prlPubkey: wallet.pubkeyHex || ''
+        };
+        renderMultichainAddressesList();
+      } catch (e) {
+        showToast(`多链派生失败: ${e.message || e}`);
+      }
+    }
+  };
+  globalThis.openMultichainAddressesSheet = window.openMultichainAddressesSheet;
 
   // ======================== 抽屉交互控制 ========================
   window.openSheet = function (sheetId) {
@@ -5254,14 +5736,15 @@
         }
       } catch (e) {}
     }
-    if (!wallet.nearAddress) {
+    const targetNear = wallet.nearNamedAccount || wallet.nearAddress;
+    if (!targetNear) {
       showToast('当前钱包没有关联助记词，无法自动识别同源 NEAR 地址');
       return;
     }
 
     state.nearSwap.direction = 'sell';
     state.nearSwap.targetTokenId = 'nep141:wrap.near';
-    state.nearSwap.recipientAddress = wallet.nearAddress;
+    state.nearSwap.recipientAddress = targetNear;
     fetchNearDefuseTokens();
     renderNearSwapUI();
     openSheet('sheet-near-swap');

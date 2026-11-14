@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.2">
+  <link rel="stylesheet" href="style.css?v=6.3">
   <script>
     tailwind.config = {
       theme: {
@@ -187,6 +187,8 @@
             <div class="flex items-center gap-1.5 mt-0.5">
               <span id="wallet-near-address-short" class="text-[11px] font-mono text-white/50">未派生或无助记词</span>
               <button type="button" onclick="copyNearAddress()" class="text-[10px] text-cyan-400 hover:underline">复制</button>
+              <span class="text-white/20">·</span>
+              <button type="button" onclick="openMultichainAddressesSheet()" class="text-[10px] text-indigo-300 hover:underline font-medium">全链地址/私钥 🌐</button>
             </div>
           </div>
         </div>
@@ -1640,6 +1642,51 @@
     </div>
   </div>
 
+  <!-- 抽屉 N：全链网络地址与公钥/私钥矩阵 -->
+  <div id="sheet-multichain-addresses" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom max-h-[88vh] flex flex-col">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4 flex-shrink-0"></div>
+    <div class="flex items-center justify-between mb-3 flex-shrink-0">
+      <div>
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>🌐 全链网络地址与密钥</span>
+        </h3>
+        <p class="text-[11px] text-white/45 mt-0.5">同一套 BIP-39 助记词离线派生真实可用地址</p>
+      </div>
+      <button type="button" onclick="unlockMultichainSecrets()" id="btn-multichain-unlock" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-bold border border-amber-400/30 btn-active transition-all">
+        🔐 解锁私钥
+      </button>
+    </div>
+
+    <!-- .near 域名账户绑定区 -->
+    <div id="multichain-near-domain-box" class="mb-3 p-3 rounded-2xl bg-emerald-500/[0.06] border border-emerald-400/20 flex-shrink-0">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-bold text-emerald-300">NEAR 人类可读域名绑定 (.near)</span>
+        <span id="multichain-near-domain-status" class="text-[10px] text-white/45">当前：64位隐式账户</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="multichain-near-domain-input" type="text" placeholder="输入已拥有本钱包公钥的 xxx.near 域名" class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50 font-mono">
+        <button type="button" onclick="bindNearNamedAccount()" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active whitespace-nowrap">
+          验证绑定
+        </button>
+        <button type="button" onclick="unbindNearNamedAccount()" id="btn-unbind-near-domain" class="hidden px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 text-xs border border-white/10 btn-active whitespace-nowrap">
+          解绑
+        </button>
+      </div>
+      <p class="text-[10px] text-white/40 mt-1.5 leading-relaxed">
+        说明：64位哈希是 NEAR 官方隐式主网地址；若你已在 Meteor 等钱包注册过 `.near` 域名并将本钱包 `ed25519` 公钥添加为 Access Key，可在此链上验签绑定。
+      </p>
+    </div>
+
+    <!-- 多链地址卡片列表 -->
+    <div id="multichain-addresses-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 no-scrollbar min-h-[220px]">
+      <!-- 由 JS 动态渲染 -->
+    </div>
+
+    <button type="button" onclick="closeSheet()" class="mt-4 w-full py-3 rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] text-white/80 font-bold text-xs border border-white/10 btn-active flex-shrink-0">
+      关闭
+    </button>
+  </div>
+
   <!-- 注册 Service Worker (启用即时更新校验机制) -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -1656,10 +1703,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.2"></script>
+  <script src="bip39-wordlist.js?v=6.3"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.2"></script>
+  <script src="qrcode.min.js?v=6.3"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.2"></script>
+  <script src="app.js?v=6.3"></script>
 </body>
 </html>
