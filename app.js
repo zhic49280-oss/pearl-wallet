@@ -4518,28 +4518,11 @@
     if (!sheet || !backdrop) return;
 
     if (sheetId === 'sheet-receive') {
-      const wallet = getActiveWallet();
-      const fullAddrEl = document.getElementById('receive-full-address');
-      const indexBarEl = document.getElementById('receive-address-index-bar');
-      const indexLabelEl = document.getElementById('receive-addr-index-label');
-      if (wallet && fullAddrEl) {
-        fullAddrEl.innerText = wallet.address;
-        generateQRCode(wallet.address);
-      }
-      if (indexBarEl) {
-        if (wallet && wallet.mnemonic) {
-          indexBarEl.classList.remove('hidden');
-          if (indexLabelEl) {
-            const idx = Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0;
-            indexLabelEl.innerText = `m/86'/808276'/0'/0/${idx}`;
-          }
-        } else {
-          indexBarEl.classList.add('hidden');
-        }
-      }
+      selectReceiveNetwork(state.receiveNetwork || 'prl');
     }
 
     if (sheetId === 'sheet-send') {
+      selectSendNetwork(state.sendNetwork || 'prl');
       selectFeeTier(state.selectedFeeTier || 'normal');
       setFeeDeductMode(state.feeDeductMode || 'internal');
     }
@@ -4606,10 +4589,220 @@
     qrContainer.appendChild(img);
   }
 
+  // ======================== 多链通用工具：官方币种 SVG 图标 & 全链地址校验 ========================
+  function getTokenIconHtml(symbol, blockchain = '', sizePx = 28) {
+    const sym = String(symbol || '').toUpperCase();
+    const chain = String(blockchain || '').toLowerCase();
+    const s = sizePx;
+
+    if (sym === 'USDT') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117" fill="#fff"/></svg>`;
+    }
+    if (sym === 'USDC') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#2775CA"/><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.452.452 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.487-.364h-1.036a.416.416 0 00-.427.425v.06c.244 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.488.485h.914c.244 0 .427-.182.488-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z" fill="#fff"/><path d="M12.646 24.375c-4.754-1.699-7.192-6.98-5.424-11.653.914-2.428 2.865-4.37 5.302-5.28.244-.122.366-.304.366-.607v-.85c0-.243-.122-.425-.366-.486-.06 0-.183 0-.244.06-5.545 1.76-8.653 7.648-6.825 13.17.975 3.156 3.474 5.645 6.643 6.677.244.122.487 0 .548-.242.061-.061.061-.122.061-.243v-.85c.061-.243-.06-.425-.06-.546zm6.704-18.814c-.244-.122-.487 0-.548.242a.624.624 0 00-.061.243v.85c0 .243.122.425.366.546 4.753 1.7 7.191 6.98 5.424 11.654-.915 2.427-2.865 4.37-5.302 5.28-.244.12-.366.303-.366.606v.85c0 .243.122.425.366.485.06 0 .183 0 .244-.06 5.546-1.76 8.654-7.648 6.825-13.171-.975-3.156-3.474-5.644-6.643-6.676z" fill="#fff"/></svg>`;
+    }
+    if (sym === 'BTC') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path d="M22.5 14.1c.3-2-1.2-3.1-3.3-3.8l.7-2.7-1.6-.4-.7 2.6c-.4-.1-.9-.2-1.3-.3l.7-2.6-1.6-.4-.7 2.7c-.3-.1-.7-.2-1-.2l-2.3-.6-.4 1.7s1.2.3 1.2.3c.7.2.8.6.8 1l-.8 3.2c0 .1.1.1.1.1h-.1l-1.1 4.5c-.1.2-.3.5-.8.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.1.5c.4.1.8.2 1.2.3l-.7 2.7 1.6.4.7-2.7c.4.1.9.2 1.3.3l-.7 2.7 1.6.4.7-2.7c2.8.5 4.9.3 5.8-2.2.7-2-.1-3.2-1.5-3.9 1.1-.3 1.9-1 2.1-2.5zm-3.8 5.3c-.5 2-3.9.9-5 .7l.9-3.6c1.1.3 4.6.8 4.1 2.9zm.5-5.3c-.5 1.8-3.3.9-4.2.7l.8-3.2c.9.2 3.9.6 3.4 2.5z" fill="#fff"/></svg>`;
+    }
+    if (sym === 'ETH') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#627EEA"/><path d="M16.498 4v8.87l7.497 3.35L16.498 4z" fill="#fff" fill-opacity=".6"/><path d="M16.498 4L9 16.22l7.498-3.35V4z" fill="#fff"/><path d="M16.498 21.968v6.027L24 17.616l-7.502 4.352z" fill="#fff" fill-opacity=".6"/><path d="M16.498 27.995v-6.028L9 17.616l7.498 10.379z" fill="#fff"/><path d="M16.498 20.573l7.497-4.353-7.497-3.348v7.701z" fill="#fff" fill-opacity=".2"/><path d="M9 16.22l7.498 4.353v-7.701L9 16.22z" fill="#fff" fill-opacity=".6"/></svg>`;
+    }
+    if (sym === 'SOL') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#131624"/><path d="M9.5 19.6a.6.6 0 01.4-.2h13.5c.3 0 .4.3.2.5l-2.3 2.3a.6.6 0 01-.4.2H7.4c-.3 0-.4-.3-.2-.5l2.3-2.3zm0-9.8a.6.6 0 01.4-.2h13.5c.3 0 .4.3.2.5l-2.3 2.3a.6.6 0 01-.4.2H7.4c-.3 0-.4-.3-.2-.5l2.3-2.3zm11.8 4.9a.6.6 0 00-.4-.2H7.4c-.3 0-.4.3-.2.5l2.3 2.3c.1.1.3.2.4.2h13.5c.3 0 .4-.3.2-.5l-2.3-2.3z" fill="url(#solGrad)"/><defs><linearGradient id="solGrad" x1="7" y1="22" x2="25" y2="10" gradientUnits="userSpaceOnUse"><stop stop-color="#9945FF"/><stop offset="1" stop-color="#14F195"/></linearGradient></defs></svg>`;
+    }
+    if (sym === 'NEAR') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#00EC97"/><path d="M21.3 9.2l-3.7 5.5c-.3.4.3.9.7.6l3.6-3v7.3c0 .2-.3.3-.4.1l-9.6-11.5A2 2 0 0010.3 7.5H9.9A2 2 0 007.9 9.5v13a2 2 0 002 2c.7 0 1.4-.4 1.8-1l3.7-5.5c.3-.4-.3-.9-.7-.6l-3.6 3v-7.3c0-.2.3-.3.4-.1l9.6 11.5c.4.5 1 .8 1.6.8h.4a2 2 0 002-2v-13a2 2 0 00-2-2c-.7 0-1.4.4-1.8 1z" fill="#000"/></svg>`;
+    }
+    if (sym === 'PRL') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="url(#prlGrad)"/><circle cx="16" cy="16" r="8.5" fill="url(#prlPearl)"/><circle cx="13" cy="13" r="2.2" fill="#fff" fill-opacity=".85"/><defs><linearGradient id="prlGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#06B6D4"/><stop offset="1" stop-color="#6366F1"/></linearGradient><radialGradient id="prlPearl" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(13.5 13.5) scale(11)"><stop stop-color="#fff"/><stop offset=".6" stop-color="#BAE6FD"/><stop offset="1" stop-color="#0284C7"/></radialGradient></defs></svg>`;
+    }
+    if (sym === 'TRX' || chain === 'tron') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#EB0029"/><path d="M8.5 9.2l14.8 2.7-6.8 12.1-8-14.8zm2.3 1.8l5.5 10.2 4.6-8.2-10.1-2z" fill="#fff"/></svg>`;
+    }
+    if (sym === 'ARB' || chain === 'arb') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#213147"/><path d="M16 6l8.5 5v10L16 26l-8.5-5V11L16 6z" stroke="#12AAFF" stroke-width="2"/><path d="M13 21l3-9 3 9m-4.8-3h3.6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    }
+    const bgMap = { base: '#0052FF', eth: '#627EEA', arb: '#12AAFF', sol: '#9945FF', near: '#00EC97', btc: '#F7931A', tron: '#EB0029' };
+    const bg = bgMap[chain] || '#334155';
+    const txtColor = chain === 'near' ? '#000' : '#fff';
+    return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="${bg}"/><text x="16" y="20" text-anchor="middle" fill="${txtColor}" font-size="11" font-weight="800" font-family="system-ui,sans-serif">${sym.slice(0, 3)}</text></svg>`;
+  }
+
+  function validateChainAddress(network, addr) {
+    const clean = String(addr || '').trim();
+    if (!clean) return { valid: false, error: '地址不能为空' };
+    const net = String(network || 'prl').toLowerCase();
+    if (net === 'prl') return validatePearlAddress(clean);
+    if (net === 'near') {
+      if (/^[a-f0-9]{64}$/i.test(clean) || /^[a-z0-9_-]+(\.[a-z0-9_-]+)*\.(near|tg)$/i.test(clean)) {
+        return { valid: true };
+      }
+      return { valid: false, error: 'NEAR 地址应为 .near 域名或 64 位十六进制隐式地址' };
+    }
+    if (net === 'evm' || net === 'eth' || net === 'base' || net === 'arb' || net === 'hype' || net === 'arc') {
+      if (/^0x[a-fA-F0-9]{40}$/.test(clean)) return { valid: true };
+      return { valid: false, error: 'EVM 地址应为 0x 开头的 42 位十六进制地址' };
+    }
+    if (net === 'sol') {
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(clean)) return { valid: true };
+      return { valid: false, error: 'Solana 地址应为 32~44 位 Base58 字符串' };
+    }
+    if (net === 'tron') {
+      if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(clean)) return { valid: true };
+      return { valid: false, error: 'TRON 地址应为 T 开头的 34 位地址' };
+    }
+    if (net === 'btc') {
+      if (/^(bc1[a-z0-9]{25,62}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/i.test(clean)) return { valid: true };
+      return { valid: false, error: 'Bitcoin 地址格式不正确' };
+    }
+    return { valid: true };
+  }
+
+  function detectAddressNetwork(addr) {
+    const clean = String(addr || '').trim();
+    if (!clean) return null;
+    if (/^prl1[a-z0-9]{10,}$/i.test(clean)) return 'prl';
+    if (/^0x[a-fA-F0-9]{40}$/.test(clean)) return 'evm';
+    if (/^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(clean)) return 'tron';
+    if (/^[a-z0-9_-]+(\.[a-z0-9_-]+)*\.(near|tg)$/i.test(clean) || /^[a-f0-9]{64}$/i.test(clean)) return 'near';
+    if (/^(bc1[a-z0-9]{25,62}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/i.test(clean)) return 'btc';
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(clean)) return 'sol';
+    return null;
+  }
+
+  state.receiveNetwork = 'prl';
+  state.receiveActiveAddress = '';
+  window.selectReceiveNetwork = async function (net = 'prl') {
+    triggerHaptic('light');
+    state.receiveNetwork = net;
+    const wallet = getActiveWallet();
+
+    ['prl', 'near', 'sol', 'evm'].forEach(k => {
+      const btn = document.getElementById(`btn-recv-net-${k}`);
+      if (!btn) return;
+      btn.className = k === net
+        ? 'py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active'
+        : 'py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active';
+    });
+
+    const titleEl = document.getElementById('receive-sheet-title');
+    const subEl = document.getElementById('receive-sheet-subtitle');
+    const netLabelEl = document.getElementById('receive-addr-network-label');
+    const fullAddrEl = document.getElementById('receive-full-address');
+    const indexBarEl = document.getElementById('receive-address-index-bar');
+    const indexLabelEl = document.getElementById('receive-addr-index-label');
+
+    if (!wallet) return;
+
+    let displayAddr = wallet.address;
+    if (net === 'prl') {
+      if (titleEl) titleEl.innerText = '接收 Pearl (PRL)';
+      if (subEl) subEl.innerText = '向下方真实 Taproot 地址付款';
+      if (netLabelEl) netLabelEl.innerText = 'Pearl Taproot 主网地址 (Bech32m 标准)';
+      if (indexBarEl) {
+        if (wallet.mnemonic) {
+          indexBarEl.classList.remove('hidden');
+          if (indexLabelEl) indexLabelEl.innerText = `m/86'/808276'/0'/0/${Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0}`;
+        } else {
+          indexBarEl.classList.add('hidden');
+        }
+      }
+      displayAddr = wallet.address;
+    } else {
+      if (indexBarEl) indexBarEl.classList.add('hidden');
+      if (!wallet.mnemonic) {
+        displayAddr = '';
+        if (fullAddrEl) fullAddrEl.innerText = '当前为观察钱包/无助记词，无法派生其他链地址';
+        state.receiveActiveAddress = '';
+        return;
+      }
+      if (net === 'near') {
+        if (titleEl) titleEl.innerText = '接收 NEAR 主网资产';
+        if (subEl) subEl.innerText = '支持 NEAR 原生代币及 NEAR 链上 USDT';
+        if (netLabelEl) netLabelEl.innerText = wallet.nearNamedAccount ? 'NEAR 已绑定域名账户' : 'NEAR Implicit 隐式主网地址 (Ed25519)';
+        if (!wallet.nearAddress) {
+          const d = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+          wallet.nearAddress = d.nearAddress;
+          wallet.nearPublicKey = d.nearPublicKey;
+          wallet.nearPrivateKey = d.nearPrivateKey;
+          saveWalletsToStorage();
+        }
+        displayAddr = wallet.nearNamedAccount || wallet.nearAddress;
+      } else if (net === 'sol') {
+        if (titleEl) titleEl.innerText = '接收 Solana (SOL) 资产';
+        if (subEl) subEl.innerText = '支持 SOL 及 SPL 代币收款 (m/44\'/501\'/0\'/0\')';
+        if (netLabelEl) netLabelEl.innerText = 'Solana 主网地址 (Base58 Ed25519)';
+        const d = await deriveSolanaFromSeedAsync(wallet.mnemonic, 0);
+        displayAddr = d.solAddress;
+      } else if (net === 'evm') {
+        if (titleEl) titleEl.innerText = '接收 EVM 全链资产';
+        if (subEl) subEl.innerText = 'ETH / Base / ARB / HYPE / ARC 通用收款地址';
+        if (netLabelEl) netLabelEl.innerText = 'EVM 多链通用地址 (BIP-44 m/44\'/60\'/0\'/0/0)';
+        const d = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+        displayAddr = d.address;
+      }
+    }
+
+    state.receiveActiveAddress = displayAddr;
+    if (fullAddrEl) fullAddrEl.innerText = displayAddr;
+    if (displayAddr) generateQRCode(displayAddr);
+  };
+  globalThis.selectReceiveNetwork = window.selectReceiveNetwork;
+
+  state.sendNetwork = 'prl';
+  window.selectSendNetwork = function (net = 'prl') {
+    triggerHaptic('light');
+    state.sendNetwork = net;
+    const wallet = getActiveWallet();
+
+    ['prl', 'near', 'sol', 'evm'].forEach(k => {
+      const btn = document.getElementById(`btn-send-net-${k}`);
+      if (!btn) return;
+      btn.className = k === net
+        ? 'py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active'
+        : 'py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active';
+    });
+
+    const titleEl = document.getElementById('send-sheet-title');
+    const subEl = document.getElementById('send-sheet-subtitle');
+    const addrInput = document.getElementById('send-address-input');
+    const currLabel = document.getElementById('send-currency-label');
+    const balEl = document.getElementById('send-available-balance');
+
+    if (net === 'prl') {
+      if (titleEl) titleEl.innerText = '转账 Pearl';
+      if (subEl) subEl.innerText = '本地离线签名，私钥永不上网';
+      if (addrInput) addrInput.placeholder = 'prl1p...';
+      if (currLabel) currLabel.innerText = 'PRL';
+      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL`;
+    } else if (net === 'near') {
+      if (titleEl) titleEl.innerText = '发送 NEAR 资产';
+      if (subEl) subEl.innerText = '校验 NEAR 地址并支持 PRL 跨链原子闪兑代发';
+      if (addrInput) addrInput.placeholder = 'alice.near 或 64位隐式地址';
+      if (currLabel) currLabel.innerText = 'NEAR';
+      if (balEl && wallet) balEl.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
+    } else if (net === 'sol') {
+      if (titleEl) titleEl.innerText = '发送 Solana (SOL)';
+      if (subEl) subEl.innerText = '校验 Solana 地址并支持 PRL 跨链原子闪兑代发';
+      if (addrInput) addrInput.placeholder = 'Solana Base58 收款地址';
+      if (currLabel) currLabel.innerText = 'SOL';
+      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL (可闪兑代发)`;
+    } else if (net === 'evm') {
+      if (titleEl) titleEl.innerText = '发送 EVM 资产 (ETH/Base/ARB/HYPE/ARC)';
+      if (subEl) subEl.innerText = '校验 0x 地址并支持 PRL 跨链原子闪兑代发';
+      if (addrInput) addrInput.placeholder = '0x... EVM 收款地址';
+      if (currLabel) currLabel.innerText = 'ETH/USDC';
+      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL (可闪兑代发)`;
+    }
+  };
+  globalThis.selectSendNetwork = window.selectSendNetwork;
+
   window.copyAddress = function () {
     const wallet = getActiveWallet();
     if (!wallet) return;
-    navigator.clipboard.writeText(wallet.address).then(() => {
+    const addrToCopy = state.receiveActiveAddress || wallet.address;
+    if (!addrToCopy) return;
+    navigator.clipboard.writeText(addrToCopy).then(() => {
       triggerHaptic('success');
       showToast("地址已复制到剪贴板");
     });
@@ -4896,6 +5089,40 @@
         triggerHaptic('error');
         showToast("请输入收款方地址");
         resetThumb();
+        return;
+      }
+
+      const activeSendNet = state.sendNetwork || 'prl';
+      if (activeSendNet !== 'prl') {
+        const chainCheck = validateChainAddress(activeSendNet, toAddr);
+        if (!chainCheck.valid) {
+          triggerHaptic('error');
+          showToast(`收款地址无效: ${chainCheck.error}`);
+          resetThumb();
+          return;
+        }
+        if (isNaN(amountVal) || amountVal <= 0) {
+          triggerHaptic('error');
+          showToast("转账金额必须大于 0");
+          resetThumb();
+          return;
+        }
+        // 通过 NEAR Intents 原子闪兑代发到目标外链地址
+        const targetMap = {
+          near: 'nep141:wrap.near',
+          sol: 'nep141:sol.omft.near',
+          evm: 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near'
+        };
+        state.nearSwap.direction = 'sell';
+        state.nearSwap.targetTokenId = targetMap[activeSendNet] || 'nep141:wrap.near';
+        state.nearSwap.recipientAddress = toAddr;
+        resetThumb();
+        closeSheet();
+        setTimeout(() => {
+          openNearSwapSheet();
+          calculateSwapQuote();
+          showToast(`已切换至跨链闪兑发送至 ${activeSendNet.toUpperCase()} 地址`);
+        }, 260);
         return;
       }
 
@@ -5324,11 +5551,39 @@
     }).catch(() => showToast("请在系统弹窗中允许粘贴"));
   };
 
+  window.updateContactAddressPlaceholder = function () {
+    const netSel = document.getElementById('contact-network-select');
+    const addrInput = document.getElementById('contact-address-input');
+    if (!netSel || !addrInput) return;
+    const map = {
+      prl: 'Pearl 地址 (prl1p...)',
+      near: 'NEAR 地址 (alice.near 或 64位十六进制)',
+      evm: 'EVM 地址 (0x... 通用 ETH/Base/ARB/HYPE/ARC)',
+      sol: 'Solana 地址 (Base58 字符串)',
+      tron: 'TRON 波场地址 (T...)',
+      btc: 'Bitcoin 地址 (bc1...)'
+    };
+    addrInput.placeholder = map[netSel.value] || '输入钱包地址';
+  };
+  globalThis.updateContactAddressPlaceholder = window.updateContactAddressPlaceholder;
+
+  window.autoDetectContactNetwork = function (val) {
+    const detected = detectAddressNetwork(val);
+    const netSel = document.getElementById('contact-network-select');
+    if (detected && netSel && netSel.value !== detected) {
+      netSel.value = detected;
+      window.updateContactAddressPlaceholder();
+    }
+  };
+  globalThis.autoDetectContactNetwork = window.autoDetectContactNetwork;
+
   window.saveNewContact = function () {
+    const netSel = document.getElementById('contact-network-select');
     const nameInput = document.getElementById('contact-name-input');
     const addrInput = document.getElementById('contact-address-input');
     const name = nameInput?.value.trim();
     const addr = addrInput?.value.trim();
+    let network = netSel ? netSel.value : 'prl';
 
     if (!name) {
       triggerHaptic('error');
@@ -5337,15 +5592,22 @@
     }
     if (!addr) {
       triggerHaptic('error');
-      showToast("请输入联系人 Pearl 地址");
+      showToast("请输入联系人钱包地址");
       return;
     }
 
-    // Feature 16: 严格校验联系人 Pearl Taproot Bech32m 地址与校验和
-    const addrCheck = validatePearlAddress(addr);
+    // 若用户未手动切下拉框但地址明显属于其他网络，自动纠偏识别
+    const autoNet = detectAddressNetwork(addr);
+    if (autoNet && network === 'prl' && autoNet !== 'prl') {
+      network = autoNet;
+      if (netSel) netSel.value = autoNet;
+    }
+
+    const addrCheck = validateChainAddress(network, addr);
     if (!addrCheck.valid) {
       triggerHaptic('error');
-      showToast(`联系人地址无效: ${formatAddressError(addrCheck.error)}`);
+      const errMsg = network === 'prl' ? formatAddressError(addrCheck.error) : addrCheck.error;
+      showToast(`联系人地址无效: ${errMsg}`);
       return;
     }
 
@@ -5362,12 +5624,13 @@
       id: `contact-${Date.now()}`,
       name,
       address: addr,
+      network,
       createdAt: new Date().toISOString()
     });
     saveContacts();
     closeAddContactModal();
     renderAddressBookList();
-    showToast(`已添加联系人【${name}】`);
+    showToast(`已添加联系人【${name}】(${network.toUpperCase()})`);
   };
 
   window.deleteContact = function (id, e) {
@@ -5379,7 +5642,7 @@
     showToast("已从地址簿删除");
   };
 
-  window.selectContactAddress = function (addr, name) {
+  window.selectContactAddress = function (addr, name, network = 'prl') {
     triggerHaptic('success');
     if (state.addressBookMode === 'swap') {
       state.nearSwap.recipientAddress = addr;
@@ -5391,6 +5654,10 @@
         showToast(`已填入【${name}】地址`);
       }, 250);
       return;
+    }
+    const net = (network && ['prl', 'near', 'sol', 'evm'].includes(network)) ? network : (detectAddressNetwork(addr) || 'prl');
+    if (['prl', 'near', 'sol', 'evm'].includes(net)) {
+      selectSendNetwork(net);
     }
     const input = document.getElementById('send-address-input');
     if (input) input.value = addr;
@@ -5415,12 +5682,24 @@
       return;
     }
 
-    listEl.innerHTML = state.contacts.map(c => `
-      <div onclick="selectContactAddress('${c.address}', '${c.name}')" class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-cyan-400/40 flex items-center justify-between cursor-pointer btn-active">
+    const netBadgeMap = {
+      prl: { label: 'Pearl', cls: 'text-cyan-400 bg-cyan-500/10' },
+      near: { label: 'NEAR', cls: 'text-emerald-300 bg-emerald-500/15' },
+      evm: { label: 'EVM全链', cls: 'text-indigo-300 bg-indigo-500/15' },
+      sol: { label: 'Solana', cls: 'text-purple-300 bg-purple-500/15' },
+      tron: { label: 'TRON', cls: 'text-rose-300 bg-rose-500/15' },
+      btc: { label: 'Bitcoin', cls: 'text-amber-300 bg-amber-500/15' }
+    };
+
+    listEl.innerHTML = state.contacts.map(c => {
+      const net = c.network || detectAddressNetwork(c.address) || 'prl';
+      const badge = netBadgeMap[net] || { label: net.toUpperCase(), cls: 'text-cyan-400 bg-cyan-500/10' };
+      return `
+      <div onclick="selectContactAddress('${c.address}', '${c.name}', '${net}')" class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] hover:border-cyan-400/40 flex items-center justify-between cursor-pointer btn-active">
         <div class="space-y-1 flex-1 pr-3">
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-white">${c.name}</span>
-            <span class="text-[10px] text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded font-mono">Taproot</span>
+            <span class="text-[10px] ${badge.cls} px-1.5 py-0.5 rounded font-mono">${badge.label}</span>
           </div>
           <div class="text-[11px] font-mono text-white/50 truncate max-w-[240px]">${c.address}</div>
         </div>
@@ -5430,7 +5709,8 @@
           </button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   // ============================================================================
@@ -5591,6 +5871,22 @@
     window.closeSwapTokenPickerModal();
   };
 
+  state.nearSwap.networkFilter = 'all';
+
+  window.setSwapNetworkFilter = function (net = 'all') {
+    triggerHaptic('light');
+    state.nearSwap.networkFilter = net;
+    document.querySelectorAll('#swap-network-filter-bar [data-swap-net]').forEach(btn => {
+      const k = btn.getAttribute('data-swap-net');
+      btn.className = k === net
+        ? 'px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active'
+        : 'px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active';
+    });
+    const input = document.getElementById('swap-token-search-input');
+    renderSwapTokenPickerList(input ? input.value : '');
+  };
+  globalThis.setSwapNetworkFilter = window.setSwapNetworkFilter;
+
   window.filterSwapTokens = function (query) {
     renderSwapTokenPickerList(query);
   };
@@ -5602,8 +5898,10 @@
     const currentAssetId = state.nearSwap.targetTokenId;
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const query = (filterText || '').trim().toLowerCase();
+    const netFilter = (state.nearSwap.networkFilter || 'all').toLowerCase();
 
     const filtered = state.nearSwap.tokensList.filter(t => {
+      if (netFilter !== 'all' && String(t.blockchain || '').toLowerCase() !== netFilter) return false;
       if (!query) return true;
       return (
         t.symbol.toLowerCase().includes(query) ||
@@ -5617,7 +5915,7 @@
       container.innerHTML = `
         <div class="py-10 text-center text-white/40 text-xs">
           <div class="text-2xl mb-1.5">🔍</div>
-          未找到匹配代币，请尝试搜索 USDT、TRON、ETH 等
+          该网络下暂无匹配代币，可切换上方网络或清空搜索词
         </div>
       `;
       return;
@@ -5632,8 +5930,8 @@
       return `
         <div onclick="selectSwapTokenFromPicker('${t.assetId}')" class="p-3 rounded-2xl ${isSelected ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06]'} border flex items-center justify-between cursor-pointer transition-all btn-active">
           <div class="flex items-center gap-3">
-            <div class="text-2xl w-9 h-9 rounded-xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center">
-              ${t.icon}
+            <div class="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center overflow-hidden">
+              ${getTokenIconHtml(t.symbol, t.blockchain, 28)}
             </div>
             <div>
               <div class="flex items-center gap-1.5">
@@ -6009,7 +6307,7 @@
 
     const prlBadgeHTML = `
       <div id="swap-pay-token-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white">
-        <span class="text-lg">🦪</span>
+        <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml('PRL', 'prl', 24)}</span>
         <div class="text-left">
           <div class="text-xs font-bold leading-tight">PRL</div>
           <div class="text-[9px] text-cyan-300/80 leading-tight">Pearl 主网</div>
@@ -6019,7 +6317,7 @@
 
     const tokenOptionsHTML = state.nearSwap.tokensList.map(t => `
       <option value="${t.assetId}" ${t.assetId === targetToken.assetId ? 'selected' : ''}>
-        ${t.icon} ${t.symbol} (${t.networkName})
+        ${t.symbol} (${t.networkName})
       </option>
     `).join('');
 
@@ -6027,7 +6325,7 @@
     const tokenSelectHTML = `
       <div class="relative">
         <button type="button" onclick="openSwapTokenPickerModal()" id="btn-swap-token-picker" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-cyan-400/50 text-white transition-all btn-active shadow-sm group">
-          <span class="text-xl">${targetToken.icon}</span>
+          <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml(targetToken.symbol, targetToken.blockchain, 24)}</span>
           <div class="text-left">
             <div class="text-xs font-bold leading-tight group-hover:text-cyan-300 transition-colors flex items-center gap-1">
               <span>${targetToken.symbol}</span>

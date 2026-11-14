@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.3">
+  <link rel="stylesheet" href="style.css?v=6.4">
   <script>
     tailwind.config = {
       theme: {
@@ -1046,12 +1046,20 @@
       <div class="w-10 h-1 bg-white/20 rounded-full"></div>
       <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
     </div>
-    <div class="text-center mb-4">
-      <h3 class="text-base font-bold text-white">接收 Pearl 珍珠币</h3>
-      <p class="text-xs text-white/40 mt-0.5">向下方真实 Taproot 地址付款</p>
+    <div class="text-center mb-3">
+      <h3 id="receive-sheet-title" class="text-base font-bold text-white">接收 Pearl 珍珠币</h3>
+      <p id="receive-sheet-subtitle" class="text-xs text-white/40 mt-0.5">选择网络查看对应真实收款地址与二维码</p>
     </div>
 
-    <div class="flex justify-center mb-5">
+    <!-- 全链收款网络切换栏 -->
+    <div id="receive-network-tabs" class="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
+      <button type="button" onclick="selectReceiveNetwork('prl')" id="btn-recv-net-prl" class="py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active">PRL</button>
+      <button type="button" onclick="selectReceiveNetwork('near')" id="btn-recv-net-near" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">NEAR</button>
+      <button type="button" onclick="selectReceiveNetwork('sol')" id="btn-recv-net-sol" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">SOL</button>
+      <button type="button" onclick="selectReceiveNetwork('evm')" id="btn-recv-net-evm" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">EVM全链</button>
+    </div>
+
+    <div class="flex justify-center mb-4">
       <div id="qrcode-canvas-container" class="p-3 bg-white rounded-3xl shadow-2xl shadow-cyan-500/20 flex items-center justify-center overflow-hidden"></div>
     </div>
 
@@ -1066,7 +1074,7 @@
     </div>
 
     <div class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-5">
-      <div class="text-[10px] text-white/40 mb-1">Pearl Taproot 主网地址 (Bech32m 标准)</div>
+      <div id="receive-addr-network-label" class="text-[10px] text-white/40 mb-1">Pearl Taproot 主网地址 (Bech32m 标准)</div>
       <div id="receive-full-address" class="text-xs font-mono text-cyan-200 break-all select-all leading-relaxed"></div>
     </div>
 
@@ -1086,9 +1094,17 @@
         ✕
       </button>
     </div>
-    <div class="text-center mb-4">
-      <h3 class="text-base font-bold text-white">转账 Pearl</h3>
-      <p class="text-xs text-white/40 mt-0.5">本地离线签名，私钥永不上网</p>
+    <div class="text-center mb-3">
+      <h3 id="send-sheet-title" class="text-base font-bold text-white">转账 Pearl</h3>
+      <p id="send-sheet-subtitle" class="text-xs text-white/40 mt-0.5">本地离线签名，私钥永不上网</p>
+    </div>
+
+    <!-- 全链发送网络切换栏 -->
+    <div id="send-network-tabs" class="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
+      <button type="button" onclick="selectSendNetwork('prl')" id="btn-send-net-prl" class="py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active">PRL</button>
+      <button type="button" onclick="selectSendNetwork('near')" id="btn-send-net-near" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">NEAR</button>
+      <button type="button" onclick="selectSendNetwork('sol')" id="btn-send-net-sol" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">SOL</button>
+      <button type="button" onclick="selectSendNetwork('evm')" id="btn-send-net-evm" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">EVM全链</button>
     </div>
 
     <div class="mb-4">
@@ -1114,7 +1130,7 @@
         <input id="send-amount-input" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00" oninput="handleSendAmountInput(this)" class="w-full p-3.5 pr-20 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-bold tabular-numbers text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
         <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
           <button onclick="setMaxSendAmount()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-md">最大</button>
-          <span class="text-xs font-bold text-white/60">PRL</span>
+          <span id="send-currency-label" class="text-xs font-bold text-white/60">PRL</span>
         </div>
       </div>
     </div>
@@ -1213,11 +1229,19 @@
     </div>
 
     <!-- 添加联系人内嵌表单 (默认折叠) -->
-    <div id="add-contact-form" class="hidden mb-4 p-3.5 rounded-2xl bg-white/[0.03] border border-cyan-500/30 space-y-3 flex-shrink-0">
+    <div id="add-contact-form" class="hidden mb-4 p-3.5 rounded-2xl bg-white/[0.03] border border-cyan-500/30 space-y-2.5 flex-shrink-0">
       <div class="text-xs font-bold text-cyan-300">新建常用地址</div>
-      <input id="contact-name-input" type="text" placeholder="备注名称 (例如: 矿机归集钱包 / 交易所充币)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+      <select id="contact-network-select" onchange="updateContactAddressPlaceholder()" class="w-full p-2.5 rounded-xl bg-[#0c0e17] border border-white/[0.1] text-xs text-white focus:outline-none focus:border-cyan-400">
+        <option value="prl">Pearl 主网 (PRL · prl1p...)</option>
+        <option value="near">NEAR Protocol (.near 域名 / 64位地址)</option>
+        <option value="evm">EVM 全链通用 (ETH / Base / ARB / HYPE / ARC · 0x...)</option>
+        <option value="sol">Solana (SOL · Base58)</option>
+        <option value="tron">TRON 波场 (TRC20 · T...)</option>
+        <option value="btc">Bitcoin (BTC · bc1...)</option>
+      </select>
+      <input id="contact-name-input" type="text" placeholder="备注名称 (例如: 我的 NEAR 账户 / 交易所)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
       <div class="relative">
-        <input id="contact-address-input" type="text" placeholder="Pearl 地址 (prl1p...)" class="w-full p-2.5 pr-14 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+        <input id="contact-address-input" type="text" oninput="autoDetectContactNetwork(this.value)" placeholder="输入对应网络钱包地址" class="w-full p-2.5 pr-14 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
         <button type="button" onclick="pasteToContactAddress()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-cyan-400 font-medium">粘贴</button>
       </div>
       <div class="flex gap-2 pt-1">
@@ -1616,22 +1640,34 @@
         <svg class="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
       </div>
 
+      <!-- 先选网络再选币种：网络筛选栏 -->
+      <div id="swap-network-filter-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+        <button type="button" onclick="setSwapNetworkFilter('all')" data-swap-net="all" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active">全部网络</button>
+        <button type="button" onclick="setSwapNetworkFilter('near')" data-swap-net="near" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">NEAR</button>
+        <button type="button" onclick="setSwapNetworkFilter('tron')" data-swap-net="tron" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">TRON</button>
+        <button type="button" onclick="setSwapNetworkFilter('eth')" data-swap-net="eth" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Ethereum</button>
+        <button type="button" onclick="setSwapNetworkFilter('base')" data-swap-net="base" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Base</button>
+        <button type="button" onclick="setSwapNetworkFilter('arb')" data-swap-net="arb" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Arbitrum</button>
+        <button type="button" onclick="setSwapNetworkFilter('sol')" data-swap-net="sol" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Solana</button>
+        <button type="button" onclick="setSwapNetworkFilter('btc')" data-swap-net="btc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Bitcoin</button>
+      </div>
+
       <!-- 热门快捷代币胶囊 -->
-      <div class="flex items-center gap-1.5 flex-wrap">
+      <div id="swap-quick-pills-bar" class="flex items-center gap-1.5 flex-wrap">
         <button type="button" onclick="selectSwapTokenFromPicker('nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
-          <span>🔴</span><span>USDT</span><span class="text-[9px] text-rose-300 font-normal">TRC20</span>
+          <span class="w-3.5 h-3.5 rounded-full bg-[#26A17B] text-white inline-flex items-center justify-center text-[9px] font-black">₮</span><span>USDT</span><span class="text-[9px] text-rose-300 font-normal">TRC20</span>
         </button>
         <button type="button" onclick="selectSwapTokenFromPicker('nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
-          <span>💎</span><span>USDT</span><span class="text-[9px] text-blue-300 font-normal">ERC20</span>
+          <span class="w-3.5 h-3.5 rounded-full bg-[#26A17B] text-white inline-flex items-center justify-center text-[9px] font-black">₮</span><span>USDT</span><span class="text-[9px] text-blue-300 font-normal">ERC20</span>
         </button>
         <button type="button" onclick="selectSwapTokenFromPicker('nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
-          <span>🔵</span><span>USDC</span><span class="text-[9px] text-indigo-300 font-normal">Base</span>
+          <span class="w-3.5 h-3.5 rounded-full bg-[#2775CA] text-white inline-flex items-center justify-center text-[9px] font-black">$</span><span>USDC</span><span class="text-[9px] text-indigo-300 font-normal">Base</span>
         </button>
         <button type="button" onclick="selectSwapTokenFromPicker('nep141:sol.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
-          <span>🟣</span><span>SOL</span>
+          <span class="w-3.5 h-3.5 rounded-full bg-gradient-to-tr from-[#9945FF] to-[#14F195] text-black inline-flex items-center justify-center text-[8px] font-black">S</span><span>SOL</span>
         </button>
         <button type="button" onclick="selectSwapTokenFromPicker('nep141:btc.omft.near')" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[11px] font-bold text-white flex items-center gap-1.5 transition-all btn-active">
-          <span>₿</span><span>BTC</span>
+          <span class="w-3.5 h-3.5 rounded-full bg-[#F7931A] text-white inline-flex items-center justify-center text-[9px] font-black">₿</span><span>BTC</span>
         </button>
       </div>
 
@@ -1703,10 +1739,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.3"></script>
+  <script src="bip39-wordlist.js?v=6.4"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.3"></script>
+  <script src="qrcode.min.js?v=6.4"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.3"></script>
+  <script src="app.js?v=6.4"></script>
 </body>
 </html>
