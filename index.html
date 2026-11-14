@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.5">
+  <link rel="stylesheet" href="style.css?v=6.6">
   <script>
     tailwind.config = {
       theme: {
@@ -163,26 +163,6 @@
             </div>
             <span class="text-[10px] font-medium text-white/80">多链地址</span>
           </button>
-        </div>
-      </div>
-
-      <!-- NEAR 链抽象跨链兑换快捷横幅 -->
-      <div onclick="openNearSwapSheet()" class="p-3 mb-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/40 to-purple-950/40 border border-cyan-400/25 hover:border-cyan-400/50 flex items-center justify-between cursor-pointer btn-active transition-all shadow-lg shadow-cyan-950/30">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 border border-cyan-400/30 text-cyan-300 flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-500/10">
-            ⚡
-          </div>
-          <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-white" data-i18n="swap.bannerTitle">NEAR 链抽象跨链闪兑</span>
-              <span class="text-[9px] px-1.5 py-0.2 rounded font-bold bg-cyan-400/20 text-cyan-300 border border-cyan-400/30">NEAR Intents</span>
-            </div>
-            <div class="text-[11px] text-white/50 mt-0.5" data-i18n="swap.bannerSubtitle">免跨链桥与原生Gas · 支持 PRL 与 35+ 公链资产原子化意图兑换</div>
-          </div>
-        </div>
-        <div class="flex items-center gap-1 text-cyan-300 text-xs font-bold bg-cyan-500/15 px-2.5 py-1 rounded-lg border border-cyan-400/30">
-          <span data-i18n="swap.bannerBtn">闪兑</span>
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </div>
       </div>
 
@@ -619,7 +599,7 @@
         <div class="space-y-3 text-xs text-white/70">
           <div class="flex items-center justify-between py-2 border-b border-white/[0.05]">
             <span data-i18n="settings.secAuthLabel">安全认证</span>
-            <span class="text-cyan-400 font-medium" data-i18n="settings.secAuthVal">支持 Face ID / 手机密码</span>
+            <span id="settings-sec-auth-val" class="text-cyan-400 font-medium" data-i18n="settings.secAuthVal">本地 PIN 密码保护</span>
           </div>
           <div class="flex items-center justify-between py-2 border-b border-white/[0.05]">
             <span data-i18n="settings.taprootAlgoLabel">Taproot 算法</span>
@@ -657,7 +637,7 @@
         <button onclick="openMultichainAddressesSheet()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-indigo-500/25 flex items-center justify-between btn-active text-left">
           <div>
             <div class="text-sm font-bold text-indigo-300">全链地址与私钥管理</div>
-            <div class="text-xs text-white/40">查看/导出 PRL、NEAR、SOL、ETH、BSC(BNB)、Base、ARB、HYPE、ARC 私钥</div>
+            <div class="text-xs text-white/40">查看/导出 PRL、NEAR、SOL、ETH、BSC(BNB)、Base、ARB、HYPE 私钥</div>
           </div>
           <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
         </button>
@@ -665,7 +645,7 @@
         <button onclick="startSecureMnemonicFlow()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-amber-500/20 flex items-center justify-between btn-active text-left">
           <div>
             <div class="text-sm font-bold text-amber-300" data-i18n="settings.viewMnemonic">安全查看当前钱包助记词</div>
-            <div class="text-xs text-white/40" data-i18n="settings.viewMnemonicDesc">需验证 Face ID 或自定义密码</div>
+            <div id="settings-view-mnemonic-desc" class="text-xs text-white/40" data-i18n="settings.viewMnemonicDesc">需验证本地密码或设备生物识别</div>
           </div>
           <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
         </button>
@@ -685,11 +665,6 @@
       <button id="tab-btn-wallet" type="button" onclick="switchTab('wallet')" class="nav-tab-btn active btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
         <span class="text-[10px]" data-i18n="nav.wallet">钱包</span>
-      </button>
-
-      <button id="tab-btn-swap" type="button" onclick="openNearSwapSheet()" class="nav-tab-btn btn-active">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
-        <span class="text-[10px]" data-i18n="nav.swap">闪兑</span>
       </button>
 
       <button id="tab-btn-mining" type="button" onclick="switchTab('mining')" class="nav-tab-btn btn-active">
@@ -990,12 +965,16 @@
       <p id="receive-sheet-subtitle" class="text-xs text-white/40 mt-0.5">选择网络查看对应真实收款地址与二维码</p>
     </div>
 
-    <!-- 全链收款网络切换栏 -->
-    <div id="receive-network-tabs" class="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
+    <!-- 全链收款网络切换栏 (明确指定具体网络) -->
+    <div id="receive-network-tabs" class="grid grid-cols-4 gap-1.5 p-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
       <button type="button" onclick="selectReceiveNetwork('prl')" id="btn-recv-net-prl" class="py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active">PRL</button>
       <button type="button" onclick="selectReceiveNetwork('near')" id="btn-recv-net-near" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">NEAR</button>
       <button type="button" onclick="selectReceiveNetwork('sol')" id="btn-recv-net-sol" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">SOL</button>
-      <button type="button" onclick="selectReceiveNetwork('evm')" id="btn-recv-net-evm" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">EVM全链</button>
+      <button type="button" onclick="selectReceiveNetwork('eth')" id="btn-recv-net-eth" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ETH</button>
+      <button type="button" onclick="selectReceiveNetwork('bsc')" id="btn-recv-net-bsc" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">BSC</button>
+      <button type="button" onclick="selectReceiveNetwork('base')" id="btn-recv-net-base" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">Base</button>
+      <button type="button" onclick="selectReceiveNetwork('arb')" id="btn-recv-net-arb" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ARB</button>
+      <button type="button" onclick="selectReceiveNetwork('hype')" id="btn-recv-net-hype" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">HYPE</button>
     </div>
 
     <div class="flex justify-center mb-4">
@@ -1038,12 +1017,16 @@
       <p id="send-sheet-subtitle" class="text-xs text-white/40 mt-0.5">本地离线签名，私钥永不上网</p>
     </div>
 
-    <!-- 全链发送网络切换栏 -->
-    <div id="send-network-tabs" class="grid grid-cols-4 gap-1.5 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
+    <!-- 全链发送网络切换栏 (明确指定具体网络) -->
+    <div id="send-network-tabs" class="grid grid-cols-4 gap-1.5 p-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
       <button type="button" onclick="selectSendNetwork('prl')" id="btn-send-net-prl" class="py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active">PRL</button>
       <button type="button" onclick="selectSendNetwork('near')" id="btn-send-net-near" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">NEAR</button>
       <button type="button" onclick="selectSendNetwork('sol')" id="btn-send-net-sol" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">SOL</button>
-      <button type="button" onclick="selectSendNetwork('evm')" id="btn-send-net-evm" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">EVM全链</button>
+      <button type="button" onclick="selectSendNetwork('eth')" id="btn-send-net-eth" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ETH</button>
+      <button type="button" onclick="selectSendNetwork('bsc')" id="btn-send-net-bsc" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">BSC</button>
+      <button type="button" onclick="selectSendNetwork('base')" id="btn-send-net-base" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">Base</button>
+      <button type="button" onclick="selectSendNetwork('arb')" id="btn-send-net-arb" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ARB</button>
+      <button type="button" onclick="selectSendNetwork('hype')" id="btn-send-net-hype" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">HYPE</button>
     </div>
 
     <div class="mb-4">
@@ -1735,10 +1718,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.5"></script>
+  <script src="bip39-wordlist.js?v=6.6"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.5"></script>
+  <script src="qrcode.min.js?v=6.6"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.5"></script>
+  <script src="app.js?v=6.6"></script>
 </body>
 </html>

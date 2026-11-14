@@ -287,7 +287,7 @@
       'settings.androidRelease': '查看 GitHub Release 发布版本页 ↗',
       'settings.securityTitle': '钱包安全与自托管',
       'settings.secAuthLabel': '安全认证',
-      'settings.secAuthVal': '支持 Face ID / 手机密码',
+      'settings.secAuthVal': '本地 PIN 密码保护',
       'settings.taprootAlgoLabel': 'Taproot 算法',
       'settings.taprootAlgoVal': 'BIP-350 Bech32m 真实编码',
       'settings.activeWalletsLabel': '活跃钱包',
@@ -296,7 +296,7 @@
       'settings.addressBook': '常用地址簿 (联系人)',
       'settings.addressBookDesc': '保存和管理常用转账地址，免重复输入',
       'settings.viewMnemonic': '安全查看当前钱包助记词',
-      'settings.viewMnemonicDesc': '需验证 Face ID 或自定义密码',
+      'settings.viewMnemonicDesc': '需验证本地密码或设备生物识别',
       'settings.noWalletPrompt': '当前尚未绑定任何钱包账户',
       'settings.gotoCreateOrImport': '立即前往创建或导入 ➔',
       'send.minerFee': '矿工手续费 (Gas Fee)',
@@ -384,13 +384,12 @@
 
     // 更新底部导航文字
     const tabWalletSpan = document.querySelector('#tab-btn-wallet span');
-    const tabSwapSpan = document.querySelector('#tab-btn-swap span');
     const tabMiningSpan = document.querySelector('#tab-btn-mining span');
     const tabSettingsSpan = document.querySelector('#tab-btn-settings span');
     if (tabWalletSpan) tabWalletSpan.innerText = dict['nav.wallet'];
-    if (tabSwapSpan) tabSwapSpan.innerText = dict['nav.swap'];
     if (tabMiningSpan) tabMiningSpan.innerText = dict['nav.mining'];
     if (tabSettingsSpan) tabSettingsSpan.innerText = dict['nav.settings'];
+    if (typeof detectDeviceSecurityLabel === 'function') detectDeviceSecurityLabel();
 
     // 同步刷新开发者支持费状态文案
     updateDevFeeUI();
@@ -3392,15 +3391,47 @@
     return [
       { id: 'prl', symbol: 'PRL', name: 'Pearl Network', chain: 'prl', chainLabel: 'Pearl 主网', balance: prlBal, price: prlPrice, addr: wallet ? wallet.address : '', recvNet: 'prl', explorer: addr => `https://prlscan.com/address/${addr}` },
       { id: 'near', symbol: 'NEAR', name: 'NEAR Protocol', chain: 'near', chainLabel: 'NEAR 主网', balance: nearBal, price: prices.near || 4.04, addr: wallet ? (wallet.nearNamedAccount || wallet.nearAddress || '') : '', recvNet: 'near', explorer: addr => `https://nearblocks.io/address/${addr}` },
-      { id: 'eth', symbol: 'ETH', name: 'Ethereum', chain: 'eth', chainLabel: 'Ethereum', balance: Number(mb.eth) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://etherscan.io/address/${addr}` },
-      { id: 'bnb', symbol: 'BNB', name: 'BNB Smart Chain', chain: 'bsc', chainLabel: 'BSC (币安链)', balance: Number(mb.bnb) || 0, price: prices.bnb || 610, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://bscscan.com/address/${addr}` },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', chain: 'eth', chainLabel: 'Ethereum', balance: Number(mb.eth) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'eth', explorer: addr => `https://etherscan.io/address/${addr}` },
+      { id: 'bnb', symbol: 'BNB', name: 'BNB Smart Chain', chain: 'bsc', chainLabel: 'BSC (币安链)', balance: Number(mb.bnb) || 0, price: prices.bnb || 610, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'bsc', explorer: addr => `https://bscscan.com/address/${addr}` },
       { id: 'sol', symbol: 'SOL', name: 'Solana', chain: 'sol', chainLabel: 'Solana', balance: Number(mb.sol) || 0, price: prices.sol || 96, addr: wallet ? (wallet.solAddress || '') : '', recvNet: 'sol', explorer: addr => `https://solscan.io/account/${addr}` },
-      { id: 'base', symbol: 'ETH', name: 'ETH (Base)', chain: 'base', chainLabel: 'Base', balance: Number(mb.base) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://basescan.org/address/${addr}` },
-      { id: 'arb', symbol: 'ETH', name: 'ETH (Arbitrum)', chain: 'arb', chainLabel: 'Arbitrum', balance: Number(mb.arb) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://arbiscan.io/address/${addr}` },
-      { id: 'hype', symbol: 'HYPE', name: 'Hyperliquid', chain: 'hype', chainLabel: 'HyperEVM', balance: Number(mb.hype) || 0, price: prices.hype || 22, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://purrsec.com/address/${addr}` },
-      { id: 'arc', symbol: 'ARC', name: 'Arc Network (USDC Gas)', chain: 'arc', chainLabel: 'Arc L1 (EVM)', balance: Number(mb.arc) || 0, price: prices.arc || 1.0, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://testnet.arcscan.app/address/${addr}` }
+      { id: 'base', symbol: 'ETH', name: 'ETH (Base)', chain: 'base', chainLabel: 'Base', balance: Number(mb.base) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'base', explorer: addr => `https://basescan.org/address/${addr}` },
+      { id: 'arb', symbol: 'ETH', name: 'ETH (Arbitrum)', chain: 'arb', chainLabel: 'Arbitrum', balance: Number(mb.arb) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'arb', explorer: addr => `https://arbiscan.io/address/${addr}` },
+      { id: 'hype', symbol: 'HYPE', name: 'Hyperliquid', chain: 'hype', chainLabel: 'HyperEVM', balance: Number(mb.hype) || 0, price: prices.hype || 22, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'hype', explorer: addr => `https://purrsec.com/address/${addr}` }
     ];
   }
+
+  async function detectDeviceSecurityLabel() {
+    const authEl = document.getElementById('settings-sec-auth-val');
+    const descEl = document.getElementById('settings-view-mnemonic-desc');
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    let hasPlatformBio = false;
+    try {
+      if (typeof window !== 'undefined' && window.PublicKeyCredential && typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+        hasPlatformBio = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      }
+    } catch (e) {}
+
+    let authText = '本地 6 位 PIN 密码保护';
+    let descText = '需验证本地 6 位安全密码';
+    if (hasPlatformBio) {
+      if (isIOS) {
+        authText = 'Face ID / Touch ID + 本地 PIN';
+        descText = '需验证 Face ID 或本地安全密码';
+      } else if (isAndroid) {
+        authText = '指纹 / 人脸识别 + 本地 PIN';
+        descText = '需验证设备指纹/人脸或本地密码';
+      } else {
+        authText = '设备生物识别 (Windows Hello / Touch ID) + PIN';
+        descText = '需验证设备系统认证或本地 PIN 密码';
+      }
+    }
+    if (authEl) authEl.innerText = authText;
+    if (descEl) descEl.innerText = descText;
+  }
+  window.detectDeviceSecurityLabel = detectDeviceSecurityLabel;
+  globalThis.detectDeviceSecurityLabel = detectDeviceSecurityLabel;
 
   async function fetchEvmNativeBalance(rpcUrl, evmAddress) {
     if (!evmAddress) return 0;
@@ -3846,19 +3877,26 @@
     container.innerHTML = state.wallets.map((w, index) => {
       const isActive = w.id === state.activeWalletId;
       const bal = Number(w.balance) || 0;
+      const tokens = getHomeTokenCatalog(w);
+      const totalUsd = tokens.reduce((sum, item) => sum + (item.balance * (item.price || 0)), 0);
+      const primaryAddr = w.evmAddress || w.address;
+      const chainTag = w.mnemonic ? '多链账户 (PRL/NEAR/SOL/EVM)' : 'Pearl 账户';
       return `
         <div id="wallet-card-${w.id}" class="p-3.5 rounded-2xl ${isActive ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] border-white/[0.08]'} border flex items-center justify-between transition-all duration-300">
           <div class="flex items-center gap-3 cursor-pointer flex-1" onclick="switchActiveWallet('${w.id}')">
             <div class="w-9 h-9 rounded-full ${isActive ? 'bg-cyan-400 text-black font-extrabold' : 'bg-white/10 text-white/60'} text-xs flex items-center justify-center">
               ${index + 1}
             </div>
-            <div>
+            <div class="min-w-0">
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold text-white">${w.name}</span>
                 ${isActive ? `<span class="text-[10px] bg-cyan-400/20 text-cyan-300 px-1.5 py-0.2 rounded font-semibold">${state.currentLang === 'en' ? 'Active' : '当前'}</span>` : ''}
               </div>
-              <div class="text-[11px] font-mono text-white/40 mt-0.5">${w.address.slice(0, 10)}...${w.address.slice(-6)}</div>
-              <div class="text-[11px] font-bold text-cyan-200 mt-0.5 tabular-numbers">${bal.toFixed(2)} PRL</div>
+              <div class="text-[10px] text-white/45 mt-0.5">${chainTag} · <span class="font-mono">${primaryAddr.slice(0, 8)}...${primaryAddr.slice(-4)}</span></div>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-xs font-bold text-emerald-400 tabular-numbers">$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</span>
+                <span class="text-[10px] text-white/40 tabular-numbers">${bal.toFixed(2)} PRL</span>
+              </div>
             </div>
           </div>
 
@@ -4739,40 +4777,37 @@
       {
         name: 'Pearl Mainnet',
         symbol: 'PRL',
-        badge: 'Taproot',
+        badge: 'Pearl 主网',
         badgeCls: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/30',
-        path: wallet.derivationPath || `m/86'/808276'/0'/0/${wallet.addressIndex || 0}`,
+        path: `序号 #${wallet.addressIndex || 0}`,
         address: wallet.address,
-        pubkey: wallet.pubkeyHex || cache.prlPubkey || '--',
         privkey: wallet.privateKeyHex || '--'
       },
       {
         name: 'NEAR Protocol',
         symbol: 'NEAR',
-        badge: wallet.nearNamedAccount ? '.near 域名' : 'Implicit 隐式主网',
+        badge: wallet.nearNamedAccount ? '.near 域名' : 'NEAR 主网',
         badgeCls: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
-        path: "m/44'/397'/0' (Ed25519)",
+        path: '主账户',
         address: wallet.nearNamedAccount ? `${wallet.nearNamedAccount} (${cache.near.nearAddress.slice(0, 10)}...)` : cache.near.nearAddress,
         copyAddress: wallet.nearNamedAccount || cache.near.nearAddress,
-        pubkey: cache.near.nearPublicKey,
         privkey: cache.near.nearPrivateKey
       },
       {
         name: 'Solana',
         symbol: 'SOL',
-        badge: 'SPL / Ed25519',
+        badge: 'Solana 主网',
         badgeCls: 'bg-purple-500/15 text-purple-300 border-purple-400/30',
-        path: "m/44'/501'/0'/0'",
+        path: '主账户',
         address: cache.sol.solAddress,
-        pubkey: cache.sol.solPublicKey,
         privkey: cache.sol.solPrivateKey
       },
       {
-        name: 'Ethereum / BSC (BNB) / Base / ARB / HYPE / ARC',
-        symbol: 'EVM 全链通用',
-        badge: 'ETH·BNB·BASE·ARB·HYPE·ARC',
+        name: 'Ethereum / BSC / Base / ARB / HYPE',
+        symbol: 'EVM 通用',
+        badge: 'ETH·BNB·BASE·ARB·HYPE',
         badgeCls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30',
-        path: "m/44'/60'/0'/0/0 (Secp256k1)",
+        path: '通用 0x 账户',
         address: cache.evm.address,
         privkey: cache.evm.privateKeyHex
       }
@@ -4954,16 +4989,13 @@
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#00EC97"/><path d="M21.3 9.2l-3.7 5.5c-.3.4.3.9.7.6l3.6-3v7.3c0 .2-.3.3-.4.1l-9.6-11.5A2 2 0 0010.3 7.5H9.9A2 2 0 007.9 9.5v13a2 2 0 002 2c.7 0 1.4-.4 1.8-1l3.7-5.5c.3-.4-.3-.9-.7-.6l-3.6 3v-7.3c0-.2.3-.3.4-.1l9.6 11.5c.4.5 1 .8 1.6.8h.4a2 2 0 002-2v-13a2 2 0 00-2-2c-.7 0-1.4.4-1.8 1z" fill="#000"/></svg>`;
     }
     if (sym === 'PRL') {
-      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="url(#prlGrad)"/><circle cx="16" cy="16" r="8.5" fill="url(#prlPearl)"/><circle cx="13" cy="13" r="2.2" fill="#fff" fill-opacity=".85"/><defs><linearGradient id="prlGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#06B6D4"/><stop offset="1" stop-color="#6366F1"/></linearGradient><radialGradient id="prlPearl" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(13.5 13.5) scale(11)"><stop stop-color="#fff"/><stop offset=".6" stop-color="#BAE6FD"/><stop offset="1" stop-color="#0284C7"/></radialGradient></defs></svg>`;
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#0D1B2A"/><circle cx="16" cy="16" r="11" stroke="#22D3EE" stroke-width="1.4" stroke-opacity=".55"/><circle cx="16" cy="16" r="6.8" fill="url(#prlPearlClean)"/><circle cx="13.8" cy="13.8" r="1.8" fill="#fff" fill-opacity=".9"/><defs><radialGradient id="prlPearlClean" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(14 13.5) scale(9)"><stop stop-color="#FFFFFF"/><stop offset=".55" stop-color="#A5F3FC"/><stop offset="1" stop-color="#0891B2"/></radialGradient></defs></svg>`;
     }
     if (sym === 'BNB') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#F3BA2F"/><path d="M12.1 14.3L16 10.4l3.9 3.9 2.3-2.3L16 5.8 9.8 12l2.3 2.3zm-6.3 1.7L8.1 13.7 10.4 16l-2.3 2.3L5.8 16zm6.3 1.7L16 21.6l3.9-3.9 2.3 2.3L16 26.2 9.8 20l2.3-2.3zm9.5-1.7l2.3-2.3 2.3 2.3-2.3 2.3-2.3-2.3zM18.3 16L16 13.7 13.7 16 16 18.3 18.3 16z" fill="#fff"/></svg>`;
     }
     if (sym === 'HYPE') {
-      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#0F2922"/><path d="M10.5 9v14m11-14v14M10.5 16h11" stroke="#50E3C2" stroke-width="2.8" stroke-linecap="round"/></svg>`;
-    }
-    if (sym === 'ARC') {
-      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#1D4ED8"/><path d="M9 21a7 7 0 0114 0" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="12" r="2.2" fill="#93C5FD"/></svg>`;
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#072723"/><path d="M11.6 10.4c-3.1 0-5.4 2.4-5.4 5.6 0 3.2 2.3 5.6 5.4 5.6 2.3 0 3.7-1.4 4.7-2.8.8 1.2 1.8 2.2 3.6 2.2 2.5 0 4.3-2 4.3-5 0-3-1.8-5-4.3-5-1.8 0-2.8 1-3.6 2.2-1-1.4-2.4-2.8-4.7-2.8z" fill="#97FCE4"/></svg>`;
     }
     if (sym === 'TRX' || chain === 'tron') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#EB0029"/><path d="M8.5 9.2l14.8 2.7-6.8 12.1-8-14.8zm2.3 1.8l5.5 10.2 4.6-8.2-10.1-2z" fill="#fff"/></svg>`;
@@ -4988,7 +5020,7 @@
       }
       return { valid: false, error: 'NEAR 地址应为 .near 域名或 64 位十六进制隐式地址' };
     }
-    if (net === 'evm' || net === 'eth' || net === 'base' || net === 'arb' || net === 'hype' || net === 'arc') {
+    if (net === 'evm' || net === 'eth' || net === 'bsc' || net === 'base' || net === 'arb' || net === 'hype') {
       if (/^0x[a-fA-F0-9]{40}$/.test(clean)) return { valid: true };
       return { valid: false, error: 'EVM 地址应为 0x 开头的 42 位十六进制地址' };
     }
@@ -5026,7 +5058,7 @@
     state.receiveNetwork = net;
     const wallet = getActiveWallet();
 
-    ['prl', 'near', 'sol', 'evm'].forEach(k => {
+    ['prl', 'near', 'sol', 'eth', 'bsc', 'base', 'arb', 'hype'].forEach(k => {
       const btn = document.getElementById(`btn-recv-net-${k}`);
       if (!btn) return;
       btn.className = k === net
@@ -5046,12 +5078,12 @@
     let displayAddr = wallet.address;
     if (net === 'prl') {
       if (titleEl) titleEl.innerText = '接收 Pearl (PRL)';
-      if (subEl) subEl.innerText = '向下方真实 Taproot 地址付款';
-      if (netLabelEl) netLabelEl.innerText = 'Pearl Taproot 主网地址 (Bech32m 标准)';
+      if (subEl) subEl.innerText = '仅接收 Pearl 主网 PRL 资产';
+      if (netLabelEl) netLabelEl.innerText = 'Pearl 主网收款地址';
       if (indexBarEl) {
         if (wallet.mnemonic) {
           indexBarEl.classList.remove('hidden');
-          if (indexLabelEl) indexLabelEl.innerText = `m/86'/808276'/0'/0/${Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0}`;
+          if (indexLabelEl) indexLabelEl.innerText = `地址 #${Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0}`;
         } else {
           indexBarEl.classList.add('hidden');
         }
@@ -5067,8 +5099,8 @@
       }
       if (net === 'near') {
         if (titleEl) titleEl.innerText = '接收 NEAR 主网资产';
-        if (subEl) subEl.innerText = '支持 NEAR 原生代币及 NEAR 链上 USDT';
-        if (netLabelEl) netLabelEl.innerText = wallet.nearNamedAccount ? 'NEAR 已绑定域名账户' : 'NEAR Implicit 隐式主网地址 (Ed25519)';
+        if (subEl) subEl.innerText = '仅接收 NEAR 网络上的 NEAR / USDT 等资产';
+        if (netLabelEl) netLabelEl.innerText = wallet.nearNamedAccount ? 'NEAR 已绑定域名账户' : 'NEAR 主网收款地址';
         if (!wallet.nearAddress) {
           const d = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
           wallet.nearAddress = d.nearAddress;
@@ -5079,14 +5111,21 @@
         displayAddr = wallet.nearNamedAccount || wallet.nearAddress;
       } else if (net === 'sol') {
         if (titleEl) titleEl.innerText = '接收 Solana (SOL) 资产';
-        if (subEl) subEl.innerText = '支持 SOL 及 SPL 代币收款 (m/44\'/501\'/0\'/0\')';
-        if (netLabelEl) netLabelEl.innerText = 'Solana 主网地址 (Base58 Ed25519)';
+        if (subEl) subEl.innerText = '仅接收 Solana 网络上的 SOL / SPL (如 Solana USDC)';
+        if (netLabelEl) netLabelEl.innerText = 'Solana 主网收款地址';
         const d = await deriveSolanaFromSeedAsync(wallet.mnemonic, 0);
         displayAddr = d.solAddress;
-      } else if (net === 'evm') {
-        if (titleEl) titleEl.innerText = '接收 EVM 全链资产';
-        if (subEl) subEl.innerText = 'ETH / Base / ARB / HYPE / ARC 通用收款地址';
-        if (netLabelEl) netLabelEl.innerText = 'EVM 多链通用地址 (BIP-44 m/44\'/60\'/0\'/0/0)';
+      } else {
+        const evmMeta = {
+          eth:  { title: '接收 Ethereum (ERC-20) 资产', sub: '仅限 Ethereum 主网转入 ETH / ERC-20 代币', label: 'Ethereum 主网收款地址 (ERC-20)' },
+          bsc:  { title: '接收 BNB Smart Chain (BEP-20) 资产', sub: '仅限币安智能链 BSC 转入 BNB / BEP-20 代币', label: 'BSC 币安智能链收款地址 (BEP-20)' },
+          base: { title: '接收 Base 网络资产', sub: '仅限 Base 网络转入 ETH / Base USDC', label: 'Base 主网收款地址 (Base Mainnet)' },
+          arb:  { title: '接收 Arbitrum One 资产', sub: '仅限 Arbitrum 网络转入 ETH / ARB USDC', label: 'Arbitrum One 主网收款地址' },
+          hype: { title: '接收 Hyperliquid (HyperEVM) 资产', sub: '仅限 HyperEVM 网络转入 HYPE 及生态资产', label: 'HyperEVM 主网收款地址' }
+        }[net] || { title: '接收 Ethereum 资产', sub: 'Ethereum 主网', label: 'Ethereum 主网地址' };
+        if (titleEl) titleEl.innerText = evmMeta.title;
+        if (subEl) subEl.innerText = evmMeta.sub;
+        if (netLabelEl) netLabelEl.innerText = evmMeta.label;
         const d = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
         displayAddr = d.address;
       }
@@ -5104,7 +5143,7 @@
     state.sendNetwork = net;
     const wallet = getActiveWallet();
 
-    ['prl', 'near', 'sol', 'evm'].forEach(k => {
+    ['prl', 'near', 'sol', 'eth', 'bsc', 'base', 'arb', 'hype'].forEach(k => {
       const btn = document.getElementById(`btn-send-net-${k}`);
       if (!btn) return;
       btn.className = k === net
@@ -5118,30 +5157,40 @@
     const currLabel = document.getElementById('send-currency-label');
     const balEl = document.getElementById('send-available-balance');
 
+    const mb = (wallet && wallet.multiBalances) ? wallet.multiBalances : {};
+    const prlBal = wallet ? (Number(wallet.balance) || 0) : 0;
+
     if (net === 'prl') {
-      if (titleEl) titleEl.innerText = '转账 Pearl';
-      if (subEl) subEl.innerText = '本地离线签名，私钥永不上网';
+      if (titleEl) titleEl.innerText = '转账 Pearl (PRL)';
+      if (subEl) subEl.innerText = 'Pearl 主网本地离线签名，私钥永不上网';
       if (addrInput) addrInput.placeholder = 'prl1p...';
       if (currLabel) currLabel.innerText = 'PRL';
-      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL`;
+      if (balEl) balEl.innerText = `${prlBal.toFixed(2)} PRL`;
     } else if (net === 'near') {
-      if (titleEl) titleEl.innerText = '发送 NEAR 资产';
-      if (subEl) subEl.innerText = '校验 NEAR 地址并支持 PRL 跨链原子闪兑代发';
+      if (titleEl) titleEl.innerText = '发送 NEAR 主网资产';
+      if (subEl) subEl.innerText = '目标网络：NEAR Protocol (支持 PRL 跨链原子闪兑代发)';
       if (addrInput) addrInput.placeholder = 'alice.near 或 64位隐式地址';
       if (currLabel) currLabel.innerText = 'NEAR';
-      if (balEl && wallet) balEl.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
+      if (balEl) balEl.innerText = `${(Number(wallet ? wallet.nearBalance : 0) || 0).toFixed(4)} NEAR`;
     } else if (net === 'sol') {
       if (titleEl) titleEl.innerText = '发送 Solana (SOL)';
-      if (subEl) subEl.innerText = '校验 Solana 地址并支持 PRL 跨链原子闪兑代发';
+      if (subEl) subEl.innerText = '目标网络：Solana 主网 (支持 PRL 跨链原子闪兑代发)';
       if (addrInput) addrInput.placeholder = 'Solana Base58 收款地址';
       if (currLabel) currLabel.innerText = 'SOL';
-      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL (可闪兑代发)`;
-    } else if (net === 'evm') {
-      if (titleEl) titleEl.innerText = '发送 EVM 资产 (ETH/Base/ARB/HYPE/ARC)';
-      if (subEl) subEl.innerText = '校验 0x 地址并支持 PRL 跨链原子闪兑代发';
-      if (addrInput) addrInput.placeholder = '0x... EVM 收款地址';
-      if (currLabel) currLabel.innerText = 'ETH/USDC';
-      if (balEl && wallet) balEl.innerText = `${(Number(wallet.balance) || 0).toFixed(2)} PRL (可闪兑代发)`;
+      if (balEl) balEl.innerText = `${(Number(mb.sol) || 0).toFixed(4)} SOL (可闪兑代发)`;
+    } else {
+      const sendMeta = {
+        eth:  { title: '发送 Ethereum (ERC-20)', sub: '目标网络：Ethereum 主网', unit: 'ETH', bal: Number(mb.eth) || 0 },
+        bsc:  { title: '发送 BNB Smart Chain (BEP-20)', sub: '目标网络：币安智能链 BSC', unit: 'BNB', bal: Number(mb.bnb) || 0 },
+        base: { title: '发送 Base 网络资产', sub: '目标网络：Base Mainnet', unit: 'ETH/USDC', bal: Number(mb.base) || 0 },
+        arb:  { title: '发送 Arbitrum One 资产', sub: '目标网络：Arbitrum One', unit: 'ETH/USDC', bal: Number(mb.arb) || 0 },
+        hype: { title: '发送 HyperEVM (HYPE) 资产', sub: '目标网络：Hyperliquid HyperEVM', unit: 'HYPE', bal: Number(mb.hype) || 0 }
+      }[net] || { title: '发送 Ethereum', sub: '目标网络：Ethereum', unit: 'ETH', bal: 0 };
+      if (titleEl) titleEl.innerText = sendMeta.title;
+      if (subEl) subEl.innerText = `${sendMeta.sub} (校验 0x 地址并支持 PRL 跨链代发)`;
+      if (addrInput) addrInput.placeholder = `输入 ${sendMeta.sub.replace('目标网络：', '')} 的 0x 收款地址`;
+      if (currLabel) currLabel.innerText = sendMeta.unit;
+      if (balEl) balEl.innerText = `${sendMeta.bal.toFixed(4)} ${sendMeta.unit.split('/')[0]} (PRL 可闪兑代发)`;
     }
   };
   globalThis.selectSendNetwork = window.selectSendNetwork;
@@ -5460,7 +5509,11 @@
         const targetMap = {
           near: 'nep141:wrap.near',
           sol: 'nep141:sol.omft.near',
-          evm: 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near'
+          eth: 'nep141:eth.omft.near',
+          bsc: 'nep141:bsc.omft.near',
+          base: 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near',
+          arb: 'nep141:eth.omft.near',
+          hype: 'nep141:eth.omft.near'
         };
         state.nearSwap.direction = 'sell';
         state.nearSwap.targetTokenId = targetMap[activeSendNet] || 'nep141:wrap.near';

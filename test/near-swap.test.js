@@ -205,14 +205,8 @@ test('T6.7: Bilingual switching converts nav bar, settings page labels, and coun
   setAppLanguage('en');
   assert.equal(state.currentLang, 'en', 'Current language must be en');
 
-  const tabSwap = sandbox.document.querySelector('#tab-btn-swap span');
-  assert.equal(tabSwap.innerText, 'Swap', 'Bottom tab #tab-btn-swap must display Swap in English');
-
-  const devFeeLabel = sandbox.document.getElementById('dev-fee-status-label');
-  assert.ok(
-    devFeeLabel.innerText.includes('Enabled') || devFeeLabel.innerText.includes('Disabled'),
-    `devFeeLabel should be English in en mode, got: ${devFeeLabel.innerText}`
-  );
+  const tabSettings = sandbox.document.querySelector('#tab-btn-settings span');
+  assert.equal(tabSettings.innerText, 'Settings', 'Bottom tab #tab-btn-settings must display Settings in English');
 
   const walletsCount = sandbox.document.getElementById('settings-wallets-count');
   assert.ok(
@@ -223,11 +217,7 @@ test('T6.7: Bilingual switching converts nav bar, settings page labels, and coun
   // Switch back to Chinese
   setAppLanguage('zh');
   assert.equal(state.currentLang, 'zh', 'Current language must be zh');
-  assert.equal(tabSwap.innerText, '闪兑', 'Bottom tab #tab-btn-swap must display 闪兑 in Chinese');
-  assert.ok(
-    devFeeLabel.innerText.includes('已开启') || devFeeLabel.innerText.includes('已停用'),
-    `devFeeLabel should be Chinese in zh mode, got: ${devFeeLabel.innerText}`
-  );
+  assert.equal(tabSettings.innerText, '设置', 'Bottom tab #tab-btn-settings must display 设置 in Chinese');
 });
 
 test('T6.8: Active swap order rendering with foreign tx hash submission and mode switching', async () => {
