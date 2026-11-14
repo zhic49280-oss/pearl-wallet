@@ -653,6 +653,27 @@
     return out;
   }
 
+  async function cryptoPbkdf2Async(mnemonic, passphrase = '') {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
+      try {
+        const enc = new TextEncoder();
+        const pass = enc.encode(mnemonic.normalize('NFKD'));
+        const salt = enc.encode('mnemonic' + passphrase.normalize('NFKD'));
+        const key = await globalThis.crypto.subtle.importKey('raw', pass, 'PBKDF2', false, ['deriveBits']);
+        const bits = await globalThis.crypto.subtle.deriveBits({
+          name: 'PBKDF2',
+          hash: 'SHA-512',
+          salt: salt,
+          iterations: 2048
+        }, key, 512);
+        return new Uint8Array(bits);
+      } catch (e) {
+        console.warn('WebCrypto PBKDF2 fallback:', e);
+      }
+    }
+    return cryptoPbkdf2Sync(mnemonic, passphrase);
+  }
+
   function cryptoHmacSha512Sync(key, data) {
     if (nodeCryptoInstance && nodeCryptoInstance.createHmac) {
       return nodeCryptoInstance.createHmac('sha512', key).update(data).digest();
@@ -668,10 +689,34 @@
     return out;
   }
 
+  async function cryptoHmacSha512Async(key, data) {
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
+      try {
+        const keyBuf = key instanceof Uint8Array ? key : new Uint8Array(key);
+        const dataBuf = data instanceof Uint8Array ? data : new Uint8Array(data);
+        const cryptoKey = await globalThis.crypto.subtle.importKey('raw', keyBuf, { name: 'HMAC', hash: 'SHA-512' }, false, ['sign']);
+        const sig = await globalThis.crypto.subtle.sign('HMAC', cryptoKey, dataBuf);
+        return new Uint8Array(sig);
+      } catch (e) {
+        console.warn('WebCrypto HMAC fallback:', e);
+      }
+    }
+    return cryptoHmacSha512Sync(key, data);
+  }
+
   function bip32DeriveMasterKey(seedBytes) {
     const enc = (typeof TextEncoder !== 'undefined') ? new TextEncoder() : { encode: s => Buffer.from(s) };
     const I = cryptoHmacSha512Sync(Buffer.from ? Buffer.from('Bitcoin seed') : enc.encode('Bitcoin seed'), seedBytes);
     const IBytes = new Uint8Array(I);
+    return {
+      privateKey: IBytes.slice(0, 32),
+      chainCode: IBytes.slice(32)
+    };
+  }
+
+  async function bip32DeriveMasterKeyAsync(seedBytes) {
+    const enc = (typeof TextEncoder !== 'undefined') ? new TextEncoder() : { encode: s => Buffer.from(s) };
+    const IBytes = await cryptoHmacSha512Async(enc.encode('Bitcoin seed'), seedBytes);
     return {
       privateKey: IBytes.slice(0, 32),
       chainCode: IBytes.slice(32)
@@ -726,6 +771,53 @@
     };
   }
 
+  async function bip32DeriveChildAsync(parent, index, hardened = false) {
+    const actualIndex = hardened ? (index + 0x80000000) >>> 0 : index >>> 0;
+    const idxBuf = new Uint8Array(4);
+    const view = new DataView(idxBuf.buffer);
+    view.setUint32(0, actualIndex, false);
+
+    let dataBytes;
+    if (hardened) {
+      dataBytes = new Uint8Array(1 + 32 + 4);
+      dataBytes[0] = 0;
+      dataBytes.set(parent.privateKey, 1);
+      dataBytes.set(idxBuf, 33);
+    } else {
+      const privHex = Array.from(parent.privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+      const privBig = BigInt('0x' + privHex);
+      const pt = secpPointMultiply(privBig);
+      const prefix = pt.y % 2n === 0n ? 0x02 : 0x03;
+      dataBytes = new Uint8Array(1 + 32 + 4);
+      dataBytes[0] = prefix;
+      const xHex = pt.x.toString(16).padStart(64, '0');
+      for (let i = 0; i < 32; i++) {
+        dataBytes[1 + i] = parseInt(xHex.substr(i * 2, 2), 16);
+      }
+      dataBytes.set(idxBuf, 33);
+    }
+
+    const IBytes = await cryptoHmacSha512Async(parent.chainCode, dataBytes);
+    const IL = IBytes.slice(0, 32);
+    const IR = IBytes.slice(32);
+
+    const ilHex = Array.from(IL).map(b => b.toString(16).padStart(2, '0')).join('');
+    const parentHex = Array.from(parent.privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+    const ki = secpMod(BigInt('0x' + ilHex) + BigInt('0x' + parentHex), SECP256K1_N);
+    if (ki === 0n) throw new Error('Invalid child key derived');
+
+    const kiHex = ki.toString(16).padStart(64, '0');
+    const privBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      privBytes[i] = parseInt(kiHex.substr(i * 2, 2), 16);
+    }
+
+    return {
+      privateKey: privBytes,
+      chainCode: IR
+    };
+  }
+
   function bip32DerivePath(master, pathStr) {
     const parts = pathStr.split('/').slice(1);
     let curr = master;
@@ -733,6 +825,17 @@
       const hardened = part.endsWith("'");
       const index = parseInt(part.replace("'", ''), 10);
       curr = bip32DeriveChild(curr, index, hardened);
+    }
+    return curr;
+  }
+
+  async function bip32DerivePathAsync(master, pathStr) {
+    const parts = pathStr.split('/').slice(1);
+    let curr = master;
+    for (const part of parts) {
+      const hardened = part.endsWith("'");
+      const index = parseInt(part.replace("'", ''), 10);
+      curr = await bip32DeriveChildAsync(curr, index, hardened);
     }
     return curr;
   }
@@ -776,10 +879,28 @@
     }
   }
 
+  // 现代 WebCrypto 硬件加速派生 (支持 iOS Safari、Chrome、移动 Web 无损 BIP-39 PBKDF2 与 BIP-86)
+  async function deriveFromSeedAsync(words, path = "m/86'/808276'/0'/0/0") {
+    try {
+      const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
+      const seedBytes = await cryptoPbkdf2Async(mnemonicStr);
+      const master = await bip32DeriveMasterKeyAsync(seedBytes);
+      const child = await bip32DerivePathAsync(master, path);
+      return privateKeyToTaprootAddress(child.privateKey);
+    } catch (e) {
+      return deriveFromSeed(words, path);
+    }
+  }
+  window.deriveFromSeedAsync = deriveFromSeedAsync;
+  globalThis.deriveFromSeedAsync = deriveFromSeedAsync;
+
   // 派生多路径候选地址列表 (用于助记词导入时全网探测真实余额与账目)
   function deriveCandidateAddresses(words) {
     const candidatePaths = [
-      "m/86'/808276'/0'/0/0", // Pearl 官方主网 BIP-86 Taproot
+      "m/86'/808276'/0'/0/0", // Pearl 官方主网 BIP-86 Taproot (Index 0)
+      "m/86'/808276'/0'/0/1", // Pearl 官方主网 BIP-86 Taproot (Index 1)
+      "m/86'/808276'/0'/0/2", // Pearl 官方主网 BIP-86 Taproot (Index 2)
+      "m/86'/808276'/0'/0/3", // Pearl 官方主网 BIP-86 Taproot (Index 3)
       "m/86'/0'/0'/0/0",      // 标准 BIP-86 Taproot
       "m/44'/808276'/0'/0/0", // Pearl BIP-44
       "m/44'/0'/0'/0/0"       // 标准 BIP-44
@@ -795,6 +916,28 @@
   }
   window.deriveCandidateAddresses = deriveCandidateAddresses;
   globalThis.deriveCandidateAddresses = deriveCandidateAddresses;
+
+  async function deriveCandidateAddressesAsync(words) {
+    const candidatePaths = [
+      "m/86'/808276'/0'/0/0", // Pearl 官方主网 BIP-86 Taproot (Index 0)
+      "m/86'/808276'/0'/0/1", // Pearl 官方主网 BIP-86 Taproot (Index 1)
+      "m/86'/808276'/0'/0/2", // Pearl 官方主网 BIP-86 Taproot (Index 2)
+      "m/86'/808276'/0'/0/3", // Pearl 官方主网 BIP-86 Taproot (Index 3)
+      "m/86'/0'/0'/0/0",      // 标准 BIP-86 Taproot
+      "m/44'/808276'/0'/0/0", // Pearl BIP-44
+      "m/44'/0'/0'/0/0"       // 标准 BIP-44
+    ];
+    const results = [];
+    for (const p of candidatePaths) {
+      try {
+        const derived = await deriveFromSeedAsync(words, p);
+        results.push({ path: p, ...derived });
+      } catch (e) {}
+    }
+    return results;
+  }
+  window.deriveCandidateAddressesAsync = deriveCandidateAddressesAsync;
+  globalThis.deriveCandidateAddressesAsync = deriveCandidateAddressesAsync;
 
   function getActiveWallet() {
     return state.wallets.find(w => w.id === state.activeWalletId) || state.wallets[0] || null;
@@ -1309,6 +1452,11 @@
   window.switchMiningSubTab = function (tab) {
     if (typeof triggerHaptic === 'function') triggerHaptic('light');
     state.activeMiningSubTab = tab;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('pearl_active_mining_subtab', tab);
+      }
+    } catch (e) {}
 
     const tabs = ['overview', 'miner', 'gpu', 'tokenomics'];
     tabs.forEach(t => {
@@ -1339,6 +1487,18 @@
   };
   globalThis.switchMiningSubTab = window.switchMiningSubTab;
 
+  // 实时持久化保存矿工收款地址草稿
+  window.saveMinerAddressDraft = function (addr) {
+    if (!addr) return;
+    const clean = addr.trim().split(/[:/]/)[0];
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('pearl_last_miner_address', clean);
+      }
+    } catch (e) {}
+  };
+  globalThis.saveMinerAddressDraft = window.saveMinerAddressDraft;
+
   // 刷新矿池与全网数据
   window.refreshMiningData = function () {
     if (typeof triggerHaptic === 'function') triggerHaptic('medium');
@@ -1353,7 +1513,7 @@
   };
   globalThis.refreshMiningData = window.refreshMiningData;
 
-  // 粘贴矿工地址
+  // 粘贴矿工地址并立即保存与触发原生查询
   window.pasteMinerAddress = async function () {
     const input = document.getElementById('custom-miner-address');
     if (!input) return;
@@ -1362,7 +1522,11 @@
         const text = await navigator.clipboard.readText();
         if (text && text.trim()) {
           input.value = text.trim();
-          showToast("已粘贴地址");
+          window.saveMinerAddressDraft(text.trim());
+          showToast("已粘贴并保存矿工地址");
+          if (typeof window.queryMinerByAddress === 'function') {
+            window.queryMinerByAddress();
+          }
           return;
         }
       }
@@ -2943,13 +3107,13 @@
   };
 
   // ======================== 创建钱包极速流 (零密码阻碍 + 硬件级随机熵) ========================
-  window.startCreateWalletFlow = function () {
+  window.startCreateWalletFlow = async function () {
     triggerHaptic('success');
     const name = `Pearl-${String(state.wallets.length + 1).padStart(2, '0')}`;
 
     // 严谨生成 12 位标准 BIP-39 助记词
     const words = generateMnemonic();
-    const { address, privateKeyHex } = deriveFromSeed(words);
+    const { address, privateKeyHex } = await deriveFromSeedAsync(words);
 
     state.pendingWallet = {
       id: `wallet-${Date.now()}`,
@@ -3145,15 +3309,15 @@
         wordsList = validation.words;
 
         // 优先探测候选路径 (m/86'/808276'/0'/0/0 等)
-        const candidates = deriveCandidateAddresses(wordsList);
-        let selectedCandidate = candidates[0] || deriveFromSeed(wordsList);
+        const candidates = await deriveCandidateAddressesAsync(wordsList);
+        let selectedCandidate = candidates[0] || (await deriveFromSeedAsync(wordsList));
 
         // 如果环境支持异步探测链上余额
         try {
           if (typeof fetch === 'function') {
             for (const cand of candidates) {
-              const res = await fetch(`https://api.prlscan.com/api/v1/addresses/${cand.address}`, {
-                signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined
+              const res = await fetch(`https://api.prlscan.com/v1/addresses/${cand.address}`, {
+                signal: AbortSignal.timeout ? AbortSignal.timeout(2000) : undefined
               }).catch(() => null);
               if (res && res.ok) {
                 const data = await res.json().catch(() => null);
@@ -3333,18 +3497,21 @@
       }
     }
 
-    // 通道 2：在 Web 网页环境中，如果用户曾绑定过 Passkey 则直接调取验证；如果未绑定，直接放行，绝不弹窗打扰用户去添加 iCloud 通行密钥
-    if (window.PublicKeyCredential) {
+    // 通道 2：在 Web 网页环境中 (如 iPhone Safari)，调用原生 WebAuthn 唤起苹果 Face ID / Touch ID 凭证弹窗
+    if (typeof window !== 'undefined' && window.PublicKeyCredential && navigator.credentials) {
       try {
         const wallet = getActiveWallet();
-        if (wallet && wallet.passkeyId) {
+        const savedPasskeyId = (wallet && wallet.passkeyId) || (typeof localStorage !== 'undefined' && localStorage.getItem('pearl_webauthn_passkey_id'));
+
+        if (savedPasskeyId) {
+          // 已登记过 Passkey，调用 navigator.credentials.get 唤起 Face ID 系统弹窗
           const challenge = new Uint8Array(32);
           window.crypto.getRandomValues(challenge);
           const assertion = await navigator.credentials.get({
             publicKey: {
               challenge,
               allowCredentials: [{
-                id: b64ToBuf(wallet.passkeyId),
+                id: b64ToBuf(savedPasskeyId),
                 type: "public-key",
                 transports: ["internal"]
               }],
@@ -3356,19 +3523,66 @@
             triggerHaptic('success');
             return true;
           }
+        } else {
+          // 首次使用生物识别，调用 navigator.credentials.create 唤起 iOS 原生 Passkey / Face ID 登记弹窗
+          const challenge = new Uint8Array(32);
+          window.crypto.getRandomValues(challenge);
+          const userId = new Uint8Array(16);
+          window.crypto.getRandomValues(userId);
+
+          const credential = await navigator.credentials.create({
+            publicKey: {
+              challenge,
+              rp: {
+                name: "Pearl Wallet",
+                id: (window.location && window.location.hostname) ? window.location.hostname : undefined
+              },
+              user: {
+                id: userId,
+                name: (wallet && wallet.address) ? wallet.address.slice(0, 16) : "pearl_user",
+                displayName: (wallet && wallet.name) || "Pearl User"
+              },
+              pubKeyCredParams: [
+                { alg: -7, type: "public-key" },  // ES256
+                { alg: -257, type: "public-key" } // RS256
+              ],
+              authenticatorSelection: {
+                authenticatorAttachment: "platform", // 必须是设备内置生物硬件 (Face ID / Touch ID)
+                userVerification: "required"
+              },
+              timeout: 60000
+            }
+          });
+
+          if (credential && credential.rawId) {
+            const passkeyB64 = bufToB64(credential.rawId);
+            if (wallet) {
+              wallet.passkeyId = passkeyB64;
+              saveWalletsToStorage();
+            }
+            try {
+              localStorage.setItem('pearl_webauthn_passkey_id', passkeyB64);
+            } catch (e) {}
+            triggerHaptic('success');
+            return true;
+          }
         }
       } catch (err) {
         console.warn("WebAuthn Face ID:", err);
+        triggerHaptic('error');
         if (err.name === 'NotAllowedError') {
-          showToast("用户已取消验证");
-          return false;
+          showToast("用户取消或未通过 Face ID 验证");
+        } else {
+          showToast("未能唤起 Face ID，请使用 6 位密码解锁");
         }
+        return false;
       }
     }
 
-    // 网页模式极速免扰确认
-    triggerHaptic('success');
-    return true;
+    // 若当前环境完全不支持 WebAuthn，明确告知用户使用 6 位 PIN 码，杜绝伪造假成功
+    triggerHaptic('error');
+    showToast("当前设备或浏览器未开启 Face ID，请使用密码解锁");
+    return false;
   };
 
   // 唤起原生生物识别 (Face ID / 指纹) 或网页免扰确认
@@ -4144,17 +4358,28 @@
       }
     } else if (tab === 'mining') {
       viewMining?.classList.remove('hidden');
-      if (typeof fetchKryptexPoolOverview === 'function') fetchKryptexPoolOverview();
-      const input = document.getElementById('custom-miner-address');
-      if (input && !input.value.trim()) {
-        const lastAddr = localStorage.getItem('pearl_last_miner_address');
-        const walletAddr = getActiveWallet()?.address;
-        if (lastAddr) {
-          input.value = lastAddr;
-        } else if (walletAddr) {
-          input.value = walletAddr;
-        }
+
+      const lastAddr = (typeof localStorage !== 'undefined' && localStorage.getItem('pearl_last_miner_address')) || getActiveWallet()?.address || '';
+      const savedSubTab = (typeof localStorage !== 'undefined' && localStorage.getItem('pearl_active_mining_subtab')) || (lastAddr ? 'miner' : 'overview');
+
+      // 自动切换至矿工监控子 Tab (若有已存矿工地址)，消除二级跳转困扰
+      if (typeof window.switchMiningSubTab === 'function') {
+        window.switchMiningSubTab(savedSubTab);
       }
+
+      const input = document.getElementById('custom-miner-address');
+      if (input && lastAddr) {
+        input.value = lastAddr;
+      }
+
+      // 若已有矿工地址，自动执行原生查询，进入挖矿界面立即可见收益与算力
+      if (lastAddr && typeof window.queryMinerByAddress === 'function') {
+        setTimeout(() => {
+          window.queryMinerByAddress();
+        }, 50);
+      }
+
+      if (typeof fetchKryptexPoolOverview === 'function') fetchKryptexPoolOverview();
       if (typeof calculateGpuProfit === 'function') calculateGpuProfit();
       if (typeof renderGpuBenchmarkList === 'function') renderGpuBenchmarkList();
     } else if (tab === 'settings') {

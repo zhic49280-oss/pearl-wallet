@@ -439,7 +439,7 @@
                 <button type="button" onclick="pasteMinerAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">粘贴</button>
               </div>
             </div>
-            <input id="custom-miner-address" type="text" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400 transition-all">
+            <input id="custom-miner-address" type="text" oninput="saveMinerAddressDraft(this.value)" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400 transition-all">
           </div>
 
           <button type="button" onclick="queryMinerByAddress()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-2">
