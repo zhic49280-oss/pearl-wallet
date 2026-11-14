@@ -228,9 +228,9 @@
     selectedFeeTier: 'normal',
     currentFee: 0.00000308,
 
-    // 开发者支持费 / 钱包应用服务费 (闪兑固定强制 0.1%，普通转账免收服务费 0 PRL)
+    // 开发者支持费 / 钱包应用服务费 (闪兑固定强制 0.25%，普通转账免收服务费 0 PRL)
     devFeeRate: 0,
-    appFeeRate: 0.001,
+    appFeeRate: 0.0025,
     devFeeRecipient: 'prl1p22hzufr46n6fa4yj38zckc9n8rsyhq2n39fjldg7pg78s8vz2zks785frn',
     nearReferralAccount: 'zhic49280.near',
     devFeeEnabled: true,
@@ -267,7 +267,7 @@
       'nav.wallet': '钱包',
       'nav.swap': '闪兑',
       'nav.mining': '矿池',
-      'nav.settings': '自托管',
+      'nav.settings': '设置',
       'wallet.send': '转账',
       'wallet.receive': '收款',
       'wallet.swap': '跨链闪兑',
@@ -1517,8 +1517,8 @@
     const wallet = getActiveWallet();
     if (!wallet || !wallet.address) return;
 
-    // 并行刷新同源 NEAR 主网余额
-    refreshActiveWalletNearBalance();
+    // 并行刷新同源多链主网余额与 USD 币价
+    refreshAllChainBalances();
 
     try {
       const balance = await fetchAddressBalance(wallet.address);
@@ -3377,6 +3377,383 @@
     updateChainDomElements();
   }
 
+  state.multiPrices = state.multiPrices || {
+    prl: 0, near: 4.04, eth: 2430, bnb: 610, sol: 96, hype: 22, arc: 1.0
+  };
+  state.activeTokenDetail = null;
+
+  function getHomeTokenCatalog(wallet) {
+    const mb = (wallet && wallet.multiBalances) ? wallet.multiBalances : {};
+    const prlBal = Number(wallet ? wallet.balance : 0) || 0;
+    const nearBal = Number(wallet ? wallet.nearBalance : 0) || 0;
+    const prices = state.multiPrices || {};
+    const prlPrice = state.livePriceUSD || prices.prl || 0;
+
+    return [
+      { id: 'prl', symbol: 'PRL', name: 'Pearl Network', chain: 'prl', chainLabel: 'Pearl 主网', balance: prlBal, price: prlPrice, addr: wallet ? wallet.address : '', recvNet: 'prl', explorer: addr => `https://prlscan.com/address/${addr}` },
+      { id: 'near', symbol: 'NEAR', name: 'NEAR Protocol', chain: 'near', chainLabel: 'NEAR 主网', balance: nearBal, price: prices.near || 4.04, addr: wallet ? (wallet.nearNamedAccount || wallet.nearAddress || '') : '', recvNet: 'near', explorer: addr => `https://nearblocks.io/address/${addr}` },
+      { id: 'eth', symbol: 'ETH', name: 'Ethereum', chain: 'eth', chainLabel: 'Ethereum', balance: Number(mb.eth) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://etherscan.io/address/${addr}` },
+      { id: 'bnb', symbol: 'BNB', name: 'BNB Smart Chain', chain: 'bsc', chainLabel: 'BSC (币安链)', balance: Number(mb.bnb) || 0, price: prices.bnb || 610, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://bscscan.com/address/${addr}` },
+      { id: 'sol', symbol: 'SOL', name: 'Solana', chain: 'sol', chainLabel: 'Solana', balance: Number(mb.sol) || 0, price: prices.sol || 96, addr: wallet ? (wallet.solAddress || '') : '', recvNet: 'sol', explorer: addr => `https://solscan.io/account/${addr}` },
+      { id: 'base', symbol: 'ETH', name: 'ETH (Base)', chain: 'base', chainLabel: 'Base', balance: Number(mb.base) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://basescan.org/address/${addr}` },
+      { id: 'arb', symbol: 'ETH', name: 'ETH (Arbitrum)', chain: 'arb', chainLabel: 'Arbitrum', balance: Number(mb.arb) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://arbiscan.io/address/${addr}` },
+      { id: 'hype', symbol: 'HYPE', name: 'Hyperliquid', chain: 'hype', chainLabel: 'HyperEVM', balance: Number(mb.hype) || 0, price: prices.hype || 22, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://purrsec.com/address/${addr}` },
+      { id: 'arc', symbol: 'ARC', name: 'Arc Network (USDC Gas)', chain: 'arc', chainLabel: 'Arc L1 (EVM)', balance: Number(mb.arc) || 0, price: prices.arc || 1.0, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'evm', explorer: addr => `https://testnet.arcscan.app/address/${addr}` }
+    ];
+  }
+
+  async function fetchEvmNativeBalance(rpcUrl, evmAddress) {
+    if (!evmAddress) return 0;
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 6000) : null;
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [evmAddress, 'latest'] }),
+        signal: controller ? controller.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
+      const data = await res.json();
+      if (data && data.result) {
+        return Number(BigInt(data.result)) / 1e18;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function fetchSolanaNativeBalance(solAddress) {
+    if (!solAddress) return 0;
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 6000) : null;
+      const res = await fetch('https://api.mainnet-beta.solana.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getBalance', params: [solAddress] }),
+        signal: controller ? controller.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
+      const data = await res.json();
+      if (data && data.result && typeof data.result.value === 'number') {
+        return data.result.value / 1e9;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  async function refreshAllChainBalances() {
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+
+    if (wallet.mnemonic) {
+      if (!wallet.nearAddress) {
+        try {
+          const n = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+          wallet.nearAddress = n.nearAddress;
+          wallet.nearPrivateSeedHex = n.nearPrivateSeedHex;
+          wallet.nearPublicKey = n.nearPublicKey;
+          wallet.nearPrivateKey = n.nearPrivateKey;
+        } catch (e) {}
+      }
+      if (!wallet.evmAddress) {
+        try {
+          const evm = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+          wallet.evmAddress = evm.address;
+        } catch (e) {}
+      }
+      if (!wallet.solAddress) {
+        try {
+          const sol = await deriveSolanaFromSeedAsync(wallet.mnemonic, 0);
+          wallet.solAddress = sol.solAddress;
+        } catch (e) {}
+      }
+      saveWalletsToStorage();
+    }
+
+    // 并行拉取实时 USD 币价与各链真实余额
+    try {
+      const pricePromise = fetch('https://api.coingecko.com/api/v3/simple/price?ids=near,ethereum,binancecoin,solana,hyperliquid,usd-coin&vs_currencies=usd')
+        .then(r => r.ok ? r.json() : null)
+        .then(p => {
+          if (!p) return;
+          if (p.near && p.near.usd) state.multiPrices.near = p.near.usd;
+          if (p.ethereum && p.ethereum.usd) state.multiPrices.eth = p.ethereum.usd;
+          if (p.binancecoin && p.binancecoin.usd) state.multiPrices.bnb = p.binancecoin.usd;
+          if (p.solana && p.solana.usd) state.multiPrices.sol = p.solana.usd;
+          if (p.hyperliquid && p.hyperliquid.usd) state.multiPrices.hype = p.hyperliquid.usd;
+          if (p['usd-coin'] && p['usd-coin'].usd) state.multiPrices.arc = p['usd-coin'].usd;
+        }).catch(() => {});
+
+      const [ethBal, bnbBal, baseBal, arbBal, hypeBal, solBal] = await Promise.all([
+        fetchEvmNativeBalance('https://ethereum-rpc.publicnode.com', wallet.evmAddress),
+        fetchEvmNativeBalance('https://bsc-dataseed.binance.org', wallet.evmAddress),
+        fetchEvmNativeBalance('https://mainnet.base.org', wallet.evmAddress),
+        fetchEvmNativeBalance('https://arb1.arbitrum.io/rpc', wallet.evmAddress),
+        fetchEvmNativeBalance('https://rpc.hyperliquid.xyz/evm', wallet.evmAddress),
+        fetchSolanaNativeBalance(wallet.solAddress),
+        refreshActiveWalletNearBalance(),
+        pricePromise
+      ]);
+
+      wallet.multiBalances = wallet.multiBalances || {};
+      if (ethBal !== null) wallet.multiBalances.eth = ethBal;
+      if (bnbBal !== null) wallet.multiBalances.bnb = bnbBal;
+      if (baseBal !== null) wallet.multiBalances.base = baseBal;
+      if (arbBal !== null) wallet.multiBalances.arb = arbBal;
+      if (hypeBal !== null) wallet.multiBalances.hype = hypeBal;
+      if (solBal !== null) wallet.multiBalances.sol = solBal;
+      saveWalletsToStorage();
+      renderWalletBalances();
+    } catch (e) {}
+  }
+  window.refreshAllChainBalances = refreshAllChainBalances;
+  globalThis.refreshAllChainBalances = refreshAllChainBalances;
+
+  function renderHomeTokenList() {
+    const container = document.getElementById('home-token-list');
+    if (!container) return;
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+
+    const tokens = getHomeTokenCatalog(wallet);
+    container.innerHTML = tokens.map(t => {
+      const usdVal = t.balance * (t.price || 0);
+      const badgeClsMap = {
+        prl: 'bg-cyan-500/15 text-cyan-300 border-cyan-400/25',
+        near: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/25',
+        eth: 'bg-blue-500/15 text-blue-300 border-blue-400/25',
+        bsc: 'bg-amber-500/15 text-amber-300 border-amber-400/25',
+        sol: 'bg-purple-500/15 text-purple-300 border-purple-400/25',
+        base: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/25',
+        arb: 'bg-sky-500/15 text-sky-300 border-sky-400/25',
+        hype: 'bg-teal-500/15 text-teal-300 border-teal-400/25',
+        arc: 'bg-blue-600/15 text-blue-200 border-blue-400/25'
+      };
+      const badgeCls = badgeClsMap[t.chain] || 'bg-white/10 text-white/70 border-white/20';
+
+      return `
+        <div onclick="openTokenDetailSheet('${t.id}')" class="p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] hover:border-cyan-400/30 flex items-center justify-between cursor-pointer transition-all btn-active">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0 overflow-hidden">
+              ${getTokenIconHtml(t.symbol, t.chain, 34)}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm font-bold text-white">${t.symbol}</span>
+                <span class="text-[9px] px-1.5 py-0.2 rounded border ${badgeCls} whitespace-nowrap">${t.chainLabel}</span>
+              </div>
+              <div class="text-[11px] text-white/45 mt-0.5 font-mono">$${Number(t.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}</div>
+            </div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            <div class="text-sm font-bold text-white tabular-numbers">${t.balance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</div>
+            <div class="text-[11px] text-white/50 tabular-numbers font-mono">$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openTokenDetailSheet = async function (tokenId) {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+
+    // 懒派生多链地址确保详情页有地址
+    if (wallet.mnemonic && (!wallet.evmAddress || !wallet.solAddress || !wallet.nearAddress)) {
+      await refreshAllChainBalances();
+    }
+
+    const tokens = getHomeTokenCatalog(wallet);
+    const t = tokens.find(x => x.id === tokenId) || tokens[0];
+    state.activeTokenDetail = t;
+
+    const iconEl = document.getElementById('token-detail-icon');
+    const symEl = document.getElementById('token-detail-symbol');
+    const badgeEl = document.getElementById('token-detail-chain-badge');
+    const nameEl = document.getElementById('token-detail-name');
+    const balEl = document.getElementById('token-detail-balance');
+    const usdEl = document.getElementById('token-detail-usd');
+    const priceEl = document.getElementById('token-detail-price');
+    const addrEl = document.getElementById('token-detail-address');
+
+    const usdVal = t.balance * (t.price || 0);
+    if (iconEl) iconEl.innerHTML = getTokenIconHtml(t.symbol, t.chain, 36);
+    if (symEl) symEl.innerText = t.symbol;
+    if (badgeEl) badgeEl.innerText = t.chainLabel;
+    if (nameEl) nameEl.innerText = t.name;
+    if (balEl) balEl.innerText = `${t.balance.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ${t.symbol}`;
+    if (usdEl) usdEl.innerText = `$${usdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+    if (priceEl) priceEl.innerText = `$${Number(t.price || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} USD`;
+    if (addrEl) addrEl.innerText = t.addr || '无助记词 (仅观察)';
+
+    openSheet('sheet-token-detail');
+    refreshTokenDetailActivity();
+  };
+  globalThis.openTokenDetailSheet = window.openTokenDetailSheet;
+
+  window.copyTokenDetailAddress = function () {
+    triggerHaptic('light');
+    const t = state.activeTokenDetail;
+    if (!t || !t.addr) {
+      showToast('暂无可复制的地址');
+      return;
+    }
+    navigator.clipboard.writeText(t.addr).then(() => {
+      showToast(`已复制 ${t.chainLabel} 地址`);
+    });
+  };
+  globalThis.copyTokenDetailAddress = window.copyTokenDetailAddress;
+
+  window.openTokenDetailAction = function (action) {
+    triggerHaptic('light');
+    const t = state.activeTokenDetail;
+    if (!t) return;
+    if (action === 'receive') {
+      state.receiveNetwork = t.recvNet || 'prl';
+      openSheet('sheet-receive');
+    } else if (action === 'send') {
+      state.sendNetwork = t.recvNet || 'prl';
+      openSheet('sheet-send');
+    } else if (action === 'swap') {
+      if (t.id === 'near') {
+        openNearSwapWithSelf();
+      } else {
+        openNearSwapSheet();
+      }
+    }
+  };
+  globalThis.openTokenDetailAction = window.openTokenDetailAction;
+
+  window.refreshTokenDetailActivity = async function () {
+    const container = document.getElementById('token-detail-activity');
+    const t = state.activeTokenDetail;
+    const wallet = getActiveWallet();
+    if (!container || !t || !wallet) return;
+
+    if (t.id === 'prl') {
+      container.innerHTML = `<div class="p-4 text-center text-xs text-white/40 animate-pulse">正在查询 Pearl 主网交易记录...</div>`;
+      await refreshActiveWalletTransactions(true);
+      if (!state.txHistory || state.txHistory.length === 0) {
+        container.innerHTML = `<div class="p-6 text-center text-xs text-white/40 rounded-2xl bg-white/[0.02] border border-white/[0.05]">暂无 Pearl 链上交易记录</div>`;
+        return;
+      }
+      container.innerHTML = state.txHistory.slice(0, 20).map(tx => {
+        const isReceive = tx.type === 'receive';
+        return `
+          <div class="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+            <div class="min-w-0 pr-2">
+              <div class="text-xs font-bold text-white flex items-center gap-1.5">
+                <span class="${isReceive ? 'text-emerald-400' : 'text-amber-300'}">${isReceive ? '↓ 转入' : '↑ 转出'}</span>
+                <span class="text-[10px] font-mono text-white/40 truncate">${(tx.txHash || '').slice(0, 14)}...</span>
+              </div>
+              <div class="text-[10px] text-white/40 mt-0.5">${tx.time || ''} · 高度 ${tx.height || '--'}</div>
+            </div>
+            <div class="text-xs font-bold tabular-numbers ${isReceive ? 'text-emerald-400' : 'text-white'}">${tx.amount}</div>
+          </div>
+        `;
+      }).join('');
+      return;
+    }
+
+    if (!t.addr) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-white/40 rounded-2xl bg-white/[0.02] border border-white/[0.05]">当前钱包无助记词，未派生该链地址</div>`;
+      return;
+    }
+
+    container.innerHTML = `<div class="p-4 text-center text-xs text-white/40 animate-pulse">正在同步 ${t.chainLabel} 链上活动...</div>`;
+
+    if (t.id === 'sol') {
+      try {
+        const res = await fetch('https://api.mainnet-beta.solana.com', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignaturesForAddress', params: [t.addr, { limit: 10 }] })
+        });
+        const data = await res.json();
+        const sigs = (data && Array.isArray(data.result)) ? data.result : [];
+        if (sigs.length === 0) {
+          container.innerHTML = `<div class="p-6 text-center text-xs text-white/40 rounded-2xl bg-white/[0.02] border border-white/[0.05]">Solana 主网暂无交易记录 · <a href="${t.explorer(t.addr)}" target="_blank" class="text-cyan-400 underline">Solscan 浏览器 ↗</a></div>`;
+          return;
+        }
+        container.innerHTML = sigs.map(s => `
+          <div class="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+            <div class="min-w-0">
+              <div class="text-xs font-mono text-white truncate max-w-[200px]">${s.signature}</div>
+              <div class="text-[10px] text-white/40 mt-0.5">${s.blockTime ? new Date(s.blockTime * 1000).toLocaleString('zh-CN', { hour12: false }) : '已确认'} · Slot ${s.slot}</div>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded ${s.err ? 'bg-rose-500/15 text-rose-300' : 'bg-emerald-500/15 text-emerald-300'}">${s.err ? '失败' : '成功'}</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = `<div class="p-5 text-center text-xs text-white/40">查询失败 · <a href="${t.explorer(t.addr)}" target="_blank" class="text-cyan-400 underline">前往区块浏览器查看 ↗</a></div>`;
+      }
+      return;
+    }
+
+    if (t.id === 'near') {
+      try {
+        const res = await fetch(`https://api.nearblocks.io/v1/account/${encodeURIComponent(t.addr)}/txns?per_page=10`);
+        const data = res.ok ? await res.json() : null;
+        const txns = (data && Array.isArray(data.txns)) ? data.txns : [];
+        if (txns.length === 0) {
+          container.innerHTML = `<div class="p-6 text-center text-xs text-white/40 rounded-2xl bg-white/[0.02] border border-white/[0.05]">NEAR 主网暂无交易记录 · <a href="${t.explorer(t.addr)}" target="_blank" class="text-cyan-400 underline">NearBlocks 浏览器 ↗</a></div>`;
+          return;
+        }
+        container.innerHTML = txns.map(tx => `
+          <div class="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+            <div class="min-w-0">
+              <div class="text-xs font-mono text-white truncate max-w-[210px]">${tx.transaction_hash}</div>
+              <div class="text-[10px] text-white/40 mt-0.5">${tx.signer_account_id} ➔ ${tx.receiver_account_id}</div>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">已上链</span>
+          </div>
+        `).join('');
+      } catch (e) {
+        container.innerHTML = `<div class="p-5 text-center text-xs text-white/40"><a href="${t.explorer(t.addr)}" target="_blank" class="text-cyan-400 underline">在 NearBlocks 查看明细 ↗</a></div>`;
+      }
+      return;
+    }
+
+    // EVM 链 (ETH / BSC / Base / ARB / HYPE / ARC)
+    const rpcMap = {
+      eth: 'https://ethereum-rpc.publicnode.com',
+      bnb: 'https://bsc-dataseed.binance.org',
+      base: 'https://mainnet.base.org',
+      arb: 'https://arb1.arbitrum.io/rpc',
+      hype: 'https://rpc.hyperliquid.xyz/evm',
+      arc: 'https://rpc.testnet.arc.network'
+    };
+    let nonceTxt = '--';
+    try {
+      const res = await fetch(rpcMap[t.id] || rpcMap.eth, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getTransactionCount', params: [t.addr, 'latest'] })
+      });
+      const d = await res.json();
+      if (d && d.result) nonceTxt = String(parseInt(d.result, 16));
+    } catch (e) {}
+
+    container.innerHTML = `
+      <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.06] space-y-2 text-xs">
+        <div class="flex items-center justify-between text-white/70">
+          <span>链上已发出交易数 (Nonce)</span>
+          <span class="font-mono font-bold text-cyan-300">${nonceTxt} 笔</span>
+        </div>
+        <div class="flex items-center justify-between text-white/70">
+          <span>当前链上余额</span>
+          <span class="font-mono font-bold text-white">${t.balance.toFixed(6)} ${t.symbol}</span>
+        </div>
+        <a href="${t.explorer(t.addr)}" target="_blank" class="mt-2 block w-full py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-center text-cyan-300 font-bold border border-cyan-400/25">
+          在 ${t.chainLabel} 官方区块浏览器查看完整流水 ↗
+        </a>
+      </div>
+    `;
+  };
+  globalThis.refreshTokenDetailActivity = window.refreshTokenDetailActivity;
+
   function renderWalletBalances() {
     const priceTag = document.getElementById('market-price-tag');
     if (priceTag) priceTag.innerHTML = state.livePriceUSD ? `<span>1 PRL ≈ $${state.livePriceUSD.toFixed(2)}</span>` : '<span>1 PRL ≈ --</span>';
@@ -3384,48 +3761,23 @@
     const wallet = getActiveWallet();
     if (!wallet) return;
 
+    const totalUsdEl = document.getElementById('wallet-total-usd');
     const balEl = document.getElementById('wallet-balance');
     const fiatEl = document.getElementById('wallet-fiat');
     const sendBalEl = document.getElementById('send-available-balance');
 
     const bal = Number(wallet.balance) || 0;
+    const prlUsdVal = bal * (state.livePriceUSD || 0);
     if (balEl) balEl.innerText = bal.toLocaleString('en-US', { minimumFractionDigits: 2 });
-    
-    const cnyVal = (bal * (state.livePriceCNY || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 });
-    const usdVal = (bal * (state.livePriceUSD || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 });
-    
-    if (fiatEl) fiatEl.innerText = `≈ ¥${cnyVal} CNY ($${usdVal} USD)`;
-    if (sendBalEl) sendBalEl.innerText = `${bal.toFixed(2)} PRL`;
 
-    // 同步渲染同源 NEAR 双链卡片
-    const nearAddrEl = document.getElementById('wallet-near-address-short');
-    const nearBalEl = document.getElementById('wallet-near-balance');
-    if (wallet.nearNamedAccount || wallet.nearAddress) {
-      const displayNear = wallet.nearNamedAccount
-        ? wallet.nearNamedAccount
-        : `${wallet.nearAddress.slice(0, 8)}...${wallet.nearAddress.slice(-6)}`;
-      if (nearAddrEl) nearAddrEl.innerText = displayNear;
-      if (nearBalEl) nearBalEl.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
-    } else if (wallet.mnemonic && !wallet._nearDeriving) {
-      wallet._nearDeriving = true;
-      if (nearAddrEl) nearAddrEl.innerText = '正在从助记词派生...';
-      deriveNearFromSeedAsync(wallet.mnemonic, 0).then(nearDerived => {
-        wallet._nearDeriving = false;
-        if (nearDerived && nearDerived.nearAddress) {
-          wallet.nearAddress = nearDerived.nearAddress;
-          wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
-          saveWalletsToStorage();
-          renderWalletBalances();
-          refreshActiveWalletNearBalance();
-        }
-      }).catch(() => {
-        wallet._nearDeriving = false;
-        if (nearAddrEl) nearAddrEl.innerText = '派生失败';
-      });
-    } else {
-      if (nearAddrEl) nearAddrEl.innerText = wallet.isWatchOnly ? '观察钱包 (无助记词)' : '未关联助记词';
-      if (nearBalEl) nearBalEl.innerText = '-- NEAR';
-    }
+    // 汇总所有支持链的 USD 总价值 (仅展示 USD)
+    const tokens = getHomeTokenCatalog(wallet);
+    const totalUsd = tokens.reduce((sum, item) => sum + (item.balance * (item.price || 0)), 0);
+    if (totalUsdEl) totalUsdEl.innerText = totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (fiatEl) fiatEl.innerHTML = `PRL: <span id="wallet-balance" class="text-cyan-300 font-semibold">${bal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span> PRL ($${prlUsdVal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)`;
+    if (sendBalEl && (state.sendNetwork || 'prl') === 'prl') sendBalEl.innerText = `${bal.toFixed(2)} PRL`;
+
+    renderHomeTokenList();
   }
 
   function renderTxList() {
@@ -4416,13 +4768,12 @@
         privkey: cache.sol.solPrivateKey
       },
       {
-        name: 'Ethereum / Base / ARB / HYPE / ARC',
+        name: 'Ethereum / BSC (BNB) / Base / ARB / HYPE / ARC',
         symbol: 'EVM 全链通用',
-        badge: 'ETH·BASE·ARB·HYPE·ARC',
+        badge: 'ETH·BNB·BASE·ARB·HYPE·ARC',
         badgeCls: 'bg-indigo-500/15 text-indigo-300 border-indigo-400/30',
         path: "m/44'/60'/0'/0/0 (Secp256k1)",
         address: cache.evm.address,
-        pubkey: cache.evm.pubkeyHex,
         privkey: cache.evm.privateKeyHex
       }
     ];
@@ -4449,23 +4800,12 @@
             </button>
           </div>
 
-          <div class="grid grid-cols-1 gap-1.5">
-            <div class="p-2 rounded-xl bg-black/20 border border-white/[0.04] flex items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <span class="text-[10px] text-white/35">公钥: </span>
-                <span class="text-[10px] font-mono text-white/65 break-all">${item.pubkey}</span>
-              </div>
-              <button type="button" onclick="copyMultichainValue('${item.symbol} 公钥', '${encodeURIComponent(item.pubkey)}')" class="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white/60 text-[10px] btn-active flex-shrink-0">
-                复制
-              </button>
+          <div class="p-2 rounded-xl bg-black/20 border border-white/[0.04] flex items-center justify-between gap-2">
+            <div class="min-w-0 flex-1">
+              <span class="text-[10px] text-amber-300/60">私钥: </span>
+              <span class="text-[10px] font-mono ${unlocked ? 'text-amber-300' : 'text-white/30'} break-all">${maskSecret(item.privkey)}</span>
             </div>
-            <div class="p-2 rounded-xl bg-black/20 border border-white/[0.04] flex items-center justify-between gap-2">
-              <div class="min-w-0 flex-1">
-                <span class="text-[10px] text-amber-300/60">私钥: </span>
-                <span class="text-[10px] font-mono ${unlocked ? 'text-amber-300' : 'text-white/30'} break-all">${maskSecret(item.privkey)}</span>
-              </div>
-              ${unlocked ? `<button type="button" onclick="copyMultichainValue('${item.symbol} 私钥', '${encodeURIComponent(item.privkey)}')" class="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[10px] font-bold btn-active flex-shrink-0">复制</button>` : ''}
-            </div>
+            ${unlocked ? `<button type="button" onclick="copyMultichainValue('${item.symbol} 私钥', '${encodeURIComponent(item.privkey)}')" class="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-[10px] font-bold btn-active flex-shrink-0">复制</button>` : ''}
           </div>
         </div>
       `;
@@ -4615,6 +4955,15 @@
     }
     if (sym === 'PRL') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="url(#prlGrad)"/><circle cx="16" cy="16" r="8.5" fill="url(#prlPearl)"/><circle cx="13" cy="13" r="2.2" fill="#fff" fill-opacity=".85"/><defs><linearGradient id="prlGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#06B6D4"/><stop offset="1" stop-color="#6366F1"/></linearGradient><radialGradient id="prlPearl" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(13.5 13.5) scale(11)"><stop stop-color="#fff"/><stop offset=".6" stop-color="#BAE6FD"/><stop offset="1" stop-color="#0284C7"/></radialGradient></defs></svg>`;
+    }
+    if (sym === 'BNB') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#F3BA2F"/><path d="M12.1 14.3L16 10.4l3.9 3.9 2.3-2.3L16 5.8 9.8 12l2.3 2.3zm-6.3 1.7L8.1 13.7 10.4 16l-2.3 2.3L5.8 16zm6.3 1.7L16 21.6l3.9-3.9 2.3 2.3L16 26.2 9.8 20l2.3-2.3zm9.5-1.7l2.3-2.3 2.3 2.3-2.3 2.3-2.3-2.3zM18.3 16L16 13.7 13.7 16 16 18.3 18.3 16z" fill="#fff"/></svg>`;
+    }
+    if (sym === 'HYPE') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#0F2922"/><path d="M10.5 9v14m11-14v14M10.5 16h11" stroke="#50E3C2" stroke-width="2.8" stroke-linecap="round"/></svg>`;
+    }
+    if (sym === 'ARC') {
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#1D4ED8"/><path d="M9 21a7 7 0 0114 0" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="16" cy="12" r="2.2" fill="#93C5FD"/></svg>`;
     }
     if (sym === 'TRX' || chain === 'tron') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#EB0029"/><path d="M8.5 9.2l14.8 2.7-6.8 12.1-8-14.8zm2.3 1.8l5.5 10.2 4.6-8.2-10.1-2z" fill="#fff"/></svg>`;
@@ -5779,6 +6128,16 @@
       networkName: 'Ethereum Native'
     },
     {
+      symbol: 'BNB',
+      name: 'BNB Smart Chain',
+      blockchain: 'bsc',
+      assetId: 'nep141:bsc.omft.near',
+      decimals: 18,
+      icon: '🟡',
+      price: 610.0,
+      networkName: 'BNB Smart Chain (BSC)'
+    },
+    {
       symbol: 'SOL',
       name: 'Solana',
       blockchain: 'sol',
@@ -6155,7 +6514,7 @@
     const targetToken = getSelectedTargetToken();
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const targetPrice = targetToken.price || 1.0;
-    const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.001;
+    const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
 
     const outEl = document.getElementById('swap-amount-out');
     const fiatInEl = document.getElementById('swap-fiat-in');
@@ -6165,7 +6524,7 @@
     const appFeeEl = document.getElementById('swap-detail-app-fee');
 
     if (appFeeEl) {
-      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}%`;
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(2)}%`;
     }
 
     // 基础汇率显示
@@ -6400,8 +6759,8 @@
 
     const appFeeEl = document.getElementById('swap-detail-app-fee');
     if (appFeeEl) {
-      const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.001;
-      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}%`;
+      const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(2)}%`;
     }
   }
 

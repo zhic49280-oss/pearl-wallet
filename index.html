@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.4">
+  <link rel="stylesheet" href="style.css?v=6.5">
   <script>
     tailwind.config = {
       theme: {
@@ -102,37 +102,28 @@
     <!-- 主视图区 1：钱包主资产界面 (仅在用户真实创建/导入钱包后激活) -->
     <main id="view-wallet" class="flex-1 flex flex-col hidden">
       <!-- 核心资产卡片 (珍珠虹彩微晕) -->
-      <div class="ios-glass-card rounded-[28px] p-6 mb-5 relative overflow-hidden">
+      <div class="ios-glass-card rounded-[28px] p-6 mb-4 relative overflow-hidden">
         <div class="absolute -right-10 -top-10 w-44 h-44 pearl-sheen pointer-events-none rounded-full blur-2xl"></div>
         
         <div class="flex items-center justify-between text-xs font-medium text-white/40 mb-2">
-          <span>总资产净值</span>
+          <span>多链资产总净值 (USD)</span>
           <span id="market-price-tag" class="flex items-center gap-1 text-cyan-400 font-semibold bg-cyan-500/10 px-2.5 py-0.5 rounded-full text-[11px]">
             <span>1 PRL ≈ --</span>
           </span>
         </div>
 
-        <!-- 主余额大数字展示 -->
+        <!-- 多链总资产 USD 大数字展示 -->
         <div class="flex items-baseline gap-2 mb-1">
-          <span id="wallet-balance" class="text-4xl font-extrabold tracking-tight tabular-numbers text-white">0.00</span>
-          <span class="text-lg font-bold text-cyan-400">PRL</span>
+          <span class="text-2xl font-bold text-white/60">$</span>
+          <span id="wallet-total-usd" class="text-4xl font-extrabold tracking-tight tabular-numbers text-white">0.00</span>
+          <span class="text-sm font-bold text-emerald-400">USD</span>
         </div>
-        <div id="wallet-fiat" class="text-xs text-white/40 font-medium mb-3 tabular-numbers">≈ ¥0.00 CNY ($0.00 USD)</div>
-
-        <!-- 实时市值与总产出微型看板 -->
-        <div class="flex items-center justify-between mb-5 text-[11px] font-mono text-white/50 bg-white/[0.03] px-3 py-1.5 rounded-xl border border-white/[0.05]">
-          <div class="flex items-center gap-1.5">
-            <span class="text-white/40">总产出:</span>
-            <span id="wallet-total-supply" class="text-cyan-300 font-semibold">-- 亿 PRL</span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <span class="text-white/40">总市值:</span>
-            <span id="wallet-total-market-cap" class="text-emerald-300 font-semibold">--</span>
-          </div>
+        <div id="wallet-fiat" class="text-xs text-white/45 font-medium mb-3 tabular-numbers">
+          PRL: <span id="wallet-balance" class="text-cyan-300 font-semibold">0.00</span> PRL
         </div>
 
-        <!-- 快捷操作胶囊 (转账 / 收款 / 跨链闪兑 / 钱包管理 / 助记词安全查看) -->
-        <div class="grid grid-cols-5 gap-1.5 pt-2 border-t border-white/[0.08]">
+        <!-- 快捷操作胶囊 (转账 / 收款 / 跨链闪兑 / 多钱包 / 全链私钥) -->
+        <div class="grid grid-cols-5 gap-1.5 pt-3 border-t border-white/[0.08]">
           <!-- 转账 -->
           <button onclick="openSheet('sheet-send')" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
             <div class="w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shadow-lg shadow-cyan-500/10">
@@ -165,41 +156,18 @@
             <span class="text-[10px] font-medium text-white/80" data-i18n="wallet.wallets">多钱包</span>
           </button>
 
-          <!-- 助记词安全备份 (仅在有钱包时才可点击) -->
-          <button onclick="startSecureMnemonicFlow()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/10">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+          <!-- 全链地址与私钥 -->
+          <button onclick="openMultichainAddressesSheet()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 flex items-center justify-center shadow-lg shadow-indigo-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
             </div>
-            <span class="text-[10px] font-medium text-white/80" data-i18n="wallet.mnemonic">助记词</span>
+            <span class="text-[10px] font-medium text-white/80">多链地址</span>
           </button>
         </div>
       </div>
 
-      <!-- 多链共生账户卡片 (同一套助记词派生 Pearl + NEAR 双地址) -->
-      <div id="dual-chain-near-card" class="p-3 mb-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 flex items-center justify-center font-bold text-xs">N</div>
-          <div>
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-bold text-white">NEAR 主网账户</span>
-              <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/20">同源助记词</span>
-            </div>
-            <div class="flex items-center gap-1.5 mt-0.5">
-              <span id="wallet-near-address-short" class="text-[11px] font-mono text-white/50">未派生或无助记词</span>
-              <button type="button" onclick="copyNearAddress()" class="text-[10px] text-cyan-400 hover:underline">复制</button>
-              <span class="text-white/20">·</span>
-              <button type="button" onclick="openMultichainAddressesSheet()" class="text-[10px] text-indigo-300 hover:underline font-medium">全链地址/私钥 🌐</button>
-            </div>
-          </div>
-        </div>
-        <div class="text-right">
-          <div id="wallet-near-balance" class="text-xs font-bold text-white tabular-numbers">0.00 NEAR</div>
-          <button type="button" onclick="openNearSwapWithSelf()" class="text-[10px] text-emerald-400 hover:underline mt-0.5">卖PRL到此处 ➔</button>
-        </div>
-      </div>
-
       <!-- NEAR 链抽象跨链兑换快捷横幅 -->
-      <div onclick="openNearSwapSheet()" class="p-3 mb-3.5 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/40 to-purple-950/40 border border-cyan-400/25 hover:border-cyan-400/50 flex items-center justify-between cursor-pointer btn-active transition-all shadow-lg shadow-cyan-950/30">
+      <div onclick="openNearSwapSheet()" class="p-3 mb-4 rounded-2xl bg-gradient-to-r from-cyan-950/40 via-indigo-950/40 to-purple-950/40 border border-cyan-400/25 hover:border-cyan-400/50 flex items-center justify-between cursor-pointer btn-active transition-all shadow-lg shadow-cyan-950/30">
         <div class="flex items-center gap-2.5">
           <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 border border-cyan-400/30 text-cyan-300 flex items-center justify-center font-bold text-sm shadow-md shadow-cyan-500/10">
             ⚡
@@ -218,33 +186,17 @@
         </div>
       </div>
 
-      <!-- 快捷横幅：来自 Kryptex 真实 API 的链上状态 -->
-      <div class="p-3.5 mb-5 rounded-2xl bg-gradient-to-r from-cyan-950/30 to-purple-950/30 border border-cyan-500/15 flex items-center justify-between">
-        <div class="flex items-center gap-2.5">
-          <div class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></div>
-          <div>
-            <div class="text-xs font-semibold text-cyan-200">
-              全网区块高度: <span id="banner-block-height" class="font-mono font-bold">--</span>
-            </div>
-            <div class="text-[11px] text-white/40">
-              全网矿工: <span id="banner-active-miners" class="text-white/60 font-semibold">--</span> 人 · 块奖励: <span id="banner-block-reward" class="text-cyan-300">-- PRL</span>
-            </div>
-          </div>
-        </div>
-        <button onclick="refreshChainData()" class="text-xs text-cyan-400 font-medium px-2.5 py-1 rounded-lg bg-cyan-500/10 btn-active flex items-center gap-1">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-          刷新
-        </button>
-      </div>
-
-      <!-- 近期动态与交易列表 (真实链上空状态) -->
+      <!-- 多链代币资产列表 (小狐狸样式：点击单个代币进入活动明细) -->
       <div class="flex-1 flex flex-col">
-        <div class="flex items-center justify-between mb-3 px-1">
-          <span class="text-xs font-bold text-white/60 tracking-wider uppercase">活动明细</span>
-          <span onclick="triggerHaptic('light'); refreshChainData();" class="text-xs text-cyan-400 font-medium cursor-pointer">同步链上</span>
+        <div class="flex items-center justify-between mb-2.5 px-1">
+          <span class="text-xs font-bold text-white/70 tracking-wider uppercase">代币资产 (点击查看明细)</span>
+          <button type="button" onclick="triggerHaptic('light'); refreshChainData(); refreshAllChainBalances();" class="text-xs text-cyan-400 font-medium cursor-pointer flex items-center gap-1 btn-active">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            刷新余额
+          </button>
         </div>
-        <div id="tx-list-container" class="space-y-2 overflow-y-auto no-scrollbar flex-1 pb-4">
-          <!-- 动态注入交易 -->
+        <div id="home-token-list" class="space-y-2 overflow-y-auto no-scrollbar flex-1 pb-4">
+          <!-- 由 JS 动态渲染全链主代币 -->
         </div>
       </div>
     </main>
@@ -639,27 +591,6 @@
         </div>
       </div>
 
-      <!-- 网络与闪兑费率设置卡片 -->
-      <div class="ios-glass-card rounded-2xl p-4">
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2.5">
-            <span class="text-base">💎</span>
-            <div>
-              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">网络与闪兑费率</h3>
-              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">主网转账免收服务费 · 跨链闪兑享受全网极速智能路由 (0.1% 交易手续费)</p>
-            </div>
-          </div>
-          <!-- iOS 风格弹性滑动开关 (默认开) -->
-          <button type="button" id="btn-toggle-dev-fee" onclick="toggleDevFee()" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none bg-cyan-500" role="switch" aria-checked="true">
-            <span id="dev-fee-switch-thumb" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-5"></span>
-          </button>
-        </div>
-        <div class="flex items-center justify-between text-[11px] text-white/50 pt-2 border-t border-white/[0.05]">
-          <span data-i18n="settings.devFeeStatus">极速路由状态</span>
-          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">智能路由已就绪 (已开启)</span>
-        </div>
-      </div>
-
       <!-- 安卓客户端 APK 下载专区 -->
       <div class="ios-glass-card rounded-2xl p-4">
         <div class="flex items-center justify-between mb-2">
@@ -723,6 +654,14 @@
           </div>
         </button>
 
+        <button onclick="openMultichainAddressesSheet()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-indigo-500/25 flex items-center justify-between btn-active text-left">
+          <div>
+            <div class="text-sm font-bold text-indigo-300">全链地址与私钥管理</div>
+            <div class="text-xs text-white/40">查看/导出 PRL、NEAR、SOL、ETH、BSC(BNB)、Base、ARB、HYPE、ARC 私钥</div>
+          </div>
+          <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+        </button>
+
         <button onclick="startSecureMnemonicFlow()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-amber-500/20 flex items-center justify-between btn-active text-left">
           <div>
             <div class="text-sm font-bold text-amber-300" data-i18n="settings.viewMnemonic">安全查看当前钱包助记词</div>
@@ -760,7 +699,7 @@
 
       <button id="tab-btn-settings" type="button" onclick="switchTab('settings')" class="nav-tab-btn btn-active">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        <span class="text-[10px]" data-i18n="nav.settings">自托管</span>
+        <span class="text-[10px]" data-i18n="nav.settings">设置</span>
       </button>
     </nav>
 
@@ -1482,9 +1421,9 @@
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-1">
               <span>交易手续费 (Swap Fee)</span>
-              <span class="text-[9px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">0.1%</span>
+              <span class="text-[9px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">0.25%</span>
             </span>
-            <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.1%</span>
+            <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.25%</span>
           </div>
           <div class="flex items-center justify-between">
             <span>跨链结算协议</span>
@@ -1646,6 +1585,7 @@
         <button type="button" onclick="setSwapNetworkFilter('near')" data-swap-net="near" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">NEAR</button>
         <button type="button" onclick="setSwapNetworkFilter('tron')" data-swap-net="tron" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">TRON</button>
         <button type="button" onclick="setSwapNetworkFilter('eth')" data-swap-net="eth" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Ethereum</button>
+        <button type="button" onclick="setSwapNetworkFilter('bsc')" data-swap-net="bsc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">BSC</button>
         <button type="button" onclick="setSwapNetworkFilter('base')" data-swap-net="base" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Base</button>
         <button type="button" onclick="setSwapNetworkFilter('arb')" data-swap-net="arb" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Arbitrum</button>
         <button type="button" onclick="setSwapNetworkFilter('sol')" data-swap-net="sol" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Solana</button>
@@ -1676,6 +1616,62 @@
         <!-- 由 JS 动态渲染 -->
       </div>
     </div>
+  </div>
+
+  <!-- 抽屉 M：单个代币详情与活动明细 (#sheet-token-detail) -->
+  <div id="sheet-token-detail" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] p-6 max-w-md mx-auto safe-area-bottom max-h-[88vh] flex flex-col">
+    <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-4 flex-shrink-0"></div>
+    <div class="flex items-center justify-between mb-4 flex-shrink-0">
+      <div class="flex items-center gap-3">
+        <div id="token-detail-icon" class="w-10 h-10 rounded-full bg-white/[0.05] border border-white/[0.1] flex items-center justify-center overflow-hidden"></div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 id="token-detail-symbol" class="text-base font-bold text-white">PRL</h3>
+            <span id="token-detail-chain-badge" class="text-[10px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-400/30 font-medium">Pearl 主网</span>
+          </div>
+          <div id="token-detail-name" class="text-[11px] text-white/45 mt-0.5">Pearl Network</div>
+        </div>
+      </div>
+      <button type="button" onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+    </div>
+
+    <!-- 余额与 USD 价值 -->
+    <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] mb-3.5 flex-shrink-0">
+      <div class="flex items-baseline justify-between">
+        <div>
+          <div id="token-detail-balance" class="text-2xl font-extrabold text-white tabular-numbers">0.0000</div>
+          <div id="token-detail-usd" class="text-xs text-emerald-400 font-semibold mt-0.5 tabular-numbers">$0.00 USD</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[10px] text-white/40">当前参考单价</div>
+          <div id="token-detail-price" class="text-xs font-mono text-white/80 mt-0.5">$0.00</div>
+        </div>
+      </div>
+      <div class="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center justify-between gap-2">
+        <div class="min-w-0 flex-1">
+          <span class="text-[10px] text-white/40">本链收款地址: </span>
+          <span id="token-detail-address" class="text-[10px] font-mono text-cyan-200/80 break-all"></span>
+        </div>
+        <button type="button" onclick="copyTokenDetailAddress()" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 text-cyan-300 text-[10px] font-bold border border-cyan-400/25 btn-active flex-shrink-0">复制</button>
+      </div>
+    </div>
+
+    <!-- 快捷操作按钮 -->
+    <div class="grid grid-cols-3 gap-2 mb-4 flex-shrink-0">
+      <button type="button" onclick="openTokenDetailAction('receive')" class="py-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-bold border border-purple-400/30 btn-active">收款</button>
+      <button type="button" onclick="openTokenDetailAction('send')" class="py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-xs font-bold border border-cyan-400/30 btn-active">发送</button>
+      <button type="button" onclick="openTokenDetailAction('swap')" class="py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active">跨链闪兑</button>
+    </div>
+
+    <!-- 活动明细与链上操作 -->
+    <div class="flex items-center justify-between mb-2 px-1 flex-shrink-0">
+      <span class="text-xs font-bold text-white/60 tracking-wider uppercase">活动明细 (余额变动与链上操作)</span>
+      <button type="button" onclick="refreshTokenDetailActivity()" class="text-[11px] text-cyan-400 font-medium btn-active">刷新明细</button>
+    </div>
+    <div id="token-detail-activity" class="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar min-h-[160px]">
+      <!-- 由 JS 渲染真实链上明细 -->
+    </div>
+    <div id="tx-list-container" class="hidden"></div>
   </div>
 
   <!-- 抽屉 N：全链网络地址与公钥/私钥矩阵 -->
@@ -1739,10 +1735,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.4"></script>
+  <script src="bip39-wordlist.js?v=6.5"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.4"></script>
+  <script src="qrcode.min.js?v=6.5"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.4"></script>
+  <script src="app.js?v=6.5"></script>
 </body>
 </html>

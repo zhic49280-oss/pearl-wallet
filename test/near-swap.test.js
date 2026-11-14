@@ -403,7 +403,7 @@ test('T6.11: Custom Web3 token picker modal lifecycle, search filtering, and sel
   closeSwapTokenPickerModal();
 });
 
-test('T6.12: App Service Fee (0.1% fixed on swap, 0 on regular transfers)', async () => {
+test('T6.12: App Service Fee (0.25% fixed on swap, 0 on regular transfers)', async () => {
   const sandbox = initAppSandbox({
     'pearl_user_wallets_v4': JSON.stringify({
       wallets: [{
@@ -419,7 +419,7 @@ test('T6.12: App Service Fee (0.1% fixed on swap, 0 on regular transfers)', asyn
   const { state, calculateSwapQuote, handleSendAmountInput } = sandbox.window;
 
   // 1. Verify state fee rates
-  assert.equal(state.appFeeRate, 0.001, 'state.appFeeRate must be 0.001 (0.1%)');
+  assert.equal(state.appFeeRate, 0.0025, 'state.appFeeRate must be 0.0025 (0.25%)');
   assert.equal(state.devFeeRate, 0, 'state.devFeeRate must be 0 for standard transfers');
 
   // 2. Test send amount input: regular transfer has 0 app fee
@@ -440,6 +440,6 @@ test('T6.12: App Service Fee (0.1% fixed on swap, 0 on regular transfers)', asyn
   await calculateSwapQuote();
 
   const appFeeEl = sandbox.document.getElementById('swap-detail-app-fee');
-  assert.ok(appFeeEl.innerText.includes('0.1%'), 'Swap detail must explicitly show 0.1% app fee');
+  assert.ok(appFeeEl.innerText.includes('0.25%'), 'Swap detail must explicitly show 0.25% app fee');
   assert.ok(Number(state.nearSwap.amountOut) > 0, 'Swap amountOut must be positive');
 });
