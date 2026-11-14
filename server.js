@@ -13,6 +13,31 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
+  // Kryptex 矿池 API 透明反向代理 (解决本地浏览器开发与局域网跨域问题)
+  if (req.url.startsWith('/kryptex-proxy')) {
+    const parsed = new URL(req.url, 'http://localhost');
+    const pathParam = parsed.searchParams.get('path');
+    if (!pathParam) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Missing path parameter' }));
+      return;
+    }
+    const https = require('https');
+    const targetUrl = `https://pool.kryptex.com${pathParam}`;
+    const proxyReq = https.get(targetUrl, { headers: { 'User-Agent': 'Pearl-Wallet/5.0', 'Accept': 'application/json' } }, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin': '*'
+      });
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (err) => {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    });
+    return;
+  }
+
   let reqPath = req.url === '/' ? '/index.html' : req.url.split('?')[0];
   let filePath = path.join(__dirname, reqPath);
 

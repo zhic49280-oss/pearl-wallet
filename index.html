@@ -227,202 +227,368 @@
     </main>
 
     <!-- 主视图区 2：矿池与 PoUW 算力监控 -->
-    <!-- 主视图区 2：矿池与 PoUW 算力监控 (媲美 Pearl Hub) -->
-    <main id="view-mining" class="flex-1 flex flex-col hidden space-y-4">
-      <!-- 顶部全网状态看板 -->
-      <div class="ios-glass-card rounded-[28px] p-6 relative overflow-hidden">
-        <div class="flex items-center justify-between mb-4">
-          <span class="text-xs font-bold text-white/50">Pearl PoUW 全网总算力</span>
-          <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">-- 矿机在线</span>
+    <!-- 主视图区 2：矿池与 PoUW 算力监控 (全原生内嵌，零外部跳转) -->
+    <main id="view-mining" class="flex-1 flex flex-col hidden space-y-3.5">
+      <!-- 顶部标题与快速刷新 -->
+      <div class="flex items-center justify-between px-1">
+        <div class="flex items-center gap-2">
+          <span class="text-base">⚡</span>
+          <h3 class="text-sm font-bold text-white">PRL 挖矿监控与算力大盘</h3>
         </div>
-        <div class="text-3xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">-- EH/s</div>
-        <div class="text-xs text-white/40 mb-4">全网 PearlHash / AI 矩阵算力集群</div>
-
-        <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/[0.08]">
-          <div class="p-3 rounded-xl bg-white/[0.03]">
-            <div class="text-[11px] text-white/40 mb-1">主导矿池</div>
-            <div class="text-xs font-bold text-cyan-300">Kryptex (56.7%)</div>
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.03]">
-            <div class="text-[11px] text-white/40 mb-1">第二矿池</div>
-            <div class="text-xs font-bold text-purple-300">HeroMiners (Prop)</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 全网核心指标交互趋势大盘 (算力 / 难度 / 出块奖励三合一) -->
-      <div class="ios-glass-card rounded-2xl p-5 space-y-3.5">
-        <!-- 顶部指标切换 Tab 与时间范围 -->
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <button type="button" onclick="switchChartMetric('hashrate')" id="btn-metric-hashrate" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all">
-              ⚡ 算力
-            </button>
-            <button type="button" onclick="switchChartMetric('diff')" id="btn-metric-diff" class="px-2.5 py-1 rounded-lg text-xs font-medium text-white/50 border border-transparent hover:text-white transition-all">
-              🎯 难度
-            </button>
-            <button type="button" onclick="switchChartMetric('reward')" id="btn-metric-reward" class="px-2.5 py-1 rounded-lg text-xs font-medium text-white/50 border border-transparent hover:text-white transition-all">
-              🪙 块奖励
-            </button>
-          </div>
-
-          <!-- 时间跨度 Tab -->
-          <div class="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
-            <button type="button" onclick="switchChartTimeRange('24h')" id="btn-time-24h" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 transition-all">24H</button>
-            <button type="button" onclick="switchChartTimeRange('7d')" id="btn-time-7d" class="px-2 py-0.5 rounded text-[10px] font-medium text-white/50 transition-all">7D</button>
-            <button type="button" onclick="switchChartTimeRange('30d')" id="btn-time-30d" class="px-2 py-0.5 rounded text-[10px] font-medium text-white/50 transition-all">30D</button>
-          </div>
-        </div>
-
-        <!-- 实时 / 手指触摸选点数值浮层 -->
-        <div class="flex items-baseline justify-between pt-0.5">
-          <div>
-            <div class="text-[10px] text-white/40 flex items-center gap-1.5" id="chart-data-title">
-              <span>全网算力</span>
-              <span id="chart-scrub-time" class="font-mono text-cyan-400 font-semibold">● 实时最新</span>
-            </div>
-            <div id="chart-scrub-val" class="text-xl font-extrabold font-mono text-cyan-300 mt-0.5 tracking-tight">
-              --
-            </div>
-          </div>
-          <div class="text-right">
-            <div id="chart-trend-tag" class="text-xs font-semibold text-emerald-400">--</div>
-            <div id="chart-scrub-hint" class="text-[9px] text-white/30 mt-0.5">👆 左右滑动查看任意时点</div>
-          </div>
-        </div>
-
-        <!-- 交互式 SVG 矢量图表容器 (支持手指滑动查探每个点) -->
-        <div class="relative w-full h-40 pt-2 select-none cursor-crosshair touch-none" id="hashrate-chart-container">
-          <!-- 悬浮数值气泡 Tooltip -->
-          <div id="chart-tooltip" class="hidden absolute pointer-events-none z-20 px-2.5 py-1 rounded-lg bg-[#181B26]/95 border border-cyan-400/40 text-[10px] shadow-xl shadow-cyan-500/20 text-white backdrop-blur transform -translate-x-1/2 -translate-y-8 transition-opacity">
-            <span id="tooltip-val" class="font-bold font-mono text-cyan-300">--</span>
-          </div>
-
-          <!-- 纵向交互辅助十字虚线 -->
-          <div id="chart-crosshair" class="hidden absolute top-2 bottom-0 w-[1px] bg-cyan-400/50 pointer-events-none z-10 border-l border-dashed border-cyan-300"></div>
-
-          <svg id="hashrate-svg" class="w-full h-full overflow-visible" viewBox="0 0 320 120" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="chart-gradient-dynamic" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.35"/>
-                <stop offset="100%" stop-color="#00F0FF" stop-opacity="0.0"/>
-              </linearGradient>
-            </defs>
-            <path id="hashrate-area-path" fill="url(#chart-gradient-dynamic)" d="M0,120 L0,70 L320,15 L320,120 Z"/>
-            <path id="hashrate-line-path" fill="none" stroke="#00F0FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M0,70 L320,15"/>
-            <circle id="hashrate-point" cx="320" cy="15" r="4.5" fill="#00F0FF" stroke="#10121B" stroke-width="2.5"/>
-          </svg>
-        </div>
-
-        <!-- 底部数据统计条 -->
-        <div class="flex items-center justify-between text-[10px] text-white/40 font-mono pt-1.5 border-t border-white/[0.04]">
-          <span id="chart-stat-min">最低: --</span>
-          <span id="chart-stat-avg">平均: --</span>
-          <span id="chart-stat-max" class="text-amber-400">最高/峰值: --</span>
-        </div>
-      </div>
-
-      <!-- 矿工实时监控卡片 (媲美 Pearl Hub) -->
-      <div class="ios-glass-card rounded-2xl p-5">
-        <div class="flex items-center justify-between mb-3">
-          <h4 class="text-xs font-bold text-white">真实矿工监控</h4>
-          <span class="text-[10px] text-cyan-400 font-medium">支持多矿池直连</span>
-        </div>
-
-        <div class="mb-3">
-          <label class="block text-[11px] text-white/60 mb-1">选择矿池 (支持多矿池直连)</label>
-          <div class="grid grid-cols-2 gap-2" id="miner-pool-selector">
-            <button type="button" onclick="selectMinerPool('herominers')" id="btn-pool-herominers" class="py-2.5 px-3 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-xs border border-purple-400/40 btn-active">
-              HeroMiners 矿池
-            </button>
-            <button type="button" onclick="selectMinerPool('kryptex')" id="btn-pool-kryptex" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active">
-              Kryptex 官方矿池
-            </button>
-          </div>
-        </div>
-
-        <div class="mb-3">
-          <div class="flex items-center justify-between text-[11px] text-white/60 mb-1">
-            <span>矿工钱包收款地址</span>
-            <div class="flex items-center gap-2">
-              <button type="button" onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
-            </div>
-          </div>
-          <input id="custom-miner-address" type="text" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
-        </div>
-
-        <button onclick="queryMinerByAddress()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-1.5">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          立即查询矿工收益与算力
-        </button>
-
-        <div id="miner-query-result" class="hidden mt-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.08] text-xs space-y-2">
-          <!-- 动态展示矿工真实数据 -->
-        </div>
-      </div>
-
-      <!-- Pearl 官方主网代币经济模型与每日产出统计卡片 -->
-      <div class="ios-glass-card rounded-2xl p-5 space-y-3.5">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="text-base">📊</span>
-            <h4 class="text-xs font-bold text-white">Pearl 主网代币经济与每日产出</h4>
-          </div>
-          <!-- 实时价格与刷新按钮 -->
-          <div onclick="triggerHaptic('light'); refreshChainData();" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 text-[10px] font-semibold cursor-pointer btn-active">
+        <div class="flex items-center gap-1.5">
+          <button type="button" onclick="refreshMiningData()" class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 text-[10px] font-semibold cursor-pointer btn-active">
             <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span id="tokenomics-live-price">1 PRL ≈ --</span>
-            <svg class="w-3 h-3 text-cyan-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>刷新数据</span>
+            <svg class="w-3 h-3 text-cyan-400/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 四级子 Tab 导航栏: [概览] [矿池监控] [显卡对比] [经济模型] -->
+      <div class="flex items-center gap-1 p-1 rounded-2xl bg-white/[0.03] border border-white/[0.06]" id="mining-subtabs-bar">
+        <button type="button" onclick="switchMiningSubTab('overview')" id="subtab-mining-overview" class="flex-1 py-2 px-2 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-center transition-all">
+          概览
+        </button>
+        <button type="button" onclick="switchMiningSubTab('miner')" id="subtab-mining-miner" class="flex-1 py-2 px-2 rounded-xl text-xs font-medium text-white/50 border border-transparent hover:text-white text-center transition-all">
+          矿池监控
+        </button>
+        <button type="button" onclick="switchMiningSubTab('gpu')" id="subtab-mining-gpu" class="flex-1 py-2 px-2 rounded-xl text-xs font-medium text-white/50 border border-transparent hover:text-white text-center transition-all">
+          显卡对比
+        </button>
+        <button type="button" onclick="switchMiningSubTab('tokenomics')" id="subtab-mining-tokenomics" class="flex-1 py-2 px-2 rounded-xl text-xs font-medium text-white/50 border border-transparent hover:text-white text-center transition-all">
+          经济模型
+        </button>
+      </div>
+
+      <!-- ==================== 子视图 1: 概览 (Overview) ==================== -->
+      <div id="mining-subview-overview" class="space-y-3.5">
+        <!-- 行情 4 宫格核心指标大盘 (对应参考图 2) -->
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-xs font-bold text-white">行情 · 实时指标</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-[10px] text-white/40">
+              <span>自动更新</span>
+              <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <!-- 1. PRL 币价 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">PRL 币价</div>
+              <div id="overview-metric-price" class="text-xl font-extrabold text-amber-400 font-mono">$1.54</div>
+              <div class="text-[10px] text-white/30 mt-0.5">SafeTrade 实时</div>
+            </div>
+            <!-- 2. 全网算力 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">全网算力</div>
+              <div id="overview-metric-hashrate" class="text-xl font-extrabold text-orange-400 font-mono">92.48 EH/s</div>
+              <div class="text-[10px] text-emerald-400 mt-0.5">近7天 +9% · 24h +1%</div>
+            </div>
+            <!-- 3. 单位日产 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">单位日产</div>
+              <div id="overview-metric-unit-daily" class="text-xl font-extrabold text-white font-mono">11.27</div>
+              <div class="text-[10px] text-white/40 mt-0.5">PRL / P·天</div>
+            </div>
+            <!-- 4. 全网难度 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">全网难度</div>
+              <div id="overview-metric-diff" class="text-xl font-extrabold text-orange-400 font-mono">59.14M</div>
+              <div class="text-[10px] text-white/30 mt-0.5">~194秒 / 块</div>
+            </div>
           </div>
         </div>
 
-        <!-- 四宫格代币关键核心数据大盘 -->
+        <!-- 全网总算力与主导矿池看板 (保留原有 ID: miner-hashrate, pool-active-workers) -->
+        <div class="ios-glass-card rounded-2xl p-4 relative overflow-hidden">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-xs font-bold text-white/50">Pearl PoUW 算力集群</span>
+            <span id="pool-active-workers" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">103,347 矿机在线</span>
+          </div>
+          <div class="text-2xl font-extrabold text-white tabular-numbers mb-1" id="miner-hashrate">92.48 EH/s</div>
+          <div class="text-xs text-white/40 mb-3">全网 PearlHash / AI 矩阵算力集群</div>
+          <div class="grid grid-cols-2 gap-2.5 pt-2.5 border-t border-white/[0.08]">
+            <div class="p-2.5 rounded-xl bg-white/[0.03]">
+              <div class="text-[10px] text-white/40 mb-0.5">主导矿池</div>
+              <div class="text-xs font-bold text-cyan-300">Kryptex (56.7%)</div>
+            </div>
+            <div class="p-2.5 rounded-xl bg-white/[0.03]">
+              <div class="text-[10px] text-white/40 mb-0.5">第二矿池</div>
+              <div class="text-xs font-bold text-purple-300">HeroMiners (Prop)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 全网核心指标交互趋势大盘 (算力 / 难度 / 出块时间三合一, 对应参考图 1) -->
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1 p-0.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+              <button type="button" onclick="switchChartMetric('hashrate')" id="btn-metric-hashrate" class="px-2 py-1 rounded-lg text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all">
+                ⚡ 算力
+              </button>
+              <button type="button" onclick="switchChartMetric('diff')" id="btn-metric-diff" class="px-2 py-1 rounded-lg text-xs font-medium text-white/50 border border-transparent hover:text-white transition-all">
+                🎯 难度
+              </button>
+              <button type="button" onclick="switchChartMetric('reward')" id="btn-metric-reward" class="px-2 py-1 rounded-lg text-xs font-medium text-white/50 border border-transparent hover:text-white transition-all">
+                🪙 出块奖励
+              </button>
+            </div>
+            <!-- 时间跨度 Tab (24h / 7天 / 30天) -->
+            <div class="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+              <button type="button" onclick="switchChartTimeRange('24h')" id="btn-time-24h" class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 transition-all">24h</button>
+              <button type="button" onclick="switchChartTimeRange('7d')" id="btn-time-7d" class="px-2 py-0.5 rounded text-[10px] font-medium text-white/50 transition-all">7天</button>
+              <button type="button" onclick="switchChartTimeRange('30d')" id="btn-time-30d" class="px-2 py-0.5 rounded text-[10px] font-medium text-white/50 transition-all">30天</button>
+            </div>
+          </div>
+
+          <div class="flex items-baseline justify-between pt-0.5">
+            <div>
+              <div class="text-[10px] text-white/40 flex items-center gap-1.5" id="chart-data-title">
+                <span>全网算力</span>
+                <span id="chart-scrub-time" class="font-mono text-cyan-400 font-semibold">● 实时最新</span>
+              </div>
+              <div id="chart-scrub-val" class="text-xl font-extrabold font-mono text-cyan-300 mt-0.5 tracking-tight">--</div>
+            </div>
+            <div class="text-right">
+              <div id="chart-trend-tag" class="text-xs font-semibold text-emerald-400">--</div>
+              <div id="chart-scrub-hint" class="text-[9px] text-white/30 mt-0.5">👆 左右滑动查看任意时点</div>
+            </div>
+          </div>
+
+          <div class="relative w-full h-36 pt-2 select-none cursor-crosshair touch-none" id="hashrate-chart-container">
+            <div id="chart-tooltip" class="hidden absolute pointer-events-none z-20 px-2.5 py-1 rounded-lg bg-[#181B26]/95 border border-cyan-400/40 text-[10px] shadow-xl shadow-cyan-500/20 text-white backdrop-blur transform -translate-x-1/2 -translate-y-8 transition-opacity">
+              <span id="tooltip-val" class="font-bold font-mono text-cyan-300">--</span>
+            </div>
+            <div id="chart-crosshair" class="hidden absolute top-2 bottom-0 w-[1px] bg-cyan-400/50 pointer-events-none z-10 border-l border-dashed border-cyan-300"></div>
+            <svg id="hashrate-svg" class="w-full h-full overflow-visible" viewBox="0 0 320 120" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chart-gradient-dynamic" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#00F0FF" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+              <path id="hashrate-area-path" fill="url(#chart-gradient-dynamic)" d="M0,120 L0,70 L320,15 L320,120 Z"/>
+              <path id="hashrate-line-path" fill="none" stroke="#00F0FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" d="M0,70 L320,15"/>
+              <circle id="hashrate-point" cx="320" cy="15" r="4.5" fill="#00F0FF" stroke="#10121B" stroke-width="2.5"/>
+            </svg>
+          </div>
+
+          <div class="flex items-center justify-between text-[10px] text-white/40 font-mono pt-1.5 border-t border-white/[0.04]">
+            <span id="chart-stat-min">最低: --</span>
+            <span id="chart-stat-avg">平均: --</span>
+            <span id="chart-stat-max" class="text-amber-400">峰值: --</span>
+          </div>
+        </div>
+
+        <!-- 概览底部：快捷跳转至矿工监控与显卡对比 -->
         <div class="grid grid-cols-2 gap-2.5">
-          <!-- 1. 全网已开采总产出 -->
-          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-            <div class="text-[11px] text-white/40 mb-1">全网总产出 (Circulating)</div>
-            <div id="tokenomics-total-supply" class="text-sm font-bold text-cyan-300 font-mono">-- 亿 PRL</div>
-            <div id="tokenomics-supply-pct" class="text-[10px] text-white/30 mt-0.5">占总硬顶 --%</div>
+          <button type="button" onclick="switchMiningSubTab('miner')" class="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 text-left hover:bg-cyan-500/15 transition-all btn-active">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-sm">💻</span>
+              <span class="text-[10px] text-cyan-400">直连查询 →</span>
+            </div>
+            <div class="text-xs font-bold text-white">我的矿池监控</div>
+            <div class="text-[10px] text-white/40 mt-0.5">Kryptex / HeroMiners 实时</div>
+          </button>
+          <button type="button" onclick="switchMiningSubTab('gpu')" class="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-400/20 text-left hover:bg-purple-500/15 transition-all btn-active">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-sm">🧮</span>
+              <span class="text-[10px] text-purple-400">净利测算 →</span>
+            </div>
+            <div class="text-xs font-bold text-white">显卡对比与计算器</div>
+            <div class="text-[10px] text-white/40 mt-0.5">RTX 4090/4080 电费回本</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- ==================== 子视图 2: 矿池监控 (Miner & Workers) ==================== -->
+      <div id="mining-subview-miner" class="hidden space-y-3.5">
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-white">真实矿工监控</span>
+              <span class="text-[10px] text-cyan-400 font-medium bg-cyan-500/10 px-2 py-0.5 rounded-full">零外部跳转 · 原生直连</span>
+            </div>
+            <span class="text-[10px] text-emerald-400 font-mono">PPS+ / Prop</span>
           </div>
 
-          <!-- 2. 全网总市值 -->
-          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-            <div class="text-[11px] text-white/40 mb-1">全网总市值 (Market Cap)</div>
-            <div id="tokenomics-market-cap" class="text-sm font-bold text-emerald-400 font-mono">-- USD</div>
-            <div id="tokenomics-market-cap-cny" class="text-[10px] text-white/30 mt-0.5">-- CNY</div>
+          <!-- 矿池选择器 -->
+          <div>
+            <label class="block text-[11px] text-white/60 mb-1.5">选择接入矿池</label>
+            <div class="grid grid-cols-2 gap-2" id="miner-pool-selector">
+              <button type="button" onclick="selectMinerPool('kryptex')" id="btn-pool-kryptex" class="py-2.5 px-3 rounded-xl bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/40 btn-active flex items-center justify-center gap-1.5">
+                <span>⚡</span> Kryptex 官方矿池
+              </button>
+              <button type="button" onclick="selectMinerPool('herominers')" id="btn-pool-herominers" class="py-2.5 px-3 rounded-xl bg-white/[0.04] text-white/60 font-medium text-xs border border-white/[0.08] btn-active flex items-center justify-center gap-1.5">
+                <span>🟣</span> HeroMiners 矿池
+              </button>
+            </div>
           </div>
 
-          <!-- 3. 每日总产出 -->
-          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-            <div class="text-[11px] text-white/40 mb-1">每日总产出 (Daily Emission)</div>
-            <div id="tokenomics-daily-emission" class="text-sm font-bold text-cyan-300 font-mono">-- 万 PRL</div>
-            <div id="tokenomics-daily-fiat" class="text-[10px] text-white/30 mt-0.5">--</div>
+          <!-- 地址输入 -->
+          <div>
+            <div class="flex items-center justify-between text-[11px] text-white/60 mb-1.5">
+              <span>矿工钱包收款地址</span>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="fillCurrentWalletAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">填入当前钱包地址</button>
+                <span class="text-white/20">|</span>
+                <button type="button" onclick="pasteMinerAddress()" class="text-cyan-400 font-medium hover:underline text-[11px]">粘贴</button>
+              </div>
+            </div>
+            <input id="custom-miner-address" type="text" placeholder="输入 prl1p... 矿工地址" class="w-full p-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400 transition-all">
           </div>
 
-          <!-- 4. 单块产出 -->
-          <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-            <div class="text-[11px] text-white/40 mb-1">单块产出 (Block Reward)</div>
-            <div id="tokenomics-block-reward" class="text-sm font-bold text-emerald-400 font-mono">-- PRL</div>
-            <div class="text-[10px] text-white/30 mt-0.5">平滑递减 (无断崖半衰)</div>
+          <button type="button" onclick="queryMinerByAddress()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            立即原生查询矿工收益与算力
+          </button>
+        </div>
+
+        <!-- 矿工收益与在线矿机原生面板 (保留原有 ID: miner-query-result) -->
+        <div id="miner-query-result" class="hidden space-y-3">
+          <!-- 动态注入原生矿工卡片：日净利实收 / 在线设备列表 / 矿池打款 / 一键分享战报 -->
+        </div>
+      </div>
+
+      <!-- ==================== 子视图 3: 显卡对比与净利润计算器 (GPU & Calculator) ==================== -->
+      <div id="mining-subview-gpu" class="hidden space-y-3.5">
+        <!-- 显卡净利润交互式计算器 (对应参考图 1 "日净利 · 设备估算") -->
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="text-sm">🧮</span>
+              <h4 class="text-xs font-bold text-white">显卡挖矿日净利估算器</h4>
+            </div>
+            <span class="text-[10px] text-cyan-300 font-mono">扣电费实时净利</span>
+          </div>
+
+          <div class="space-y-2.5">
+            <!-- 显卡型号选择 -->
+            <div>
+              <label class="block text-[11px] text-white/50 mb-1">选择显卡型号或预设</label>
+              <select id="gpu-calc-model" onchange="selectGpuPreset(this.value)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+                <option value="4090" class="bg-[#181B26]">NVIDIA RTX 4090 (120 GH/s · 320W)</option>
+                <option value="4080s" class="bg-[#181B26]">NVIDIA RTX 4080 Super (88 GH/s · 240W)</option>
+                <option value="4070tis" class="bg-[#181B26]">NVIDIA RTX 4070 Ti Super (72 GH/s · 200W)</option>
+                <option value="4070s" class="bg-[#181B26]">NVIDIA RTX 4070 Super (62 GH/s · 175W)</option>
+                <option value="3080" class="bg-[#181B26]">NVIDIA RTX 3080 (65 GH/s · 250W)</option>
+                <option value="3070" class="bg-[#181B26]">NVIDIA RTX 3070 (42 GH/s · 130W)</option>
+                <option value="7900xtx" class="bg-[#181B26]">AMD Radeon RX 7900 XTX (90 GH/s · 280W)</option>
+                <option value="custom" class="bg-[#181B26]">自定义算力与功耗...</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-white/50 mb-1">单卡算力 (GH/s)</label>
+                <input id="gpu-calc-hash" type="number" step="1" value="120" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+              </div>
+              <div>
+                <label class="block text-[11px] text-white/50 mb-1">单卡功耗 (W)</label>
+                <input id="gpu-calc-power" type="number" step="1" value="320" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-[11px] text-white/50 mb-1">显卡数量 (张)</label>
+                <input id="gpu-calc-count" type="number" step="1" min="1" max="100" value="1" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+              </div>
+              <div>
+                <label class="block text-[11px] text-white/50 mb-1">电费单价 ($/度)</label>
+                <input id="gpu-calc-power-rate" type="number" step="0.01" value="0.06" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+              </div>
+            </div>
+          </div>
+
+          <!-- 计算结果卡片 -->
+          <div id="gpu-calc-result" class="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/20 space-y-2 text-xs">
+            <!-- 动态注入计算结果 -->
           </div>
         </div>
 
-        <div class="space-y-2 text-xs text-white/70 pt-1">
-          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
-            <span class="text-white/50">平均出块时间</span>
-            <span class="font-mono text-white/90">~194 秒 (~3.2 分钟 / 块)</span>
+        <!-- 主流显卡 PearlHash 能效对比基准榜 (对应参考图 1 "显卡对比") -->
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-white">主流显卡 PearlHash 能效排行榜</h4>
+            <span class="text-[10px] text-white/40">基于当前全网难度</span>
           </div>
-          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
-            <span class="text-white/50">全网每日出块数</span>
-            <span class="font-mono text-white/90">~445 个区块 / 天</span>
+
+          <div class="space-y-2 text-xs" id="gpu-benchmark-table">
+            <!-- 动态渲染显卡列表 -->
           </div>
-          <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
-            <span class="text-white/50">最大硬顶总供应量</span>
-            <span class="font-mono text-cyan-300 font-semibold">21 亿 PRL (100x BTC)</span>
+        </div>
+      </div>
+
+      <!-- ==================== 子视图 4: 经济模型 (Tokenomics) ==================== -->
+      <div id="mining-subview-tokenomics" class="hidden space-y-3.5">
+        <!-- Pearl 官方主网代币经济模型与每日产出统计卡片 -->
+        <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1.5">
+              <span class="text-base">📊</span>
+              <h4 class="text-xs font-bold text-white">Pearl 主网代币经济与每日产出</h4>
+            </div>
+            <!-- 实时价格与刷新按钮 -->
+            <div onclick="triggerHaptic('light'); refreshChainData();" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-400/20 text-cyan-300 text-[10px] font-semibold cursor-pointer btn-active">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="tokenomics-live-price">1 PRL ≈ --</span>
+              <svg class="w-3 h-3 text-cyan-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            </div>
           </div>
-          <div class="flex items-center justify-between py-1.5">
-            <span class="text-white/50">初始预挖 / ICO 比例</span>
-            <span class="font-mono text-emerald-400 font-semibold">0% (100% 纯算力公平启动)</span>
+
+          <!-- 四宫格代币关键核心数据大盘 -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <!-- 1. 全网已开采总产出 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">全网总产出 (Circulating)</div>
+              <div id="tokenomics-total-supply" class="text-sm font-bold text-cyan-300 font-mono">-- 亿 PRL</div>
+              <div id="tokenomics-supply-pct" class="text-[10px] text-white/30 mt-0.5">占总硬顶 --%</div>
+            </div>
+
+            <!-- 2. 全网总市值 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">全网总市值 (Market Cap)</div>
+              <div id="tokenomics-market-cap" class="text-sm font-bold text-emerald-400 font-mono">-- USD</div>
+              <div id="tokenomics-market-cap-cny" class="text-[10px] text-white/30 mt-0.5">-- CNY</div>
+            </div>
+
+            <!-- 3. 每日总产出 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">每日总产出 (Daily Emission)</div>
+              <div id="tokenomics-daily-emission" class="text-sm font-bold text-cyan-300 font-mono">-- 万 PRL</div>
+              <div id="tokenomics-daily-fiat" class="text-[10px] text-white/30 mt-0.5">--</div>
+            </div>
+
+            <!-- 4. 单块产出 -->
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+              <div class="text-[11px] text-white/40 mb-1">单块产出 (Block Reward)</div>
+              <div id="tokenomics-block-reward" class="text-sm font-bold text-emerald-400 font-mono">-- PRL</div>
+              <div class="text-[10px] text-white/30 mt-0.5">平滑递减 (无断崖半衰)</div>
+            </div>
+          </div>
+
+          <div class="space-y-2 text-xs text-white/70 pt-1">
+            <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+              <span class="text-white/50">平均出块时间</span>
+              <span class="font-mono text-white/90">~194 秒 (~3.2 分钟 / 块)</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+              <span class="text-white/50">全网每日出块数</span>
+              <span class="font-mono text-white/90">~445 个区块 / 天</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5 border-b border-white/[0.05]">
+              <span class="text-white/50">最大硬顶总供应量</span>
+              <span class="font-mono text-cyan-300 font-semibold">21 亿 PRL (100x BTC)</span>
+            </div>
+            <div class="flex items-center justify-between py-1.5">
+              <span class="text-white/50">初始预挖 / ICO 比例</span>
+              <span class="font-mono text-emerald-400 font-semibold">0% (100% 纯算力公平启动)</span>
+            </div>
           </div>
         </div>
       </div>

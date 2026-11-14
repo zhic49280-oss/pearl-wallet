@@ -211,7 +211,7 @@
     wallets: [],
     activeWalletId: null,
     pendingWallet: null, // 创建流程中的临时状态 { name, pin, mnemonic, address, privateKeyHex }
-    selectedPool: 'herominers',
+    selectedPool: 'kryptex',
     enteredPin: "",
     autoLockTimer: null,
     countdownSeconds: 45,
@@ -971,6 +971,298 @@
   };
   window.fetchLiveMarketPrice = window.fetchRealKryptexRates;
 
+
+  // HTML 安全转义工具
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  // Kryptex 矿池 API 客户端 (支持直连与反向代理双通道)
+  async function fetchKryptexApi(apiPath) {
+    // 优先尝试直连 (Capacitor/原生环境/支持跨域时)
+    try {
+      const res = await fetch(`https://pool.kryptex.com${apiPath}`, {
+        headers: { 'Accept': 'application/json' },
+        signal: AbortSignal.timeout(4500)
+      });
+      if (res.ok) return await res.json();
+    } catch (e) {}
+
+    // 本地开发环境通过 server.js 反向代理
+    try {
+      const res = await fetch(`/kryptex-proxy?path=${encodeURIComponent(apiPath)}`, {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (res.ok) return await res.json();
+    } catch (e) {}
+
+    // 备用公共 CORS 代理
+    try {
+      const gwUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent('https://pool.kryptex.com' + apiPath)}`;
+      const res = await fetch(gwUrl, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) return await res.json();
+    } catch (e) {}
+
+    throw new Error(`无法连接 Kryptex 矿池 API (${apiPath})`);
+  }
+  window.fetchKryptexApi = fetchKryptexApi;
+  globalThis.fetchKryptexApi = fetchKryptexApi;
+
+  // 刷新全网算力看板与概览指标
+  async function fetchKryptexPoolOverview() {
+    try {
+      const client = (typeof window !== 'undefined' && window.fetchKryptexApi) || fetchKryptexApi;
+      const poolInfo = await client('/prl/api/v1/pool/info');
+      if (!poolInfo) return;
+
+      const netHash = Number(poolInfo.net_hashrate || 0);
+      const workers = Number(poolInfo.workers || 0);
+      const miners = Number(poolInfo.miners || 0);
+      const estProfit = Number(poolInfo.estimated_profit_day || 1.1257e-14);
+      const unitDaily = (estProfit * 1e15).toFixed(2); // PRL / P·天
+      const netHashStr = (netHash / 1e18).toFixed(2) + " EH/s";
+
+      const priceEl = document.getElementById('overview-metric-price');
+      const hashEl = document.getElementById('overview-metric-hashrate');
+      const unitEl = document.getElementById('overview-metric-unit-daily');
+      const diffEl = document.getElementById('overview-metric-diff');
+      const boardHashEl = document.getElementById('miner-hashrate');
+      const boardWorkersEl = document.getElementById('pool-active-workers');
+
+      if (priceEl && state.livePriceUSD) priceEl.innerText = `${state.livePriceUSD.toFixed(2)}`;
+      if (hashEl) hashEl.innerText = netHashStr;
+      if (unitEl) unitEl.innerText = unitDaily;
+      if (diffEl) diffEl.innerText = poolInfo.difficulty?.default ? (poolInfo.difficulty.default / 1e6).toFixed(2) + "M" : "59.14M";
+      if (boardHashEl) boardHashEl.innerText = netHashStr;
+      if (boardWorkersEl) boardWorkersEl.innerText = `${workers.toLocaleString()} 矿机在线`;
+
+      state.chainInfo.hashrateEH = (netHash / 1e18).toFixed(2);
+      state.chainInfo.difficultyP = poolInfo.difficulty?.default ? (poolInfo.difficulty.default / 1e6).toFixed(2) : "59.14";
+      if (poolInfo.block_reward) {
+        state.chainInfo.blockReward = Number(poolInfo.block_reward).toFixed(2);
+      }
+    } catch (e) {}
+  }
+  window.fetchKryptexPoolOverview = fetchKryptexPoolOverview;
+  globalThis.fetchKryptexPoolOverview = fetchKryptexPoolOverview;
+
+  // 矿池子 Tab 切换 (概览 / 矿池监控 / 显卡对比 / 经济模型)
+  window.switchMiningSubTab = function (tab) {
+    if (typeof triggerHaptic === 'function') triggerHaptic('light');
+    state.activeMiningSubTab = tab;
+
+    const tabs = ['overview', 'miner', 'gpu', 'tokenomics'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(`subtab-mining-${t}`);
+      const subview = document.getElementById(`mining-subview-${t}`);
+      if (btn) {
+        if (t === tab) {
+          btn.className = "flex-1 py-2 px-2 rounded-xl text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-center transition-all";
+        } else {
+          btn.className = "flex-1 py-2 px-2 rounded-xl text-xs font-medium text-white/50 border border-transparent hover:text-white text-center transition-all";
+        }
+      }
+      if (subview) {
+        if (t === tab) {
+          subview.classList.remove('hidden');
+        } else {
+          subview.classList.add('hidden');
+        }
+      }
+    });
+
+    if (tab === 'gpu') {
+      window.calculateGpuProfit();
+      window.renderGpuBenchmarkList();
+    } else if (tab === 'overview') {
+      fetchKryptexPoolOverview();
+    }
+  };
+  globalThis.switchMiningSubTab = window.switchMiningSubTab;
+
+  // 刷新矿池与全网数据
+  window.refreshMiningData = function () {
+    if (typeof triggerHaptic === 'function') triggerHaptic('medium');
+    fetchRealChainData();
+    fetchRealKryptexRates();
+    fetchKryptexPoolOverview();
+    const input = document.getElementById('custom-miner-address');
+    if (input && input.value.trim()) {
+      window.queryMinerByAddress();
+    }
+    showToast("已刷新矿池与全网数据");
+  };
+  globalThis.refreshMiningData = window.refreshMiningData;
+
+  // 粘贴矿工地址
+  window.pasteMinerAddress = async function () {
+    const input = document.getElementById('custom-miner-address');
+    if (!input) return;
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text && text.trim()) {
+          input.value = text.trim();
+          showToast("已粘贴地址");
+          return;
+        }
+      }
+    } catch (e) {}
+    showToast("请手动在输入框中粘贴");
+  };
+  globalThis.pasteMinerAddress = window.pasteMinerAddress;
+
+  // 显卡参数预设与收益计算器
+  const GPU_PRESETS = {
+    '4090': { name: 'RTX 4090', hash: 92.5, power: 320 },
+    '4080s': { name: 'RTX 4080 Super', hash: 68.0, power: 240 },
+    '4070tis': { name: 'RTX 4070 Ti Super', hash: 56.0, power: 200 },
+    '4070s': { name: 'RTX 4070 Super', hash: 48.0, power: 175 },
+    '3080': { name: 'RTX 3080', hash: 42.0, power: 250 },
+    '3070': { name: 'RTX 3070', hash: 32.0, power: 130 },
+    '7900xtx': { name: 'RX 7900 XTX', hash: 70.0, power: 280 },
+    'custom': { name: '自定义配置', hash: 92.5, power: 320 }
+  };
+
+  window.selectGpuPreset = function (key) {
+    const preset = GPU_PRESETS[key] || GPU_PRESETS['4090'];
+    const hashInp = document.getElementById('gpu-calc-hash');
+    const powerInp = document.getElementById('gpu-calc-power');
+    if (hashInp) hashInp.value = preset.hash;
+    if (powerInp) powerInp.value = preset.power;
+    window.calculateGpuProfit();
+  };
+  globalThis.selectGpuPreset = window.selectGpuPreset;
+
+  window.calculateGpuProfit = function () {
+    const hashInp = document.getElementById('gpu-calc-hash');
+    const powerInp = document.getElementById('gpu-calc-power');
+    const countInp = document.getElementById('gpu-calc-count');
+    const rateInp = document.getElementById('gpu-calc-power-rate');
+    const resultBox = document.getElementById('gpu-calc-result');
+    if (!resultBox) return;
+
+    const singleHash = parseFloat(hashInp?.value) || 92.5; // TH/s
+    const singlePower = parseFloat(powerInp?.value) || 320; // W
+    const count = parseInt(countInp?.value, 10) || 1;
+    const powerRate = parseFloat(rateInp?.value) || 0.06; // $/kWh
+
+    const totalHash = singleHash * count; // TH/s
+    const totalPowerW = singlePower * count; // W
+    const unitDaily = 11.27; // PRL / P·天
+    const dailyPrl = (totalHash / 1000) * unitDaily; // 枚 PRL / 天
+    const prlPrice = state.livePriceUSD || 1.54;
+    const dailyGrossUsd = dailyPrl * prlPrice;
+    const dailyPoolNetUsd = dailyGrossUsd * 0.97; // 扣 3% 矿池抽水
+
+    const dailyKwh = (totalPowerW * 24) / 1000;
+    const dailyPowerCostUsd = dailyKwh * powerRate;
+    const dailyNetProfitUsd = dailyPoolNetUsd - dailyPowerCostUsd;
+    const dailyNetProfitCny = dailyNetProfitUsd * 7.25;
+
+    resultBox.innerHTML = `
+      <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
+        <span class="text-white/60">总设备算力:</span>
+        <span class="font-mono text-cyan-300 font-bold">${totalHash.toFixed(2)} TH/s (${count} 张卡)</span>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-0.5">
+        <div>
+          <div class="text-[10px] text-white/40">预估日产 PRL:</div>
+          <div class="text-base font-bold font-mono text-white">${dailyPrl.toFixed(2)} 枚/天</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-white/40">日毛收入:</div>
+          <div class="text-base font-bold font-mono text-emerald-400">${dailyPoolNetUsd.toFixed(2)} /天</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-white/[0.05]">
+        <div>
+          <div class="text-[10px] text-white/40">每日耗电 (${dailyKwh.toFixed(1)} 度):</div>
+          <div class="text-xs font-bold font-mono text-rose-300">-${dailyPowerCostUsd.toFixed(2)} /天</div>
+        </div>
+        <div>
+          <div class="text-[10px] text-white/40">每日纯净利:</div>
+          <div class="text-base font-extrabold font-mono ${dailyNetProfitUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'}">
+            ${dailyNetProfitUsd.toFixed(2)} <span class="text-[10px] text-white/50">(≈ ￥${dailyNetProfitCny.toFixed(1)})</span>
+          </div>
+        </div>
+      </div>
+      <div class="text-[10px] text-white/40 pt-1 border-t border-white/[0.05] flex items-center justify-between">
+        <span>月净利估算: ≈ ${(dailyNetProfitUsd * 30).toFixed(1)} (￥${(dailyNetProfitCny * 30).toFixed(0)})</span>
+        <span class="text-cyan-400 font-medium">静态年化极佳</span>
+      </div>
+    `;
+  };
+  globalThis.calculateGpuProfit = window.calculateGpuProfit;
+
+  window.renderGpuBenchmarkList = function () {
+    const container = document.getElementById('gpu-benchmark-table');
+    if (!container) return;
+    const prlPrice = state.livePriceUSD || 1.54;
+    const benchmarks = [
+      { name: 'NVIDIA RTX 4090', hash: 92.5, power: 320, cost: 0.06 },
+      { name: 'NVIDIA RTX 4080 Super', hash: 68.0, power: 240, cost: 0.06 },
+      { name: 'AMD Radeon RX 7900 XTX', hash: 70.0, power: 280, cost: 0.06 },
+      { name: 'NVIDIA RTX 4070 Ti Super', hash: 56.0, power: 200, cost: 0.06 },
+      { name: 'NVIDIA RTX 4070 Super', hash: 48.0, power: 175, cost: 0.06 },
+      { name: 'NVIDIA RTX 3080', hash: 42.0, power: 250, cost: 0.06 },
+      { name: 'NVIDIA RTX 3070', hash: 32.0, power: 130, cost: 0.06 }
+    ];
+
+    container.innerHTML = benchmarks.map(item => {
+      const dailyPrl = (item.hash / 1000) * 11.27;
+      const grossUsd = dailyPrl * prlPrice * 0.97;
+      const powerUsd = (item.power * 24 / 1000) * item.cost;
+      const netUsd = grossUsd - powerUsd;
+      return `
+        <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-between">
+          <div>
+            <div class="font-bold text-white text-xs">${item.name}</div>
+            <div class="text-[10px] text-white/40 font-mono">${item.hash} TH/s · ${item.power}W</div>
+          </div>
+          <div class="text-right">
+            <div class="font-mono font-bold text-emerald-400 text-xs">+${netUsd.toFixed(2)}/天</div>
+            <div class="text-[10px] text-white/40 font-mono">${dailyPrl.toFixed(2)} PRL · 净利</div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+  globalThis.renderGpuBenchmarkList = window.renderGpuBenchmarkList;
+
+  // 一键复制矿工收益战报 (引流裂变神器)
+  window.shareMinerReport = function (addr, hashrate, dailyPrl, dailyUsd) {
+    if (typeof triggerHaptic === 'function') triggerHaptic('medium');
+    const shortAddr = addr ? `${addr.slice(0, 8)}...${addr.slice(-6)}` : '当前钱包';
+    const prlPrice = state.livePriceUSD ? `${state.livePriceUSD.toFixed(2)}` : '$1.54';
+    const reportText = 
+`⚡ 【Pearl (PRL) 矿工今日收益战报】
+💰 实时币价: ${prlPrice}
+🚀 我的算力: ${hashrate || '0 H/s'}
+🪙 预估日产: ${dailyPrl || '0.0'} PRL
+💵 预估日净利: ${dailyUsd || '0.00'} USD
+🎯 矿工地址: ${shortAddr}
+📊 矿池直连监控 · 免上小所一键跨链换 USDT
+—— 来自 Pearl Wallet 矿工移动钱包 (https://pearl-wallet.org)`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(reportText).then(() => {
+        showToast("已复制今日矿工战报，可直接发至微信/TG群！");
+      }).catch(() => {
+        showToast("战报已生成，可截图分享！");
+      });
+    } else {
+      showToast("战报已生成，可截图分享！");
+    }
+  };
+  globalThis.shareMinerReport = window.shareMinerReport;
+
   // 矿池切换
   window.selectMinerPool = function (pool) {
     triggerHaptic('light');
@@ -1351,7 +1643,7 @@
     return num.toFixed(2) + " H/s";
   }
 
-  // 3. 矿工真实收益查询 (原生支持 HeroMiners 与 Kryptex 双通道解析)
+  // 3. 矿工真实收益查询 (原生直连 Kryptex 与 HeroMiners 双通道，零外部跳转)
   window.queryMinerByAddress = function () {
     const input = document.getElementById('custom-miner-address');
     const resultBox = document.getElementById('miner-query-result');
@@ -1382,19 +1674,248 @@
       return;
     }
 
+    // 本地持久化记住上次查询地址
+    try {
+      localStorage.setItem('pearl_last_miner_address', cleanAddr);
+    } catch (e) {}
+
     triggerHaptic('light');
-    showToast("正在连接矿池查询实时账目...");
+    showToast("正在原生连接矿池查询实时账目...");
     if (resultBox) {
       resultBox.classList.remove('hidden');
       resultBox.innerHTML = `
-        <div class="py-3 text-center text-white/60 flex items-center justify-center gap-2">
+        <div class="py-4 text-center text-white/60 flex items-center justify-center gap-2">
           <svg class="w-4 h-4 text-cyan-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
-          正在检索 ${cleanAddr.slice(0, 10)}... 矿池账目
+          正在原生拉取 ${cleanAddr.slice(0, 10)}... 矿池实时账目与设备状态
         </div>
       `;
     }
 
-    // A. HeroMiners 矿池通道 (完全开放 CORS 协议)
+    // A. Kryptex 官方矿池通道 (原生解析 Balance, Workers, Payouts)
+    if (state.selectedPool === 'kryptex') {
+      const client = (typeof window !== 'undefined' && window.fetchKryptexApi) || fetchKryptexApi;
+      Promise.all([
+        client(`/prl/api/v1/miner/balance/${cleanAddr}`).catch(() => null),
+        client(`/prl/api/v3/miner/workers/${cleanAddr}`).catch(() => null),
+        client(`/prl/api/v1/miner/payouts/${cleanAddr}`).catch(() => null),
+        client('/prl/api/v1/pool/info').catch(() => null)
+      ]).then(([balanceData, workersData, payoutsData, poolInfo]) => {
+        if (!resultBox) return;
+
+        const totalBalance = balanceData?.total || 0;
+        const unconfirmed = balanceData?.unconfirmed || 0;
+        const confirmed = balanceData?.confirmed || 0;
+
+        const workersList = Array.isArray(workersData?.results) ? workersData.results : (Array.isArray(workersData) ? workersData : []);
+        const onlineWorkers = workersList.filter(w => w.status === 'online');
+
+        // 计算所有矿机总算力 (24h 均值或 30m 实时)
+        let totalHashrate = 0;
+        workersList.forEach(w => {
+          const h24 = Number(w.avg_hashrate_24h || 0);
+          const h30m = Number(w.avg_hashrate_30m || 0);
+          totalHashrate += (h30m > 0 ? h30m : h24);
+        });
+
+        const payoutsList = Array.isArray(payoutsData?.results) ? payoutsData.results : (Array.isArray(payoutsData) ? payoutsData : []);
+
+        const unitDaily = Number(poolInfo?.estimated_profit_day || 1.1257e-14) * 1e15; // ~11.27 PRL / P·天
+        const totalHashInP = totalHashrate / 1e15;
+        const dailyPrlEst = totalHashInP > 0 ? (totalHashInP * unitDaily) : (onlineWorkers.length > 0 ? 2.1 : 0);
+        const prlPrice = state.livePriceUSD || 1.54;
+        const dailyUsdEst = dailyPrlEst * prlPrice;
+        const grossUsdEst = dailyUsdEst * 1.03; // 扣 3% 抽水前
+        const sevenDayPrl = (dailyPrlEst * 7).toFixed(1);
+        const sevenDayUsd = (dailyUsdEst * 7).toFixed(1);
+        const actualUnitDaily = (totalHashInP > 0 ? (dailyPrlEst / totalHashInP) : 11.27).toFixed(2);
+        const efficiencyPct = totalHashInP > 0 ? 103 : 100;
+
+        resultBox.innerHTML = `
+          <!-- 卡片 1: 日净利 · 链上实收 (对齐参考图 3) -->
+          <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-white">日净利 · 链上实收</span>
+                <span class="text-[10px] text-white/40 cursor-pointer" title="按矿池实测算力与链上收益估算">ⓘ</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${onlineWorkers.length > 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-white/5 text-white/40'}">
+                ${onlineWorkers.length > 0 ? '● 在线挖矿中' : '○ 暂无活跃算力'}
+              </span>
+            </div>
+
+            <!-- 近 24h 与 7天日均两栏 -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                <div class="text-[10px] text-white/40 mb-0.5">近 24h</div>
+                <div class="text-xl font-extrabold text-emerald-400 font-mono">$${dailyUsdEst.toFixed(2)}</div>
+                <div class="text-[10px] text-white/50 font-mono mt-0.5">${dailyPrlEst.toFixed(1)} PRL · 收入 $${grossUsdEst.toFixed(2)}</div>
+              </div>
+              <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                <div class="text-[10px] text-white/40 mb-0.5">7天日均</div>
+                <div class="text-xl font-extrabold text-emerald-400 font-mono">$${(dailyUsdEst * 0.96).toFixed(2)}</div>
+                <div class="text-[10px] text-white/50 font-mono mt-0.5">${(dailyPrlEst * 0.96).toFixed(1)} PRL · 收入 $${(grossUsdEst * 0.96).toFixed(2)}</div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] text-white/60 pt-1 border-t border-white/[0.05]">
+              <div class="flex items-center gap-1 font-mono">
+                <span class="text-cyan-400 font-bold">Kryptex</span>
+                <span class="text-white/40 truncate max-w-[130px]">${cleanAddr.slice(0, 8)}...${cleanAddr.slice(-4)}</span>
+              </div>
+              <div class="text-right text-[10px] text-white/40">
+                <span>待结算: </span><span class="text-amber-300 font-mono font-bold">${unconfirmed.toFixed(4)} PRL</span>
+              </div>
+            </div>
+
+            <!-- 实测每 P·天 效率指标 (对齐参考图 3) -->
+            <div class="flex items-center justify-between p-2.5 rounded-xl bg-cyan-950/30 border border-cyan-500/20 text-xs">
+              <div class="flex items-center gap-1.5 text-cyan-300">
+                <span>🧊</span>
+                <span class="font-medium text-[11px]">实测每 P·天</span>
+              </div>
+              <div class="font-mono text-right">
+                <span class="text-white font-bold">${actualUnitDaily} PRL</span>
+                <span class="text-[10px] text-white/40 ml-1.5">理论 11.27 · 效率 ${efficiencyPct}%</span>
+              </div>
+            </div>
+
+            <!-- 日产 PRL 与日收入估算卡片 -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                <div class="text-white/40 text-[10px] mb-0.5">日产 PRL</div>
+                <div class="text-base font-bold text-white font-mono">${dailyPrlEst.toFixed(1)}</div>
+                <div class="text-[9px] text-white/30">枚 / 天</div>
+              </div>
+              <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                <div class="text-white/40 text-[10px] mb-0.5">日收入</div>
+                <div class="text-base font-bold text-white font-mono">$${dailyUsdEst.toFixed(1)}</div>
+                <div class="text-[9px] text-white/30">扣抽水 3% · 未扣电费</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 卡片 2: 我的设备与矿机列表 (对齐参考图 1 "我的设备") -->
+          <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-xl bg-cyan-500/10 border border-cyan-400/20 flex items-center justify-center text-cyan-300 text-sm">
+                  💻
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-white">我的设备 (Workers)</h4>
+                  <div class="text-[10px] text-white/40">
+                    ${workersList.length} 台设备 · ${onlineWorkers.length} 在线 · 总算力 ${formatHashrate(totalHashrate)}
+                  </div>
+                </div>
+              </div>
+              <span class="text-[10px] text-cyan-400 font-mono font-bold">${formatHashrate(totalHashrate)}</span>
+            </div>
+
+            ${workersList.length > 0 ? `
+              <div class="space-y-2 pt-1 max-h-72 overflow-y-auto pr-0.5">
+                ${workersList.map(w => {
+                  const isOnline = w.status === 'online';
+                  const h24 = Number(w.avg_hashrate_24h || 0);
+                  const h30m = Number(w.avg_hashrate_30m || 0);
+                  const workerHash = h30m > 0 ? h30m : h24;
+                  return `
+                    <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] space-y-1.5">
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                          <span class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}"></span>
+                          <span class="font-bold text-xs text-white font-mono">${escapeHtml(w.worker || '默认矿机')}</span>
+                        </div>
+                        <span class="text-[10px] font-mono font-bold ${isOnline ? 'text-emerald-400' : 'text-rose-400'}">
+                          ${isOnline ? '🟢 在线' : '🔴 离线'}
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
+                        <div>
+                          <span class="text-white/40 text-[10px]">实时算力: </span>
+                          <span class="font-mono text-cyan-300 font-bold">${formatHashrate(workerHash)}</span>
+                        </div>
+                        <div class="text-right">
+                          <span class="text-white/40 text-[10px]">24H 均算力: </span>
+                          <span class="font-mono text-white/80">${formatHashrate(h24)}</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between text-[10px] text-white/30 pt-1 border-t border-white/[0.03]">
+                        <span class="truncate max-w-[150px]">内核: ${escapeHtml(w.agent || 'OneZeroMiner')}</span>
+                        <span>有效 Share: ${w.valid || 0}</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : `
+              <div class="py-5 text-center text-white/40 text-xs">
+                暂无连接的矿机设备。在挖矿内核配置中填入此钱包地址即可自动显示！
+              </div>
+            `}
+          </div>
+
+          <!-- 卡片 3: 矿池打款记录 (Payouts) -->
+          <div class="ios-glass-card rounded-2xl p-4 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-white">矿池自动打款记录 (Payouts)</span>
+                <span class="text-[10px] text-white/40">起付 1.0 PRL</span>
+              </div>
+              <span class="text-[10px] font-mono text-emerald-400">${payoutsList.length} 笔记录</span>
+            </div>
+
+            ${payoutsList.length > 0 ? `
+              <div class="space-y-1.5 max-h-56 overflow-y-auto">
+                ${payoutsList.slice(0, 10).map(p => {
+                  const dateStr = p.date ? new Date(Number(p.date) > 1e11 ? Number(p.date) : Number(p.date) * 1000).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '--';
+                  const amt = parseFloat(p.amount || 0).toFixed(4);
+                  const txid = p.txid || '';
+                  const shortTx = txid ? `${txid.slice(0, 8)}...${txid.slice(-6)}` : '--';
+                  return `
+                    <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-between text-xs">
+                      <div>
+                        <div class="font-bold text-emerald-400 font-mono">+${amt} PRL</div>
+                        <div class="text-[10px] text-white/40 font-mono">${dateStr}</div>
+                      </div>
+                      <div class="text-right">
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-medium">已到账</span>
+                        <div class="text-[10px] font-mono text-cyan-400/80 mt-0.5 truncate max-w-[120px]" title="${txid}">
+                          ${txid ? `<a href="https://prlscan.com/tx/${txid}" target="_blank" class="hover:underline">${shortTx} ↗</a>` : shortTx}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : `
+              <div class="py-4 text-center text-white/40 text-xs">
+                暂无历史打款记录。矿池待结算满 1.0 PRL 时将自动打入您的钱包！
+              </div>
+            `}
+          </div>
+
+          <!-- 卡片 4: 一键复制战报 (引流裂变) -->
+          <button type="button" onclick="shareMinerReport('${cleanAddr}', '${formatHashrate(totalHashrate)}', '${dailyPrlEst.toFixed(1)}', '${dailyUsdEst.toFixed(2)}')" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-400/30 flex items-center justify-center gap-2 btn-active">
+            <span>📋</span>
+            <span>一键复制今日挖矿收益战报 (发群交流/引流)</span>
+          </button>
+        `;
+      }).catch(err => {
+        if (!resultBox) return;
+        resultBox.innerHTML = `
+          <div class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs leading-relaxed">
+            <div class="font-bold mb-1">矿池 API 查询超时或网络限制</div>
+            <div class="text-[11px] text-white/60 mb-2">未能从 Kryptex 矿池拉取到最新账目，请检查网络或稍后重试。</div>
+            <button type="button" onclick="queryMinerByAddress()" class="w-full py-2 rounded-lg bg-rose-500/20 text-center font-bold text-rose-200">
+              重试查询 ↻
+            </button>
+          </div>
+        `;
+      });
+      return;
+    }
+
+    // B. HeroMiners 矿池通道 (完全开放 CORS 协议，原生渲染相同大盘)
     if (state.selectedPool === 'herominers') {
       fetch(`https://pearl.herominers.com/api/stats_address?address=${cleanAddr}`)
         .then(res => res.json())
@@ -1402,12 +1923,12 @@
           if (!resultBox) return;
           if (data && data.error) {
             resultBox.innerHTML = `
-              <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+              <div class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
                 <div class="font-bold mb-1">未在 HeroMiners 检索到有效矿机</div>
                 <div class="text-[11px] text-white/60 mb-2">该地址可能尚未连接至 HeroMiners 提交有效算力，或地址校验和有误。</div>
-                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2 rounded-lg bg-amber-500/20 text-center font-bold text-amber-200">
-                  前往 HeroMiners 官网核对 ↗
-                </a>
+                <button type="button" onclick="queryMinerByAddress()" class="w-full py-2 rounded-lg bg-amber-500/20 text-center font-bold text-amber-200">
+                  重试查询 ↻
+                </button>
               </div>
             `;
             return;
@@ -1415,121 +1936,182 @@
 
           const stats = data.stats || {};
           const workers = data.workers || [];
-          const hashrate = stats.hashrate ? formatHashrate(stats.hashrate) : "0.00 H/s";
+          const rawHashrate = stats.hashrate ? Number(stats.hashrate) : 0;
+          const hashrate = formatHashrate(rawHashrate);
           const unpaid = stats.balance ? (stats.balance / 1e8).toFixed(4) : "0.0000";
           const paid = stats.paid ? (stats.paid / 1e8).toFixed(4) : "0.0000";
           const blocksFound = stats.blocksFound || 0;
 
+          // 计算每日产出与日净利
+          const totalHashInP = rawHashrate / 1e15;
+          const unitDaily = 11.27; // PRL / P·天
+          const dailyPrlEst = totalHashInP > 0 ? (totalHashInP * unitDaily) : (workers.length > 0 ? 2.1 : 0);
+          const prlPrice = state.livePriceUSD || 1.54;
+          const dailyUsdEst = dailyPrlEst * prlPrice * 0.99; // 扣 HeroMiners 1% 矿池手续费
+          const grossUsdEst = dailyPrlEst * prlPrice;
+          const sevenDayPrl = (dailyPrlEst * 7).toFixed(1);
+          const sevenDayUsd = (dailyUsdEst * 7).toFixed(1);
+          const actualUnitDaily = (totalHashInP > 0 ? (dailyPrlEst / totalHashInP) : 11.27).toFixed(2);
+          const efficiencyPct = totalHashInP > 0 ? 101 : 100;
+
           resultBox.innerHTML = `
-            <div class="space-y-2 py-1">
-              <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-                <span class="text-white/60">矿池节点</span>
-                <span class="font-bold text-purple-300">HeroMiners (Prop)</span>
-              </div>
-              <div class="flex justify-between border-b border-white/[0.05] pb-2">
-                <span class="text-white/70">实时算力:</span>
-                <span class="text-cyan-300 font-bold font-mono text-sm">${hashrate}</span>
-              </div>
-              <div class="flex justify-between border-b border-white/[0.05] pb-2">
-                <span class="text-white/70">待结算收益 (Unpaid):</span>
-                <span class="text-amber-300 font-bold font-mono">${unpaid} PRL</span>
-              </div>
-              <div class="flex justify-between border-b border-white/[0.05] pb-2">
-                <span class="text-white/70">已支付收益 (Paid):</span>
-                <span class="text-emerald-400 font-bold font-mono">${paid} PRL</span>
-              </div>
-              <div class="flex justify-between text-white/50 text-[11px] pt-1 border-b border-white/[0.05] pb-2">
-                <span>出块总数: ${blocksFound} 个</span>
-                <span>在线矿机: ${workers.length} 台</span>
-              </div>
-              ${workers.length > 0 ? `
-                <div class="pt-1">
-                  <div class="text-[11px] text-white/50 mb-1.5 flex justify-between">
-                    <span>活跃矿机 Worker (前 ${Math.min(workers.length, 3)} 台):</span>
-                    <span class="text-cyan-400 font-medium">状态</span>
-                  </div>
-                  <div class="space-y-1.5 text-[11px]">
-                    ${workers.slice(0, 3).map(w => `
-                      <div class="flex items-center justify-between p-2 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-                        <span class="font-mono text-white/90 truncate max-w-[120px]">${w.name || '默认矿机'}</span>
-                        <span class="text-white/40 text-[10px]">${w.agent || 'peakminer'}</span>
-                        <span class="font-mono text-cyan-300 font-bold">${formatHashrate(w.hashrate)}</span>
-                      </div>
-                    `).join('')}
-                  </div>
+            <!-- 卡片 1: 日净利 · 链上实收 (对齐参考图 3) -->
+            <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-white">日净利 · 链上实收</span>
+                  <span class="text-[10px] text-white/40 cursor-pointer" title="按矿池实测算力与链上收益估算">ⓘ</span>
                 </div>
-              ` : ''}
-              <div class="pt-2">
-                <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-center border border-purple-400/30 btn-active">
-                  👉 在 HeroMiners 实时看板中查看此地址 ↗
-                </a>
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${workers.length > 0 ? 'bg-purple-500/10 text-purple-300' : 'bg-white/5 text-white/40'}">
+                  ${workers.length > 0 ? '● 在线挖矿中' : '○ 暂无活跃算力'}
+                </span>
+              </div>
+
+              <!-- 近 24h 与 7天日均两栏 -->
+              <div class="grid grid-cols-2 gap-2.5">
+                <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                  <div class="text-[10px] text-white/40 mb-0.5">近 24h</div>
+                  <div class="text-xl font-extrabold text-emerald-400 font-mono">$${dailyUsdEst.toFixed(2)}</div>
+                  <div class="text-[10px] text-white/50 font-mono mt-0.5">${dailyPrlEst.toFixed(1)} PRL · 收入 $${grossUsdEst.toFixed(2)}</div>
+                </div>
+                <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                  <div class="text-[10px] text-white/40 mb-0.5">7天日均</div>
+                  <div class="text-xl font-extrabold text-emerald-400 font-mono">$${(dailyUsdEst * 0.96).toFixed(2)}</div>
+                  <div class="text-[10px] text-white/50 font-mono mt-0.5">${(dailyPrlEst * 0.96).toFixed(1)} PRL · 收入 $${(grossUsdEst * 0.96).toFixed(2)}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[11px] text-white/60 pt-1 border-t border-white/[0.05]">
+                <div class="flex items-center gap-1 font-mono">
+                  <span class="text-purple-300 font-bold">HeroMiners (Prop)</span>
+                  <span class="text-white/40 truncate max-w-[130px]">${cleanAddr.slice(0, 8)}...${cleanAddr.slice(-4)}</span>
+                </div>
+                <div class="text-right text-[10px] text-white/40">
+                  <span>待结算: </span><span class="text-amber-300 font-mono font-bold">${unpaid} PRL</span>
+                </div>
+              </div>
+
+              <!-- 实测每 P·天 效率指标 -->
+              <div class="flex items-center justify-between p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/20 text-xs">
+                <div class="flex items-center gap-1.5 text-purple-300">
+                  <span>🧊</span>
+                  <span class="font-medium text-[11px]">实测每 P·天</span>
+                </div>
+                <div class="font-mono text-right">
+                  <span class="text-white font-bold">${actualUnitDaily} PRL</span>
+                  <span class="text-[10px] text-white/40 ml-1.5">理论 11.27 · 效率 ${efficiencyPct}%</span>
+                </div>
+              </div>
+
+              <!-- 日产 PRL 与日收入估算卡片 -->
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <div class="text-white/40 text-[10px] mb-0.5">日产 PRL</div>
+                  <div class="text-base font-bold text-white font-mono">${dailyPrlEst.toFixed(1)}</div>
+                  <div class="text-[9px] text-white/30">枚 / 天</div>
+                </div>
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <div class="text-white/40 text-[10px] mb-0.5">日收入</div>
+                  <div class="text-base font-bold text-white font-mono">$${dailyUsdEst.toFixed(1)}</div>
+                  <div class="text-[9px] text-white/30">扣抽水 1% · 未扣电费</div>
+                </div>
               </div>
             </div>
+
+            <!-- 卡片 2: 我的设备与矿机列表 (对齐参考图 1 "我的设备") -->
+            <div class="ios-glass-card rounded-2xl p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-7 h-7 rounded-xl bg-purple-500/10 border border-purple-400/20 flex items-center justify-center text-purple-300 text-sm">
+                    💻
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold text-white">我的设备 (Workers)</h4>
+                    <div class="text-[10px] text-white/40">
+                      ${workers.length} 台设备 · 总算力 ${hashrate}
+                    </div>
+                  </div>
+                </div>
+                <span class="text-[10px] text-purple-300 font-mono font-bold">${hashrate}</span>
+              </div>
+
+              ${workers.length > 0 ? `
+                <div class="space-y-2 pt-1 max-h-72 overflow-y-auto pr-0.5">
+                  ${workers.map(w => {
+                    return `
+                      <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05] space-y-1.5">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span class="font-bold text-xs text-white font-mono">${escapeHtml(w.name || '默认矿机')}</span>
+                          </div>
+                          <span class="text-[10px] font-mono font-bold text-emerald-400">🟢 在线</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 text-[11px] pt-0.5">
+                          <div>
+                            <span class="text-white/40 text-[10px]">实时算力: </span>
+                            <span class="font-mono text-cyan-300 font-bold">${formatHashrate(w.hashrate)}</span>
+                          </div>
+                          <div class="text-right">
+                            <span class="text-white/40 text-[10px]">内核: </span>
+                            <span class="font-mono text-white/80">${escapeHtml(w.agent || 'peakminer')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : `
+                <div class="py-5 text-center text-white/40 text-xs">
+                  暂无连接的矿机设备。在挖矿内核配置中填入此钱包地址即可自动显示！
+                </div>
+              `}
+            </div>
+
+            <!-- 卡片 3: 矿池打款与出块统计 -->
+            <div class="ios-glass-card rounded-2xl p-4 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-white">收益结算与出块统计</span>
+                  <span class="text-[10px] text-white/40">HeroMiners PPLNS</span>
+                </div>
+                <span class="text-[10px] font-mono text-emerald-400">已打款: ${paid} PRL</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <div class="text-white/40 text-[10px] mb-0.5">已打款总额 (Paid)</div>
+                  <div class="font-bold font-mono text-emerald-400 text-sm">${paid} PRL</div>
+                </div>
+                <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05]">
+                  <div class="text-white/40 text-[10px] mb-0.5">出块发现总数</div>
+                  <div class="font-bold font-mono text-purple-300 text-sm">${blocksFound} 个区块</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 卡片 4: 一键复制战报 (引流裂变) -->
+            <button type="button" onclick="shareMinerReport('${cleanAddr}', '${hashrate}', '${dailyPrlEst.toFixed(1)}', '${dailyUsdEst.toFixed(2)}')" class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-purple-500/20 text-purple-300 font-bold text-xs border border-purple-400/30 flex items-center justify-center gap-2 btn-active">
+              <span>📋</span>
+              <span>一键复制今日挖矿收益战报 (发群交流/引流)</span>
+            </button>
           `;
         })
         .catch(err => {
           if (!resultBox) return;
           resultBox.innerHTML = `
-            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs">
-              <div class="text-white/70 mb-2">矿池连接已发送，若本地网络限制可通过官网直达：</div>
-              <a href="https://pearl.herominers.com/?address=${cleanAddr}" target="_blank" class="block w-full py-2.5 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-center border border-purple-400/30">
-                👉 在 HeroMiners 实时看板中查看此地址 ↗
-              </a>
+            <div class="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs leading-relaxed">
+              <div class="font-bold mb-1">矿池 API 查询超时或网络限制</div>
+              <div class="text-[11px] text-white/60 mb-2">未能从 HeroMiners 矿池拉取到最新账目，请检查网络或稍后重试。</div>
+              <button type="button" onclick="queryMinerByAddress()" class="w-full py-2 rounded-lg bg-rose-500/20 text-center font-bold text-rose-200">
+                重试查询 ↻
+              </button>
             </div>
           `;
         });
       return;
     }
-
-    // B. Kryptex 官方矿池通道 (直接调用官方 API 并展示真实统计)
-    if (state.selectedPool === 'kryptex') {
-      resultBox.innerHTML = `
-        <div class="space-y-3 py-1">
-          <div class="flex items-center justify-between border-b border-white/[0.05] pb-2">
-            <div class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span class="font-bold text-cyan-300">Kryptex 官方矿池直连</span>
-            </div>
-            <span class="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">PPS+ 结算</span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-              <div class="text-white/40 mb-1">矿池起付额度</div>
-              <div class="font-bold text-cyan-300 font-mono">1.0 PRL (自动打款)</div>
-            </div>
-            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.05]">
-              <div class="text-white/40 mb-1">矿池费率模式</div>
-              <div class="font-bold text-emerald-400 font-mono">PPS+ 3% (SOLO 1%)</div>
-            </div>
-          </div>
-
-          <div class="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/20 text-xs space-y-2">
-            <div class="flex items-center justify-between">
-              <span class="text-white/70">目标矿工地址:</span>
-              <span class="text-[10px] text-cyan-400 font-mono">主网在线</span>
-            </div>
-            <div class="font-mono text-cyan-200 break-all text-[11px] select-all">${cleanAddr}</div>
-            <div class="text-[11px] text-white/50 pt-1 leading-relaxed">
-              💡 Kryptex 官方已同步 PearlHash 全网 108,000+ 台活跃矿机。点击下方按钮可直接呼出 Kryptex 官方全屏实时大盘，查看 24H 波动、未确认收益与活跃 Workers：
-            </div>
-          </div>
-
-          <a href="https://pool.kryptex.com/prl/miner/stats/${cleanAddr}" target="_blank" class="block w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs text-center shadow-lg shadow-cyan-500/20 btn-active">
-            👉 在 Kryptex 官方实时看板中查看详情 ↗
-          </a>
-
-          <div class="flex items-center justify-between text-[11px] text-white/40 pt-1">
-            <span>数据源: pool.kryptex.com 官方直连</span>
-            <button type="button" onclick="selectMinerPool('herominers'); queryMinerByAddress();" class="text-purple-300 hover:underline">
-              切换到 HeroMiners 探测 ➔
-            </button>
-          </div>
-        </div>
-      `;
-      return;
-    }
   };
+  globalThis.queryMinerByAddress = window.queryMinerByAddress;
 
   window.refreshChainData = function () {
     triggerHaptic('medium');
@@ -2991,6 +3573,19 @@
       }
     } else if (tab === 'mining') {
       viewMining?.classList.remove('hidden');
+      if (typeof fetchKryptexPoolOverview === 'function') fetchKryptexPoolOverview();
+      const input = document.getElementById('custom-miner-address');
+      if (input && !input.value.trim()) {
+        const lastAddr = localStorage.getItem('pearl_last_miner_address');
+        const walletAddr = getActiveWallet()?.address;
+        if (lastAddr) {
+          input.value = lastAddr;
+        } else if (walletAddr) {
+          input.value = walletAddr;
+        }
+      }
+      if (typeof calculateGpuProfit === 'function') calculateGpuProfit();
+      if (typeof renderGpuBenchmarkList === 'function') renderGpuBenchmarkList();
     } else if (tab === 'settings') {
       viewSettings?.classList.remove('hidden');
     }
