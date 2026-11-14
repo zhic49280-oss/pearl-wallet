@@ -591,6 +591,7 @@
   }
 
   function secpModInverse(a, m = SECP256K1_P) {
+    a = secpMod(a, m);
     let [old_r, r] = [a, m];
     let [old_s, s] = [1n, 0n];
     while (r !== 0n) {
@@ -840,10 +841,99 @@
     return curr;
   }
 
-  function privateKeyToTaprootAddress(privBytes) {
+  // 纯 JS 标准 SHA-256 与 BIP-341 TapTweak 引擎 (浏览器与 Node 全兼容)
+  function sha256Bytes(data) {
+    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+    const K = [
+      0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+      0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+      0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+      0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+      0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+      0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+      0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+      0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+    ];
+    const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+    const bitLen = bytes.length * 8;
+    const totalLen = Math.ceil((bytes.length + 9) / 64) * 64;
+    const padded = new Uint8Array(totalLen);
+    padded.set(bytes);
+    padded[bytes.length] = 0x80;
+    const view = new DataView(padded.buffer);
+    view.setUint32(totalLen - 4, bitLen >>> 0, false);
+    view.setUint32(totalLen - 8, Math.floor(bitLen / 0x100000000), false);
+
+    let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+    const W = new Uint32Array(64);
+    for (let i = 0; i < totalLen; i += 64) {
+      for (let t = 0; t < 16; t++) W[t] = view.getUint32(i + t * 4, false);
+      for (let t = 16; t < 64; t++) {
+        const s0 = rotr(W[t-15], 7) ^ rotr(W[t-15], 18) ^ (W[t-15] >>> 3);
+        const s1 = rotr(W[t-2], 17) ^ rotr(W[t-2], 19) ^ (W[t-2] >>> 10);
+        W[t] = (W[t-16] + s0 + W[t-7] + s1) >>> 0;
+      }
+      let [a,b,c,d,e,f,g,h] = H;
+      for (let t = 0; t < 64; t++) {
+        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = (e & f) ^ (~e & g);
+        const t1 = (h + S1 + ch + K[t] + W[t]) >>> 0;
+        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = (a & b) ^ (a & c) ^ (b & c);
+        const t2 = (S0 + maj) >>> 0;
+        h = g; g = f; f = e; e = (d + t1) >>> 0;
+        d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+      }
+      H = [(H[0]+a)>>>0,(H[1]+b)>>>0,(H[2]+c)>>>0,(H[3]+d)>>>0,(H[4]+e)>>>0,(H[5]+f)>>>0,(H[6]+g)>>>0,(H[7]+h)>>>0];
+    }
+    const out = new Uint8Array(32);
+    const ov = new DataView(out.buffer);
+    for (let i = 0; i < 8; i++) ov.setUint32(i * 4, H[i], false);
+    return out;
+  }
+
+  function tapTweakHash(pubKeyXBytes) {
+    const tagHash = sha256Bytes('TapTweak');
+    const combined = new Uint8Array(64 + pubKeyXBytes.length);
+    combined.set(tagHash, 0);
+    combined.set(tagHash, 32);
+    combined.set(pubKeyXBytes, 64);
+    return sha256Bytes(combined);
+  }
+
+  function privateKeyToTaprootAddress(privBytes, useTapTweak = true) {
     const privHex = Array.from(privBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const privBig = BigInt('0x' + privHex);
-    const pt = secpPointMultiply(privBig);
+    let priv = BigInt('0x' + privHex);
+    let pt = secpPointMultiply(priv);
+
+    if (useTapTweak) {
+      // BIP-340 偶数 Y 校验与 TapTweak 密钥微调 (标准 BIP-86 P2TR)
+      if (pt.y % 2n !== 0n) {
+        priv = secpMod(SECP256K1_N - priv, SECP256K1_N);
+        pt = { x: pt.x, y: secpMod(SECP256K1_P - pt.y, SECP256K1_P) };
+      }
+      const pxHex = pt.x.toString(16).padStart(64, '0');
+      const pxBytes = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) pxBytes[i] = parseInt(pxHex.substr(i * 2, 2), 16);
+
+      const tBytes = tapTweakHash(pxBytes);
+      const tHex = Array.from(tBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const tBig = BigInt('0x' + tHex) % SECP256K1_N;
+      const tPt = secpPointMultiply(tBig);
+      const Q = secpPointAdd(pt, tPt);
+      const qxHex = Q.x.toString(16).padStart(64, '0');
+      const qxBytes = [];
+      for (let i = 0; i < 32; i++) qxBytes.push(parseInt(qxHex.substr(i * 2, 2), 16));
+      const address = encodeBech32m('prl', 1, qxBytes);
+      const tweakedPriv = secpMod(priv + tBig, SECP256K1_N);
+      return {
+        address,
+        privateKeyHex: `0x${privHex}`,
+        tweakedPrivateKeyHex: `0x${tweakedPriv.toString(16).padStart(64, '0')}`,
+        pubkeyHex: qxHex
+      };
+    }
+
     const xHex = pt.x.toString(16).padStart(64, '0');
     const xBytes = [];
     for (let i = 0; i < 32; i++) {
@@ -856,6 +946,104 @@
       pubkeyHex: xHex
     };
   }
+
+  // ======================== Ed25519 与 SLIP-0010 NEAR 双链派生引擎 ========================
+  const ED_P = (1n << 255n) - 19n;
+  const ED_D = 37095705934669439343138083508754565189542113879843219016388785533085940283555n;
+  const ED_BX = 15112221349535400772501151409588531511454012693041857206046113283949847762202n;
+  const ED_BY = 46316835694926478169428394003475163141307993866256225615783033603165251855960n;
+
+  function edMod(a, m = ED_P) { const r = a % m; return r >= 0n ? r : r + m; }
+  function edPow(base, exp, mod = ED_P) {
+    let res = 1n; base = edMod(base, mod);
+    while (exp > 0n) { if (exp & 1n) res = edMod(res * base, mod); base = edMod(base * base, mod); exp >>= 1n; }
+    return res;
+  }
+  function edInv(a) { return edPow(a, ED_P - 2n, ED_P); }
+  function edAdd(P, Q) {
+    const [X1, Y1, Z1, T1] = P;
+    const [X2, Y2, Z2, T2] = Q;
+    const A = edMod((Y1 - X1) * (Y2 - X2));
+    const B = edMod((Y1 + X1) * (Y2 + X2));
+    const C = edMod(T1 * 2n * ED_D * T2);
+    const D = edMod(Z1 * 2n * Z2);
+    const E = edMod(B - A);
+    const F = edMod(D - C);
+    const G = edMod(D + C);
+    const H = edMod(B + A);
+    return [edMod(E * F), edMod(G * H), edMod(F * G), edMod(E * H)];
+  }
+  function edScalarMult(k) {
+    let P = [ED_BX, ED_BY, 1n, edMod(ED_BX * ED_BY)];
+    let Q = [0n, 1n, 1n, 0n];
+    while (k > 0n) {
+      if (k & 1n) Q = edAdd(Q, P);
+      P = edAdd(P, P);
+      k >>= 1n;
+    }
+    const zInv = edInv(Q[2]);
+    const x = edMod(Q[0] * zInv);
+    const y = edMod(Q[1] * zInv);
+    const bytes = new Uint8Array(32);
+    let yCopy = y;
+    for (let i = 0; i < 32; i++) { bytes[i] = Number(yCopy & 0xffn); yCopy >>= 8n; }
+    if (x & 1n) bytes[31] |= 0x80;
+    return bytes;
+  }
+
+  async function sha512BytesAsync(data) {
+    const buf = data instanceof Uint8Array ? data : new Uint8Array(data);
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
+      const hash = await globalThis.crypto.subtle.digest('SHA-512', buf);
+      return new Uint8Array(hash);
+    }
+    if (nodeCryptoInstance && nodeCryptoInstance.createHash) {
+      return new Uint8Array(nodeCryptoInstance.createHash('sha512').update(buf).digest());
+    }
+    throw new Error('SHA-512 unavailable');
+  }
+
+  // 同源助记词派生 NEAR 隐式地址 (SLIP-0010 Ed25519 路径 m/44'/397'/0')
+  async function deriveNearFromSeedAsync(words, accountIndex = 0) {
+    try {
+      const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
+      const seedBytes = await cryptoPbkdf2Async(mnemonicStr);
+      const enc = new TextEncoder();
+      let I = await cryptoHmacSha512Async(enc.encode('ed25519 seed'), seedBytes);
+      let key = I.slice(0, 32);
+      let chain = I.slice(32);
+
+      const pathIndices = [44, 397, accountIndex];
+      for (const idx of pathIndices) {
+        const actualIdx = (idx + 0x80000000) >>> 0;
+        const data = new Uint8Array(1 + 32 + 4);
+        data[0] = 0;
+        data.set(key, 1);
+        new DataView(data.buffer).setUint32(33, actualIdx, false);
+        I = await cryptoHmacSha512Async(chain, data);
+        key = I.slice(0, 32);
+        chain = I.slice(32);
+      }
+
+      const h = await sha512BytesAsync(key);
+      h[0] &= 248;
+      h[31] &= 127;
+      h[31] |= 64;
+      let kBig = 0n;
+      for (let i = 31; i >= 0; i--) kBig = (kBig << 8n) | BigInt(h[i]);
+      const pubBytes = edScalarMult(kBig);
+      const nearImplicitAddress = Array.from(pubBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      return {
+        nearAddress: nearImplicitAddress,
+        nearPrivateSeedHex: Array.from(key).map(b => b.toString(16).padStart(2, '0')).join('')
+      };
+    } catch (e) {
+      console.warn('NEAR derivation fallback:', e);
+      return { nearAddress: '', nearPrivateSeedHex: '' };
+    }
+  }
+  window.deriveNearFromSeedAsync = deriveNearFromSeedAsync;
+  globalThis.deriveNearFromSeedAsync = deriveNearFromSeedAsync;
 
   // BIP-350 Taproot 地址与私钥生成 (标准 BIP-86 官方 Pearl 路径 m/86'/808276'/0'/0/0)
   function deriveFromSeed(words, path = "m/86'/808276'/0'/0/0") {
@@ -880,13 +1068,13 @@
   }
 
   // 现代 WebCrypto 硬件加速派生 (支持 iOS Safari、Chrome、移动 Web 无损 BIP-39 PBKDF2 与 BIP-86)
-  async function deriveFromSeedAsync(words, path = "m/86'/808276'/0'/0/0") {
+  async function deriveFromSeedAsync(words, path = "m/86'/808276'/0'/0/0", useTapTweak = true) {
     try {
       const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
       const seedBytes = await cryptoPbkdf2Async(mnemonicStr);
       const master = await bip32DeriveMasterKeyAsync(seedBytes);
       const child = await bip32DerivePathAsync(master, path);
-      return privateKeyToTaprootAddress(child.privateKey);
+      return privateKeyToTaprootAddress(child.privateKey, useTapTweak);
     } catch (e) {
       return deriveFromSeed(words, path);
     }
@@ -930,8 +1118,15 @@
     const results = [];
     for (const p of candidatePaths) {
       try {
-        const derived = await deriveFromSeedAsync(words, p);
+        const derived = await deriveFromSeedAsync(words, p, true);
         results.push({ path: p, ...derived });
+      } catch (e) {}
+    }
+    // 兼容未做 TapTweak 的旧版 Taproot 派生探测
+    for (const p of ["m/86'/808276'/0'/0/0", "m/86'/0'/0'/0/0"]) {
+      try {
+        const derived = await deriveFromSeedAsync(words, p, false);
+        results.push({ path: `${p} (untweaked)`, ...derived });
       } catch (e) {}
     }
     return results;
@@ -1070,11 +1265,71 @@
   window.fetchAddressBalance = fetchAddressBalance;
 
   /**
+   * 刷新当前活跃钱包同源 NEAR Implicit 账户的真实主网余额
+   */
+  async function refreshActiveWalletNearBalance() {
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+
+    if (!wallet.nearAddress && wallet.mnemonic) {
+      try {
+        const nearDerived = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+        if (nearDerived && nearDerived.nearAddress) {
+          wallet.nearAddress = nearDerived.nearAddress;
+          wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+          saveWalletsToStorage();
+        }
+      } catch (e) {}
+    }
+
+    if (!wallet.nearAddress) return;
+
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 8000) : null;
+      const res = await fetch('https://rpc.mainnet.near.org', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'pearl-near-bal',
+          method: 'query',
+          params: {
+            request_type: 'view_account',
+            finality: 'final',
+            account_id: wallet.nearAddress
+          }
+        }),
+        signal: controller ? controller.signal : undefined
+      });
+      if (timer) clearTimeout(timer);
+      const data = await res.json();
+      if (data && data.result && data.result.amount !== undefined) {
+        wallet.nearBalance = Number(data.result.amount) / 1e24;
+        saveWalletsToStorage();
+        renderWalletBalances();
+      } else if (data && data.error) {
+        // 未激活的 Implicit 账户会返回 UNKNOWN_ACCOUNT，余额为 0
+        wallet.nearBalance = 0;
+        saveWalletsToStorage();
+        renderWalletBalances();
+      }
+    } catch (e) {
+      // 网络失败保持上次余额
+    }
+  }
+  window.refreshActiveWalletNearBalance = refreshActiveWalletNearBalance;
+  globalThis.refreshActiveWalletNearBalance = refreshActiveWalletNearBalance;
+
+  /**
    * 刷新当前活跃钱包的真实链上余额并同步更新界面
    */
   async function refreshActiveWalletBalance(silent = false) {
     const wallet = getActiveWallet();
     if (!wallet || !wallet.address) return;
+
+    // 并行刷新同源 NEAR 主网余额
+    refreshActiveWalletNearBalance();
 
     try {
       const balance = await fetchAddressBalance(wallet.address);
@@ -2952,6 +3207,33 @@
     
     if (fiatEl) fiatEl.innerText = `≈ ¥${cnyVal} CNY ($${usdVal} USD)`;
     if (sendBalEl) sendBalEl.innerText = `${bal.toFixed(2)} PRL`;
+
+    // 同步渲染同源 NEAR 双链卡片
+    const nearAddrEl = document.getElementById('wallet-near-address-short');
+    const nearBalEl = document.getElementById('wallet-near-balance');
+    if (wallet.nearAddress) {
+      if (nearAddrEl) nearAddrEl.innerText = `${wallet.nearAddress.slice(0, 8)}...${wallet.nearAddress.slice(-6)}`;
+      if (nearBalEl) nearBalEl.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
+    } else if (wallet.mnemonic && !wallet._nearDeriving) {
+      wallet._nearDeriving = true;
+      if (nearAddrEl) nearAddrEl.innerText = '正在从助记词派生...';
+      deriveNearFromSeedAsync(wallet.mnemonic, 0).then(nearDerived => {
+        wallet._nearDeriving = false;
+        if (nearDerived && nearDerived.nearAddress) {
+          wallet.nearAddress = nearDerived.nearAddress;
+          wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+          saveWalletsToStorage();
+          renderWalletBalances();
+          refreshActiveWalletNearBalance();
+        }
+      }).catch(() => {
+        wallet._nearDeriving = false;
+        if (nearAddrEl) nearAddrEl.innerText = '派生失败';
+      });
+    } else {
+      if (nearAddrEl) nearAddrEl.innerText = wallet.isWatchOnly ? '观察钱包 (无助记词)' : '未关联助记词';
+      if (nearBalEl) nearBalEl.innerText = '-- NEAR';
+    }
   }
 
   function renderTxList() {
@@ -3111,17 +3393,22 @@
     triggerHaptic('success');
     const name = `Pearl-${String(state.wallets.length + 1).padStart(2, '0')}`;
 
-    // 严谨生成 12 位标准 BIP-39 助记词
+    // 严谨生成 12 位标准 BIP-39 助记词与双链地址 (Pearl BIP-86 + NEAR SLIP-0010)
     const words = generateMnemonic();
     const { address, privateKeyHex } = await deriveFromSeedAsync(words);
+    const { nearAddress, nearPrivateSeedHex } = await deriveNearFromSeedAsync(words);
 
     state.pendingWallet = {
       id: `wallet-${Date.now()}`,
       name,
       mnemonic: words,
       address,
+      addressIndex: 0,
       privateKeyHex,
+      nearAddress,
+      nearPrivateSeedHex,
       balance: 0.00,
+      nearBalance: 0.00,
       createdAt: new Date().toISOString()
     };
 
@@ -3358,6 +3645,14 @@
         return;
       }
 
+      let nearAddress = '';
+      let nearPrivateSeedHex = '';
+      if (Array.isArray(wordsList) && wordsList.length > 0) {
+        const nearDerived = await deriveNearFromSeedAsync(wordsList);
+        nearAddress = nearDerived.nearAddress || '';
+        nearPrivateSeedHex = nearDerived.nearPrivateSeedHex || '';
+      }
+
       triggerHaptic('success');
       const importedWallet = {
         id: `wallet-${Date.now()}`,
@@ -3365,9 +3660,13 @@
         pin,
         mnemonic: wordsList,
         address,
+        addressIndex: 0,
         privateKeyHex,
+        nearAddress,
+        nearPrivateSeedHex,
         watchOnly,
         balance: 0.00,
+        nearBalance: 0.00,
         createdAt: new Date().toISOString()
       };
 
@@ -3381,6 +3680,7 @@
       showToast(`🎉 成功导入钱包【${name}】！`);
       refreshActiveWalletBalance(false);
       refreshActiveWalletTransactions(false);
+      if (nearAddress) refreshActiveWalletNearBalance();
     } catch (err) {
       console.error('Import wallet error:', err);
       showImportError(`导入失败: ${err.message || err}`);
@@ -3660,6 +3960,74 @@
     }
   };
 
+  /**
+   * 切换当前助记词下的 Pearl Taproot 派生地址序号 (m/86'/808276'/0'/0/i)
+   */
+  window.switchPearlAddressIndex = async function (delta) {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.mnemonic) {
+      showToast('仅助记词钱包支持切换派生地址');
+      return;
+    }
+    const currentIndex = Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0;
+    const newIndex = Math.max(0, currentIndex + (Number(delta) || 0));
+    if (newIndex === currentIndex && delta < 0) {
+      showToast('已经是第 0 号主地址');
+      return;
+    }
+
+    const labelEl = document.getElementById('receive-addr-index-label');
+    if (labelEl) labelEl.innerText = `派生中 (#${newIndex})...`;
+
+    try {
+      const path = `m/86'/808276'/0'/0/${newIndex}`;
+      const derived = await deriveFromSeedAsync(wallet.mnemonic, path);
+      if (!derived || !derived.address) {
+        throw new Error('地址派生失败');
+      }
+      wallet.addressIndex = newIndex;
+      wallet.address = derived.address;
+      wallet.privateKeyHex = derived.privateKeyHex;
+      wallet.pubkeyHex = derived.pubkeyHex || wallet.pubkeyHex;
+      wallet.derivationPath = path;
+      saveWalletsToStorage();
+
+      const fullAddrEl = document.getElementById('receive-full-address');
+      if (fullAddrEl) fullAddrEl.innerText = wallet.address;
+      if (labelEl) labelEl.innerText = path;
+      generateQRCode(wallet.address);
+
+      renderAll();
+      refreshActiveWalletBalance(true);
+      refreshActiveWalletTransactions(true);
+      showToast(`已切换至地址 #${newIndex}`);
+    } catch (e) {
+      if (labelEl) labelEl.innerText = `m/86'/808276'/0'/0/${currentIndex}`;
+      showToast(`切换地址失败: ${e.message || e}`);
+    }
+  };
+  globalThis.switchPearlAddressIndex = window.switchPearlAddressIndex;
+
+  /**
+   * 复制同源 NEAR 链账户地址
+   */
+  window.copyNearAddress = async function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.nearAddress) {
+      showToast('当前钱包尚未生成 NEAR 同源地址');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(wallet.nearAddress);
+      showToast('已复制 NEAR 链地址');
+    } catch (e) {
+      showToast(`NEAR 地址: ${wallet.nearAddress}`);
+    }
+  };
+  globalThis.copyNearAddress = window.copyNearAddress;
+
   // ======================== 抽屉交互控制 ========================
   window.openSheet = function (sheetId) {
     triggerHaptic('light');
@@ -3670,9 +4038,22 @@
     if (sheetId === 'sheet-receive') {
       const wallet = getActiveWallet();
       const fullAddrEl = document.getElementById('receive-full-address');
+      const indexBarEl = document.getElementById('receive-address-index-bar');
+      const indexLabelEl = document.getElementById('receive-addr-index-label');
       if (wallet && fullAddrEl) {
         fullAddrEl.innerText = wallet.address;
         generateQRCode(wallet.address);
+      }
+      if (indexBarEl) {
+        if (wallet && wallet.mnemonic) {
+          indexBarEl.classList.remove('hidden');
+          if (indexLabelEl) {
+            const idx = Number.isInteger(wallet.addressIndex) ? wallet.addressIndex : 0;
+            indexLabelEl.innerText = `m/86'/808276'/0'/0/${idx}`;
+          }
+        } else {
+          indexBarEl.classList.add('hidden');
+        }
       }
     }
 
@@ -4853,6 +5234,42 @@
     openSheet('sheet-near-swap');
   };
 
+  /**
+   * 一键卖出 PRL 至当前钱包同源的 NEAR 地址
+   */
+  window.openNearSwapWithSelf = async function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet) {
+      showToast('请先创建或导入 Pearl 钱包账户');
+      return;
+    }
+    if (!wallet.nearAddress && wallet.mnemonic) {
+      try {
+        const nearDerived = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+        if (nearDerived && nearDerived.nearAddress) {
+          wallet.nearAddress = nearDerived.nearAddress;
+          wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+          saveWalletsToStorage();
+        }
+      } catch (e) {}
+    }
+    if (!wallet.nearAddress) {
+      showToast('当前钱包没有关联助记词，无法自动识别同源 NEAR 地址');
+      return;
+    }
+
+    state.nearSwap.direction = 'sell';
+    state.nearSwap.targetTokenId = 'nep141:wrap.near';
+    state.nearSwap.recipientAddress = wallet.nearAddress;
+    fetchNearDefuseTokens();
+    renderNearSwapUI();
+    openSheet('sheet-near-swap');
+    calculateSwapQuote();
+    showToast('已自动填入本钱包同源 NEAR 收款地址');
+  };
+  globalThis.openNearSwapWithSelf = window.openNearSwapWithSelf;
+
   window.closeNearSwapSheet = function () {
     closeSheet();
   };
@@ -4860,6 +5277,11 @@
   window.setSwapDirection = function (dir) {
     triggerHaptic('light');
     state.nearSwap.direction = dir;
+    const wallet = getActiveWallet();
+    const targetToken = getSelectedTargetToken();
+    if (wallet && wallet.nearAddress && targetToken && targetToken.blockchain === 'near' && !state.nearSwap.recipientAddress) {
+      state.nearSwap.recipientAddress = wallet.nearAddress;
+    }
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -4874,6 +5296,14 @@
   window.selectSwapTargetToken = function (assetId) {
     triggerHaptic('light');
     state.nearSwap.targetTokenId = assetId;
+    const wallet = getActiveWallet();
+    const targetToken = getSelectedTargetToken();
+    if (wallet && wallet.nearAddress && targetToken && targetToken.blockchain === 'near') {
+      // 选择 NEAR 链资产时，若尚未填地址，自动填入本钱包同源 NEAR 地址
+      if (!state.nearSwap.recipientAddress) {
+        state.nearSwap.recipientAddress = wallet.nearAddress;
+      }
+    }
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -5137,8 +5567,13 @@
       if (paySlot) paySlot.innerHTML = prlBadgeHTML;
       if (receiveSlot) receiveSlot.innerHTML = tokenSelectHTML;
     } else {
-      if (balanceLabel) balanceLabel.innerText = '外链参考:';
-      if (balanceVal) balanceVal.innerText = '--';
+      if (targetToken && targetToken.blockchain === 'near' && wallet && wallet.nearAddress) {
+        if (balanceLabel) balanceLabel.innerText = '同源 NEAR 余额:';
+        if (balanceVal) balanceVal.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
+      } else {
+        if (balanceLabel) balanceLabel.innerText = '外链参考:';
+        if (balanceVal) balanceVal.innerText = '--';
+      }
       if (paySlot) paySlot.innerHTML = tokenSelectHTML;
       if (receiveSlot) receiveSlot.innerHTML = prlBadgeHTML;
     }

@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.1">
+  <link rel="stylesheet" href="style.css?v=6.2">
   <script>
     tailwind.config = {
       theme: {
@@ -172,6 +172,27 @@
             </div>
             <span class="text-[10px] font-medium text-white/80" data-i18n="wallet.mnemonic">助记词</span>
           </button>
+        </div>
+      </div>
+
+      <!-- 多链共生账户卡片 (同一套助记词派生 Pearl + NEAR 双地址) -->
+      <div id="dual-chain-near-card" class="p-3 mb-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 flex items-center justify-center font-bold text-xs">N</div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-xs font-bold text-white">NEAR 主网账户</span>
+              <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/20">同源助记词</span>
+            </div>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span id="wallet-near-address-short" class="text-[11px] font-mono text-white/50">未派生或无助记词</span>
+              <button type="button" onclick="copyNearAddress()" class="text-[10px] text-cyan-400 hover:underline">复制</button>
+            </div>
+          </div>
+        </div>
+        <div class="text-right">
+          <div id="wallet-near-balance" class="text-xs font-bold text-white tabular-numbers">0.00 NEAR</div>
+          <button type="button" onclick="openNearSwapWithSelf()" class="text-[10px] text-emerald-400 hover:underline mt-0.5">卖PRL到此处 ➔</button>
         </div>
       </div>
 
@@ -1032,6 +1053,16 @@
       <div id="qrcode-canvas-container" class="p-3 bg-white rounded-3xl shadow-2xl shadow-cyan-500/20 flex items-center justify-center overflow-hidden"></div>
     </div>
 
+    <div id="receive-address-index-bar" class="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] mb-3">
+      <div class="text-[11px] text-white/60">
+        派生路径: <span id="receive-addr-index-label" class="font-mono text-cyan-300 font-bold">m/86'/808276'/0'/0/0</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <button type="button" onclick="switchPearlAddressIndex(-1)" class="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/70 btn-active">上一个</button>
+        <button type="button" onclick="switchPearlAddressIndex(1)" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-[11px] text-cyan-300 font-bold btn-active">换一个地址 ↻</button>
+      </div>
+    </div>
+
     <div class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-5">
       <div class="text-[10px] text-white/40 mb-1">Pearl Taproot 主网地址 (Bech32m 标准)</div>
       <div id="receive-full-address" class="text-xs font-mono text-cyan-200 break-all select-all leading-relaxed"></div>
@@ -1625,10 +1656,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.1"></script>
+  <script src="bip39-wordlist.js?v=6.2"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.1"></script>
+  <script src="qrcode.min.js?v=6.2"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.1"></script>
+  <script src="app.js?v=6.2"></script>
 </body>
 </html>
