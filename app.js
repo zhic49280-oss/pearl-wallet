@@ -6152,6 +6152,16 @@
     },
     {
       symbol: 'USDC',
+      name: 'USD Coin (NEAR)',
+      blockchain: 'near',
+      assetId: 'nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1',
+      decimals: 6,
+      icon: '🔵',
+      price: 1.0,
+      networkName: 'NEAR Protocol'
+    },
+    {
+      symbol: 'USDC',
       name: 'USD Coin',
       blockchain: 'base',
       assetId: 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near',
@@ -6220,12 +6230,16 @@
     decimals: 8,
     icon: '🦪',
     price: 1.59,
-    networkName: 'Pearl Mainnet'
+    networkName: 'Pearl 主网'
   };
 
   state.nearSwap = {
-    direction: 'sell', // 'sell': PRL -> Foreign; 'buy': Foreign -> PRL
+    direction: 'sell', // 'sell': PRL -> Foreign; 'buy': Foreign -> PRL; 'custom': Any <-> Any
     targetTokenId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
+    fromTokenId: PEARL_DEFUSE_TOKEN.assetId,
+    toTokenId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
+    pickerSlot: 'to',
+    quoteSource: '1click', // '1click' | 'ref'
     slippageTolerance: 100, // 100 bps = 1.0%
     amountIn: '',
     amountOut: '',
@@ -6239,8 +6253,34 @@
     activeOrder: null
   };
 
+  function getAllSwapTokens() {
+    return [PEARL_DEFUSE_TOKEN, ...state.nearSwap.tokensList];
+  }
+
+  function findSwapTokenById(assetId) {
+    return getAllSwapTokens().find(t => t.assetId === assetId) || null;
+  }
+
   function getSelectedTargetToken() {
     return state.nearSwap.tokensList.find(t => t.assetId === state.nearSwap.targetTokenId) || state.nearSwap.tokensList[0];
+  }
+
+  function getSwapFromToken() {
+    return findSwapTokenById(state.nearSwap.fromTokenId) || PEARL_DEFUSE_TOKEN;
+  }
+
+  function getSwapToToken() {
+    return findSwapTokenById(state.nearSwap.toTokenId) || getSelectedTargetToken();
+  }
+
+  function getRefContractId(token) {
+    if (!token) return null;
+    if (token.assetId === PEARL_DEFUSE_TOKEN.assetId || token.symbol === 'PRL') return 'prl.omft.near';
+    if (token.blockchain !== 'near') return null;
+    if (token.assetId === 'nep141:wrap.near') return 'wrap.near';
+    if (token.assetId === 'nep141:usdt.tether-token.near') return 'usdt.tether-token.near';
+    if (token.assetId.startsWith('nep141:')) return token.assetId.slice('nep141:'.length);
+    return null;
   }
 
   function getChainBadge(token) {
@@ -6254,8 +6294,9 @@
     return { text: token.blockchain.toUpperCase(), cls: 'bg-white/10 text-white/70 border border-white/20' };
   }
 
-  window.openSwapTokenPickerModal = function () {
+  window.openSwapTokenPickerModal = function (slot = 'to') {
     triggerHaptic('light');
+    state.nearSwap.pickerSlot = (slot === 'from') ? 'from' : 'to';
     const modal = document.getElementById('modal-swap-token-picker');
     const input = document.getElementById('swap-token-search-input');
     if (input) input.value = '';
@@ -6279,7 +6320,36 @@
 
   window.selectSwapTokenFromPicker = function (assetId) {
     triggerHaptic('success');
-    window.selectSwapTargetToken(assetId);
+    const slot = state.nearSwap.pickerSlot || 'to';
+    if (slot === 'from') {
+      if (assetId === state.nearSwap.toTokenId) {
+        state.nearSwap.toTokenId = state.nearSwap.fromTokenId;
+      }
+      state.nearSwap.fromTokenId = assetId;
+    } else {
+      if (assetId === state.nearSwap.fromTokenId) {
+        state.nearSwap.fromTokenId = state.nearSwap.toTokenId;
+      }
+      state.nearSwap.toTokenId = assetId;
+      if (assetId !== PEARL_DEFUSE_TOKEN.assetId) {
+        state.nearSwap.targetTokenId = assetId;
+      }
+    }
+    const fromT = getSwapFromToken();
+    const toT = getSwapToToken();
+    if (fromT.assetId === PEARL_DEFUSE_TOKEN.assetId) {
+      state.nearSwap.direction = 'sell';
+      state.nearSwap.targetTokenId = toT.assetId;
+    } else if (toT.assetId === PEARL_DEFUSE_TOKEN.assetId) {
+      state.nearSwap.direction = 'buy';
+      state.nearSwap.targetTokenId = fromT.assetId;
+    } else {
+      state.nearSwap.direction = 'custom';
+      state.nearSwap.targetTokenId = toT.assetId;
+    }
+    autoFillSwapWalletAddress(getActiveWallet(), toT);
+    renderNearSwapUI();
+    calculateSwapQuote();
     window.closeSwapTokenPickerModal();
   };
 
@@ -6307,12 +6377,14 @@
     const container = document.getElementById('swap-token-list-container');
     if (!container) return;
 
-    const currentAssetId = state.nearSwap.targetTokenId;
+    const slot = state.nearSwap.pickerSlot || 'to';
+    const currentAssetId = slot === 'from' ? getSwapFromToken().assetId : getSwapToToken().assetId;
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const query = (filterText || '').trim().toLowerCase();
     const netFilter = (state.nearSwap.networkFilter || 'all').toLowerCase();
+    const allTokens = query || netFilter === 'prl' ? getAllSwapTokens() : (netFilter === 'all' ? getAllSwapTokens() : state.nearSwap.tokensList);
 
-    const filtered = state.nearSwap.tokensList.filter(t => {
+    const filtered = allTokens.filter(t => {
       if (netFilter !== 'all' && String(t.blockchain || '').toLowerCase() !== netFilter) return false;
       if (!query) return true;
       return (
@@ -6417,6 +6489,7 @@
   function getWalletChainAddress(wallet, blockchain) {
     if (!wallet) return '';
     const chain = String(blockchain || '').toLowerCase();
+    if (chain === 'prl') return wallet.address || '';
     if (chain === 'near') return wallet.nearNamedAccount || wallet.nearAddress || '';
     if (chain === 'sol') return wallet.solAddress || '';
     if (['eth', 'bsc', 'base', 'arb', 'hype'].includes(chain)) return wallet.evmAddress || '';
@@ -6507,15 +6580,33 @@
   window.setSwapDirection = function (dir) {
     triggerHaptic('light');
     state.nearSwap.direction = dir;
-    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
+    const target = getSelectedTargetToken();
+    if (dir === 'sell') {
+      state.nearSwap.fromTokenId = PEARL_DEFUSE_TOKEN.assetId;
+      state.nearSwap.toTokenId = target.assetId;
+    } else if (dir === 'buy') {
+      state.nearSwap.fromTokenId = target.assetId;
+      state.nearSwap.toTokenId = PEARL_DEFUSE_TOKEN.assetId;
+    }
+    autoFillSwapWalletAddress(getActiveWallet(), getSwapToToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
 
   window.toggleSwapDirection = function () {
     triggerHaptic('medium');
-    state.nearSwap.direction = state.nearSwap.direction === 'sell' ? 'buy' : 'sell';
-    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
+    const prevFrom = state.nearSwap.fromTokenId;
+    const prevTo = state.nearSwap.toTokenId;
+    state.nearSwap.fromTokenId = prevTo;
+    state.nearSwap.toTokenId = prevFrom;
+    if (state.nearSwap.fromTokenId === PEARL_DEFUSE_TOKEN.assetId) {
+      state.nearSwap.direction = 'sell';
+    } else if (state.nearSwap.toTokenId === PEARL_DEFUSE_TOKEN.assetId) {
+      state.nearSwap.direction = 'buy';
+    } else {
+      state.nearSwap.direction = 'custom';
+    }
+    autoFillSwapWalletAddress(getActiveWallet(), getSwapToToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -6523,7 +6614,13 @@
   window.selectSwapTargetToken = function (assetId) {
     triggerHaptic('light');
     state.nearSwap.targetTokenId = assetId;
-    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
+    if (state.nearSwap.direction === 'buy') {
+      state.nearSwap.fromTokenId = assetId;
+      state.nearSwap.toTokenId = PEARL_DEFUSE_TOKEN.assetId;
+    } else {
+      state.nearSwap.toTokenId = assetId;
+    }
+    autoFillSwapWalletAddress(getActiveWallet(), getSwapToToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -6546,12 +6643,18 @@
     const input = document.getElementById('swap-amount-in');
     if (!input) return;
 
-    if (state.nearSwap.direction === 'sell') {
+    const fromToken = getSwapFromToken();
+    if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
       const balance = Number(wallet.balance) || 0;
       const maxAmt = Math.max(0, balance - 0.001);
       input.value = maxAmt > 0 ? maxAmt.toFixed(4) : balance.toFixed(4);
     } else {
-      input.value = "100";
+      const balInfo = getWalletChainBalanceInfo(wallet, fromToken.blockchain);
+      if (balInfo && balInfo.bal > 0) {
+        input.value = balInfo.bal.toFixed(4);
+      } else {
+        input.value = "100";
+      }
     }
     state.nearSwap.amountIn = input.value;
     calculateSwapQuote();
@@ -6588,12 +6691,24 @@
     calculateSwapQuote();
   };
 
+  function getFallbackChainAddr(blockchain) {
+    const c = String(blockchain || '').toLowerCase();
+    if (c === 'prl') return 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm';
+    if (c === 'near') return 'alice.near';
+    if (c === 'sol') return '11111111111111111111111111111111';
+    if (c === 'btc') return 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
+    if (c === 'tron') return 'TYDzsYUEpvnYmQk4zGP9sWWcTEd36d5f7U';
+    return '0x0000000000000000000000000000000000000001';
+  }
+
   async function calculateSwapQuote() {
     const amtStr = state.nearSwap.amountIn;
     const amt = Number(amtStr);
-    const targetToken = getSelectedTargetToken();
+    const fromToken = getSwapFromToken();
+    const toToken = getSwapToToken();
     const prlPrice = state.nearSwap.prlPrice || 1.59;
-    const targetPrice = targetToken.price || 1.0;
+    const fromPrice = fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId ? prlPrice : (fromToken.price || 1.0);
+    const toPrice = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId ? prlPrice : (toToken.price || 1.0);
     const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
 
     const outEl = document.getElementById('swap-amount-out');
@@ -6608,9 +6723,9 @@
     }
 
     // 基础汇率显示
-    const prlToTargetRate = targetPrice > 0 ? (prlPrice / targetPrice) : 1.0;
+    const pairRate = toPrice > 0 ? (fromPrice / toPrice) : 1.0;
     if (rateEl) {
-      rateEl.innerText = `1 PRL ≈ ${prlToTargetRate.toFixed(4)} ${targetToken.symbol} (${targetToken.blockchain.toUpperCase()})`;
+      rateEl.innerText = `1 ${fromToken.symbol} ≈ ${pairRate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
     }
 
     if (!amt || isNaN(amt) || amt <= 0) {
@@ -6624,48 +6739,68 @@
       return;
     }
 
-    // 计算法定货币估值 (USD)，扣除滑点与 0.1% 钱包应用服务费
-    if (state.nearSwap.direction === 'sell') {
-      const fiatInUsd = amt * prlPrice;
-      if (fiatInEl) fiatInUsd ? fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD` : '--';
-      const estOut = amt * prlToTargetRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
-      state.nearSwap.amountOut = estOut.toFixed(4);
-      if (outEl) outEl.innerText = state.nearSwap.amountOut;
-      if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * targetPrice).toFixed(2)} USD`;
-    } else {
-      const fiatInUsd = amt * targetPrice;
-      if (fiatInEl) fiatInUsd ? fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD` : '--';
-      const targetToPrlRate = prlPrice > 0 ? (targetPrice / prlPrice) : 1.0;
-      const estOut = amt * targetToPrlRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
-      state.nearSwap.amountOut = estOut.toFixed(4);
-      if (outEl) outEl.innerText = state.nearSwap.amountOut;
-      if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * prlPrice).toFixed(2)} USD`;
-    }
+    // 本地法定货币参考估值 (USD)
+    const fiatInUsd = amt * fromPrice;
+    if (fiatInEl) fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD`;
+    const estOut = amt * pairRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
+    state.nearSwap.amountOut = estOut.toFixed(4);
+    if (outEl) outEl.innerText = state.nearSwap.amountOut;
+    if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * toPrice).toFixed(2)} USD`;
 
     if (statusLabel) {
-      statusLabel.innerText = '正在向 NEAR 做市商询价...';
+      statusLabel.innerText = '正在向做市商与链上路由询价...';
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
+    }
+
+    const involvesPrl = (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId || toToken.assetId === PEARL_DEFUSE_TOKEN.assetId);
+    const refIn = getRefContractId(fromToken);
+    const refOut = getRefContractId(toToken);
+
+    // 若为 NEAR 链上代币 <-> PRL，优先查询 Ref Finance 开源链上池真实报价
+    if (involvesPrl && refIn && refOut && refIn !== refOut) {
+      try {
+        const slippageFrac = Math.max(0.001, (state.nearSwap.slippageTolerance || 100) / 10000);
+        const rawAmt = toBaseUnits(amtStr, fromToken.decimals);
+        const refUrl = `https://smartrouter.ref.finance/findPath?tokenIn=${encodeURIComponent(refIn)}&tokenOut=${encodeURIComponent(refOut)}&amountIn=${encodeURIComponent(rawAmt)}&pathDeep=3&slippage=${slippageFrac}`;
+        const refData = await fetchWithTimeout(refUrl, {}, 6000);
+        const route = refData && refData.result_code === 0 && refData.result_data && Array.isArray(refData.result_data.routes) ? refData.result_data.routes[0] : null;
+        const rawOut = route && (route.min_amount_out && route.min_amount_out !== '0' ? route.min_amount_out : route.amount_out);
+        if (rawOut && rawOut !== '0') {
+          const outNum = parseFloat(fromBaseUnits(rawOut, toToken.decimals));
+          const netOut = (!isNaN(outNum) && outNum > 0) ? (outNum * (1 - appFeeRate)).toFixed(4) : '0.0000';
+          state.nearSwap.amountOut = netOut;
+          state.nearSwap.quoteStatus = 'success';
+          state.nearSwap.quoteSource = 'ref';
+          if (outEl) outEl.innerText = netOut;
+          if (fiatOutEl) fiatOutEl.innerText = `≈ $${(parseFloat(netOut) * toPrice).toFixed(2)} USD`;
+          if (statusLabel) {
+            statusLabel.innerText = '⚡ Ref Finance 链上实时池报价';
+            statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+          }
+          return;
+        }
+      } catch (e) {
+        // Ref 路由异常时继续尝试 1Click
+      }
     }
 
     // 向 NEAR Intents 1Click API 发起真实 Dry 报价探测
     try {
-      const isSell = state.nearSwap.direction === 'sell';
-      const originAsset = isSell ? PEARL_DEFUSE_TOKEN.assetId : targetToken.assetId;
-      const destinationAsset = isSell ? targetToken.assetId : PEARL_DEFUSE_TOKEN.assetId;
-      const originDecimals = isSell ? PEARL_DEFUSE_TOKEN.decimals : targetToken.decimals;
       const wallet = getActiveWallet();
+      const refundAddr = getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain);
+      const destAddr = (state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain) || getFallbackChainAddr(toToken.blockchain);
 
       const quoteReqBody = {
         dry: true,
         swapType: 'EXACT_INPUT',
         slippageTolerance: state.nearSwap.slippageTolerance,
-        originAsset,
+        originAsset: fromToken.assetId,
         depositType: 'ORIGIN_CHAIN',
-        destinationAsset,
-        amount: toBaseUnits(amtStr, originDecimals),
-        refundTo: isSell ? (wallet?.address || 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm') : (state.nearSwap.recipientAddress || 'alice.near'),
+        destinationAsset: toToken.assetId,
+        amount: toBaseUnits(amtStr, fromToken.decimals),
+        refundTo: refundAddr,
         refundType: 'ORIGIN_CHAIN',
-        recipient: isSell ? (state.nearSwap.recipientAddress || '0x0000000000000000000000000000000000000001') : (wallet?.address || 'prl1pvxtfv9c7a9elgny7jmhndtl9cwdy9wnhvphg7g5arxjvc2rwa4vq09sfpm'),
+        recipient: destAddr,
         recipientType: 'DESTINATION_CHAIN',
         deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
         referral: state.nearReferralAccount || 'zhic49280.near',
@@ -6686,27 +6821,34 @@
 
       const json = await res.json();
       if (res.ok && json.quote && json.quote.amountOut) {
-        const destDecimals = isSell ? targetToken.decimals : PEARL_DEFUSE_TOKEN.decimals;
-        const actualOut = json.quote.amountOutFormatted || fromBaseUnits(json.quote.amountOut, destDecimals);
+        const actualOut = json.quote.amountOutFormatted || fromBaseUnits(json.quote.amountOut, toToken.decimals);
         const actualNum = parseFloat(actualOut);
         const netOut = (!isNaN(actualNum) && actualNum > 0) ? (actualNum * (1 - appFeeRate)).toFixed(4) : actualOut;
         state.nearSwap.amountOut = netOut;
         state.nearSwap.quoteStatus = 'success';
+        state.nearSwap.quoteSource = '1click';
         if (outEl) outEl.innerText = netOut;
+        if (fiatOutEl) fiatOutEl.innerText = `≈ $${(parseFloat(netOut) * toPrice).toFixed(2)} USD`;
         if (statusLabel) {
           statusLabel.innerText = `⚡ Solvers 实时可执行报价 (${json.quote.timeEstimate || 20}s)`;
           statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
         }
       } else {
         state.nearSwap.quoteStatus = 'no_liquidity';
+        state.nearSwap.quoteSource = 'none';
         const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '暂未匹配到做市商';
         if (statusLabel) {
-          statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 报价 (${reason.slice(0, 22)}) · <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">前往 near.com ↗</a>`;
+          if (involvesPrl) {
+            statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 报价 · 可先跨至 USDC(NEAR) 或 <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`;
+          } else {
+            statusLabel.innerText = `⚠️ 仅市价参考 · 做市商未报价 (${reason.slice(0, 28)})`;
+          }
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
       }
     } catch (e) {
       state.nearSwap.quoteStatus = 'error';
+      state.nearSwap.quoteSource = 'none';
       if (statusLabel) {
         statusLabel.innerText = '⚠️ 仅市价参考 · 做市商询价超时';
         statusLabel.className = 'text-[10px] text-amber-300 font-mono';
@@ -6716,10 +6858,33 @@
   window.calculateSwapQuote = calculateSwapQuote;
   globalThis.calculateSwapQuote = calculateSwapQuote;
 
+  function buildSwapTokenButtonHTML(token, slot, selectHtml = '') {
+    const badge = getChainBadge(token);
+    return `
+      <div class="relative">
+        <button type="button" onclick="openSwapTokenPickerModal('${slot}')" id="btn-swap-token-picker-${slot}" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-cyan-400/50 text-white transition-all btn-active shadow-sm group">
+          <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml(token.symbol, token.blockchain, 24)}</span>
+          <div class="text-left">
+            <div class="text-xs font-bold leading-tight group-hover:text-cyan-300 transition-colors flex items-center gap-1">
+              <span>${token.symbol}</span>
+              <span class="text-[9px] px-1 py-0.2 rounded font-medium ${badge.cls}">${badge.text}</span>
+            </div>
+            <div class="text-[9px] text-white/50 leading-tight">${token.networkName}</div>
+          </div>
+          <svg class="w-3.5 h-3.5 text-white/40 group-hover:text-cyan-300 ml-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        ${selectHtml}
+      </div>
+    `;
+  }
+
   function renderNearSwapUI() {
-    const isSell = state.nearSwap.direction === 'sell';
     const wallet = getActiveWallet();
+    const fromToken = getSwapFromToken();
+    const toToken = getSwapToToken();
     const targetToken = getSelectedTargetToken();
+    const isSell = state.nearSwap.direction === 'sell';
+    const isBuy = state.nearSwap.direction === 'buy';
 
     // 1. Tab 高亮
     const btnSell = document.getElementById('btn-swap-dir-sell');
@@ -6728,9 +6893,12 @@
       if (isSell) {
         btnSell.className = 'flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm';
         btnBuy.className = 'flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white';
-      } else {
+      } else if (isBuy) {
         btnBuy.className = 'flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm';
         btnSell.className = 'flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white';
+      } else {
+        btnSell.className = 'flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white';
+        btnBuy.className = 'flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white';
       }
     }
 
@@ -6742,104 +6910,65 @@
     if (fixedWalletAddr) fixedWalletAddr.innerText = wallet ? wallet.address : '未连接';
     if (fixedWalletBal) fixedWalletBal.innerText = wallet ? `${(Number(wallet.balance) || 0).toFixed(4)} PRL` : '0.00 PRL';
 
-    // 2. 支付方与接收方槽位渲染 (买入时支付方为下拉币种选择，卖出时接收方为下拉币种选择)
+    // 2. 支付方与接收方槽位渲染 (双侧均可自由选择多链代币或 PRL)
     const balanceLabel = document.getElementById('swap-balance-label');
     const balanceVal = document.getElementById('swap-balance-value');
     const paySlot = document.getElementById('swap-pay-token-slot');
     const receiveSlot = document.getElementById('swap-receive-token-slot');
-
-    const prlBadgeHTML = `
-      <div id="swap-pay-token-badge" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white">
-        <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml('PRL', 'prl', 24)}</span>
-        <div class="text-left">
-          <div class="text-xs font-bold leading-tight">PRL</div>
-          <div class="text-[9px] text-cyan-300/80 leading-tight">Pearl 主网</div>
-        </div>
-      </div>
-    `;
 
     const tokenOptionsHTML = state.nearSwap.tokensList.map(t => `
       <option value="${t.assetId}" ${t.assetId === targetToken.assetId ? 'selected' : ''}>
         ${t.symbol} (${t.networkName})
       </option>
     `).join('');
-
-    const badge = getChainBadge(targetToken);
-    const tokenSelectHTML = `
-      <div class="relative">
-        <button type="button" onclick="openSwapTokenPickerModal()" id="btn-swap-token-picker" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-cyan-400/50 text-white transition-all btn-active shadow-sm group">
-          <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml(targetToken.symbol, targetToken.blockchain, 24)}</span>
-          <div class="text-left">
-            <div class="text-xs font-bold leading-tight group-hover:text-cyan-300 transition-colors flex items-center gap-1">
-              <span>${targetToken.symbol}</span>
-              <span class="text-[9px] px-1 py-0.2 rounded font-medium ${badge.cls}">${badge.text}</span>
-            </div>
-            <div class="text-[9px] text-white/50 leading-tight">${targetToken.networkName}</div>
-          </div>
-          <svg class="w-3.5 h-3.5 text-white/40 group-hover:text-cyan-300 ml-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </button>
-        <!-- 保持与测试和 DOM 规范兼容的辅助节点 -->
-        <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="sr-only hidden" tabindex="-1">
-          ${tokenOptionsHTML}
-        </select>
-      </div>
+    const hiddenSelectHTML = `
+      <select id="swap-target-token-select" onchange="selectSwapTargetToken(this.value)" class="sr-only hidden" tabindex="-1">
+        ${tokenOptionsHTML}
+      </select>
     `;
 
-    if (isSell) {
+    if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
       if (balanceLabel) balanceLabel.innerText = 'PRL 可用余额:';
       if (balanceVal) balanceVal.innerText = wallet ? (Number(wallet.balance) || 0).toFixed(4) : '0.00';
-      if (paySlot) paySlot.innerHTML = prlBadgeHTML;
-      if (receiveSlot) receiveSlot.innerHTML = tokenSelectHTML;
     } else {
-      const balInfo = getWalletChainBalanceInfo(wallet, targetToken ? targetToken.blockchain : '');
+      const balInfo = getWalletChainBalanceInfo(wallet, fromToken.blockchain);
       if (balInfo) {
-        if (balanceLabel) balanceLabel.innerText = `同源 ${targetToken.blockchain.toUpperCase()} 余额:`;
+        if (balanceLabel) balanceLabel.innerText = `同源 ${fromToken.blockchain.toUpperCase()} 余额:`;
         if (balanceVal) balanceVal.innerText = `${balInfo.bal.toFixed(4)} ${balInfo.sym}`;
       } else {
         if (balanceLabel) balanceLabel.innerText = '外链参考:';
         if (balanceVal) balanceVal.innerText = '--';
       }
-      if (paySlot) paySlot.innerHTML = tokenSelectHTML;
-      if (receiveSlot) receiveSlot.innerHTML = prlBadgeHTML;
     }
 
-    // 3. 收款/付款退款地址区域动态适配
+    if (paySlot) paySlot.innerHTML = buildSwapTokenButtonHTML(fromToken, 'from', isBuy ? hiddenSelectHTML : '');
+    if (receiveSlot) receiveSlot.innerHTML = buildSwapTokenButtonHTML(toToken, 'to', !isBuy ? hiddenSelectHTML : '');
+
+    // 3. 目标链收款地址区域动态适配
     const recipientLabel = document.getElementById('swap-recipient-label');
     const recipientHint = document.getElementById('swap-recipient-chain-hint');
     const recipientInput = document.getElementById('swap-recipient-input');
     const recipientFeedback = document.getElementById('swap-recipient-feedback');
 
-    if (isSell) {
-      if (recipientLabel) recipientLabel.innerText = `外链收款钱包地址 (${targetToken.symbol} - ${targetToken.networkName})`;
-      if (recipientHint) recipientHint.innerText = `${targetToken.blockchain.toUpperCase()} 链`;
-      if (recipientInput) {
-        recipientInput.disabled = false;
-        recipientInput.placeholder = `输入接收 ${targetToken.symbol} 的 ${targetToken.blockchain.toUpperCase()} 钱包地址`;
-        recipientInput.value = state.nearSwap.recipientAddress;
-      }
-      if (recipientFeedback) {
-        recipientFeedback.innerHTML = `做市商将在原子化交割后直接打款至该 <strong>${targetToken.networkName}</strong> 收款地址。`;
-      }
-    } else {
-      if (recipientLabel) recipientLabel.innerText = `外链付款 / 退款地址 (${targetToken.symbol} - ${targetToken.networkName})`;
-      if (recipientHint) recipientHint.innerText = `${targetToken.blockchain.toUpperCase()} 链`;
-      if (recipientInput) {
-        recipientInput.disabled = false;
-        recipientInput.placeholder = `输入您付款或用于超时退款的 ${targetToken.blockchain.toUpperCase()} 钱包地址`;
-        recipientInput.value = state.nearSwap.recipientAddress;
-      }
-      if (recipientFeedback) {
-        recipientFeedback.innerHTML = `用于核对您的链上充值；若超时或异常将自动原路原额退款。兑换生成的 PRL 将直接安全入账至上方锁定的当前钱包 <strong>${wallet ? wallet.name : ''}</strong>。`;
-      }
+    if (recipientLabel) recipientLabel.innerText = `目标收款钱包地址 (${toToken.symbol} - ${toToken.networkName})`;
+    if (recipientHint) recipientHint.innerText = `${toToken.blockchain.toUpperCase()} 链`;
+    if (recipientInput) {
+      recipientInput.disabled = false;
+      recipientInput.placeholder = `输入接收 ${toToken.symbol} 的 ${toToken.blockchain.toUpperCase()} 钱包地址`;
+      recipientInput.value = state.nearSwap.recipientAddress;
+    }
+    if (recipientFeedback) {
+      recipientFeedback.innerHTML = `做市商将在交割后直接打款至该 <strong>${toToken.networkName}</strong> 地址（已优先自动填入本钱包同源地址）。`;
     }
 
     // 4. 汇率更新
     const rateEl = document.getElementById('swap-detail-rate');
     const prlPrice = state.nearSwap.prlPrice || 1.59;
-    const targetPrice = targetToken.price || 1.0;
-    const rate = targetPrice > 0 ? (prlPrice / targetPrice) : 1.0;
+    const fromPrice = fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId ? prlPrice : (fromToken.price || 1.0);
+    const toPrice = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId ? prlPrice : (toToken.price || 1.0);
+    const rate = toPrice > 0 ? (fromPrice / toPrice) : 1.0;
     if (rateEl) {
-      rateEl.innerText = `1 PRL ≈ ${rate.toFixed(4)} ${targetToken.symbol} (${targetToken.blockchain.toUpperCase()})`;
+      rateEl.innerText = `1 ${fromToken.symbol} ≈ ${rate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
     }
 
     const appFeeEl = document.getElementById('swap-detail-app-fee');
@@ -6895,22 +7024,32 @@
       return;
     }
 
-    const isSell = state.nearSwap.direction === 'sell';
-    const targetToken = getSelectedTargetToken();
+    const fromToken = getSwapFromToken();
+    const toToken = getSwapToToken();
+    const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
 
-    if (isSell) {
+    if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
       const balance = Number(wallet.balance) || 0;
       if (amt > balance) {
         showToast(`PRL 余额不足 (当前可用: ${balance.toFixed(4)} PRL)`);
         return;
       }
-      const recipient = state.nearSwap.recipientAddress.trim();
-      if (!recipient) {
-        showToast('请输入目标链收款地址');
-        const input = document.getElementById('swap-recipient-input');
-        if (input) input.focus();
-        return;
-      }
+    }
+
+    const recipient = (state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain);
+    if (!recipient) {
+      showToast('请输入目标链收款地址');
+      const input = document.getElementById('swap-recipient-input');
+      if (input) input.focus();
+      return;
+    }
+
+    if (state.nearSwap.quoteSource === 'ref') {
+      const refIn = getRefContractId(fromToken);
+      const refOut = getRefContractId(toToken);
+      triggerHaptic('light');
+      showToast(`已获取 Ref Finance 链上池实时报价，请在 Ref 链上池 (${refIn} ⇄ ${refOut}) 或 near.com 完成 NEAR 链上签名交易`);
+      return;
     }
 
     const btn = document.getElementById('btn-execute-swap');
@@ -6919,11 +7058,10 @@
     if (btnText) btnText.innerText = '正在向 NEAR 意图网络撮合下单...';
 
     try {
-      const originAsset = isSell ? PEARL_DEFUSE_TOKEN.assetId : targetToken.assetId;
-      const destinationAsset = isSell ? targetToken.assetId : PEARL_DEFUSE_TOKEN.assetId;
-      const originDecimals = isSell ? PEARL_DEFUSE_TOKEN.decimals : targetToken.decimals;
-      const recipient = isSell ? state.nearSwap.recipientAddress.trim() : wallet.address;
-      const refundTo = isSell ? wallet.address : (state.nearSwap.recipientAddress.trim() || 'defuse.near');
+      const originAsset = fromToken.assetId;
+      const destinationAsset = toToken.assetId;
+      const originDecimals = fromToken.decimals;
+      const refundTo = getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain);
 
       const quoteReqBody = {
         dry: false,
@@ -6982,10 +7120,10 @@
         memo,
         amountIn: state.nearSwap.amountIn,
         amountOut: quoteResult?.quote?.amountOutFormatted || state.nearSwap.amountOut,
-        originSymbol: isSell ? 'PRL' : targetToken.symbol,
-        destSymbol: isSell ? targetToken.symbol : 'PRL',
-        originChain: isSell ? 'Pearl 主网' : targetToken.networkName,
-        destChain: isSell ? targetToken.networkName : 'Pearl 主网',
+        originSymbol: fromToken.symbol,
+        destSymbol: toToken.symbol,
+        originChain: fromToken.networkName,
+        destChain: toToken.networkName,
         deadline: quoteResult?.quote?.deadline || new Date(Date.now() + 15 * 60 * 1000).toISOString()
       });
       showToast('跨链意图已生成，请在倒计时结束前存入资金');

@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=6.9">
+  <link rel="stylesheet" href="style.css?v=7.0">
   <script>
     tailwind.config = {
       theme: {
@@ -1255,8 +1255,8 @@
         <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
         <span>去中心化多链闪兑</span>
       </div>
-      <h3 class="text-base font-bold text-white">跨链闪兑 (Cross-Chain Swap)</h3>
-      <p class="text-xs text-white/40 mt-0.5">免跨链桥 · 自动撮合交割 · 资产直达 Pearl 钱包</p>
+      <h3 class="text-base font-bold text-white">多链闪兑 (Cross-Chain Swap)</h3>
+      <p class="text-xs text-white/40 mt-0.5">支持 NEAR / ETH / BSC / Base / SOL / BTC / PRL 自由互换</p>
     </div>
 
     <!-- 极简闪兑主视图 -->
@@ -1550,8 +1550,8 @@
       <!-- 弹窗顶栏 -->
       <div class="flex items-center justify-between">
         <div>
-          <h4 class="text-base font-bold text-white">选择跨链代币</h4>
-          <p class="text-[11px] text-white/50">支持 35+ 主网原生资产与 Pearl 原子化互换</p>
+          <h4 class="text-base font-bold text-white">选择闪兑代币</h4>
+          <p class="text-[11px] text-white/50">支持 PRL 及 NEAR / ETH / BSC / Base / SOL / BTC 自由互换</p>
         </div>
         <button type="button" onclick="closeSwapTokenPickerModal()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
       </div>
@@ -1565,6 +1565,7 @@
       <!-- 先选网络再选币种：网络筛选栏 -->
       <div id="swap-network-filter-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
         <button type="button" onclick="setSwapNetworkFilter('all')" data-swap-net="all" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active">全部网络</button>
+        <button type="button" onclick="setSwapNetworkFilter('prl')" data-swap-net="prl" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Pearl</button>
         <button type="button" onclick="setSwapNetworkFilter('near')" data-swap-net="near" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">NEAR</button>
         <button type="button" onclick="setSwapNetworkFilter('tron')" data-swap-net="tron" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">TRON</button>
         <button type="button" onclick="setSwapNetworkFilter('eth')" data-swap-net="eth" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Ethereum</button>
@@ -1718,10 +1719,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=6.9"></script>
+  <script src="bip39-wordlist.js?v=7.0"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=6.9"></script>
+  <script src="qrcode.min.js?v=7.0"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=6.9"></script>
+  <script src="app.js?v=7.0"></script>
 </body>
 </html>
