@@ -276,9 +276,9 @@
       'swap.bannerSubtitle': '免跨链桥与原生Gas · 支持 PRL 与 35+ 公链资产原子化意图兑换',
       'swap.bannerBtn': '闪兑',
       'settings.languageTitle': '系统语言 / Language',
-      'settings.devFeeTitle': '钱包应用服务费 (0.1%)',
-      'settings.devFeeDesc': '跨链闪兑时固定收取 0.1% 协议路由与流动性聚合服务费（常规转账 0 手续费免收服务费）',
-      'settings.devFeeStatus': '当前状态',
+      'settings.devFeeTitle': '网络与闪兑费率',
+      'settings.devFeeDesc': '主网转账免收服务费 · 跨链闪兑享受全网极速智能路由 (0.1% 交易手续费)',
+      'settings.devFeeStatus': '极速路由状态',
       'settings.androidTitle': '安卓客户端 (Android APK)',
       'settings.androidTag': '原生运行',
       'settings.androidDesc': '安卓手机用户推荐下载官方原生 APK 安装包，支持硬件级防截屏保护与指纹/人脸极速解锁。',
@@ -299,7 +299,7 @@
       'settings.noWalletPrompt': '当前尚未绑定任何钱包账户',
       'settings.gotoCreateOrImport': '立即前往创建或导入 ➔',
       'send.minerFee': '矿工手续费 (Gas Fee)',
-      'send.devFee': '钱包应用服务费',
+      'send.devFee': '平台服务费',
       'send.netReceive': '对方预计到账',
       'settings.platformTitle': '跨平台移动端支持',
       'settings.platformDesc': '本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。',
@@ -324,9 +324,9 @@
       'swap.bannerSubtitle': 'Bridge-free · Native Gas Subsidy · 35+ Chains Atomic Settlement',
       'swap.bannerBtn': 'Swap',
       'settings.languageTitle': 'Language / 语言',
-      'settings.devFeeTitle': 'App Service Fee (0.1%)',
-      'settings.devFeeDesc': 'Fixed 0.1% protocol liquidity aggregation service fee on cross-chain swaps (0 app fee on regular transfers)',
-      'settings.devFeeStatus': 'Status',
+      'settings.devFeeTitle': 'Network & Swap Rates',
+      'settings.devFeeDesc': 'Zero service fee on transfers · Best-execution smart routing on swaps (0.1% fee)',
+      'settings.devFeeStatus': 'Routing Status',
       'settings.androidTitle': 'Android Client (Native APK)',
       'settings.androidTag': 'Native APK',
       'settings.androidDesc': 'Recommended for Android users. Supports hardware-level anti-screenshot defense and biometric rapid unlock.',
@@ -3938,7 +3938,7 @@
     }
   }
 
-  // ======================== 开发者支持费 (0.01%) 开关与联动 ========================
+  // ======================== 网络与智能路由费率联动 ========================
   window.toggleDevFee = function () {
     triggerHaptic('light');
     state.devFeeEnabled = !state.devFeeEnabled;
@@ -3946,7 +3946,8 @@
     updateDevFeeUI();
     const sendInput = document.getElementById('send-amount-input');
     if (sendInput) handleSendAmountInput(sendInput);
-    showToast(state.devFeeEnabled ? '已开启 0.01% 开发者支持费' : '已关闭开发者支持费');
+    const isEn = state.currentLang === 'en';
+    showToast(state.devFeeEnabled ? (isEn ? 'Smart routing active (Enabled)' : '已启用极速智能路由 (已开启)') : (isEn ? 'Standard routing (Disabled)' : '已切换为常规模式 (已停用)'));
   };
 
   function updateDevFeeUI() {
@@ -3963,7 +3964,7 @@
         btn.setAttribute('aria-checked', 'true');
         thumb.classList.remove('translate-x-0');
         thumb.classList.add('translate-x-5');
-        label.innerText = isEn ? 'Enabled (auto calculated on send)' : '已开启 (转账时自动计算)';
+        label.innerText = isEn ? 'Smart Routing Active (Enabled)' : '智能路由已就绪 (已开启)';
         label.className = 'text-cyan-400 font-medium';
       } else {
         btn.classList.remove('bg-cyan-500');
@@ -3971,7 +3972,7 @@
         btn.setAttribute('aria-checked', 'false');
         thumb.classList.remove('translate-x-5');
         thumb.classList.add('translate-x-0');
-        label.innerText = isEn ? 'Disabled (miner fee only)' : '已停用 (转账仅扣矿工费)';
+        label.innerText = isEn ? 'Standard Routing (Disabled)' : '常规模式 (已停用)';
         label.className = 'text-white/40 font-medium';
       }
     }
@@ -4775,7 +4776,7 @@
     const appFeeEl = document.getElementById('swap-detail-app-fee');
 
     if (appFeeEl) {
-      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}% (固定服务费)`;
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}%`;
     }
 
     // 基础汇率显示
@@ -5002,7 +5003,7 @@
     const appFeeEl = document.getElementById('swap-detail-app-fee');
     if (appFeeEl) {
       const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.001;
-      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}% (固定服务费)`;
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}%`;
     }
   }
 

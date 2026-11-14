@@ -616,14 +616,14 @@
         </div>
       </div>
 
-      <!-- 钱包应用服务费设置卡片 (0.1% 仅限闪兑，转账免收) -->
+      <!-- 网络与闪兑费率设置卡片 -->
       <div class="ios-glass-card rounded-2xl p-4">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2.5">
             <span class="text-base">💎</span>
             <div>
-              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">钱包应用服务费 (0.1%)</h3>
-              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">跨链闪兑时固定收取 0.1% 协议路由与流动性聚合服务费（常规转账 0 手续费免收服务费）</p>
+              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">网络与闪兑费率</h3>
+              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">主网转账免收服务费 · 跨链闪兑享受全网极速智能路由 (0.1% 交易手续费)</p>
             </div>
           </div>
           <!-- iOS 风格弹性滑动开关 (默认开) -->
@@ -632,8 +632,8 @@
           </button>
         </div>
         <div class="flex items-center justify-between text-[11px] text-white/50 pt-2 border-t border-white/[0.05]">
-          <span data-i18n="settings.devFeeStatus">当前状态</span>
-          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">固定收取 0.1% (已开启 · 仅限闪兑)</span>
+          <span data-i18n="settings.devFeeStatus">极速路由状态</span>
+          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">智能路由已就绪 (已开启)</span>
         </div>
       </div>
 
@@ -1128,8 +1128,8 @@
       </div>
       <div id="send-dev-fee-row" class="flex items-center justify-between text-white/60">
         <div class="flex items-center gap-1.5">
-          <span data-i18n="send.devFee">钱包应用服务费</span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-400/20">转账免收</span>
+          <span data-i18n="send.devFee">平台服务费</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-400/20">免收</span>
         </div>
         <span id="send-dev-fee" class="font-mono text-emerald-400 font-semibold">0 PRL (转账免收服务费)</span>
       </div>
@@ -1414,10 +1414,10 @@
           </div>
           <div class="flex items-center justify-between">
             <span class="flex items-center gap-1">
-              <span>钱包应用服务费 (App Fee)</span>
+              <span>交易手续费 (Swap Fee)</span>
               <span class="text-[9px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">0.1%</span>
             </span>
-            <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.1% (固定服务费)</span>
+            <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.1%</span>
           </div>
           <div class="flex items-center justify-between">
             <span>跨链结算协议</span>
