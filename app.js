@@ -4989,7 +4989,7 @@
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#00EC97"/><path d="M21.3 9.2l-3.7 5.5c-.3.4.3.9.7.6l3.6-3v7.3c0 .2-.3.3-.4.1l-9.6-11.5A2 2 0 0010.3 7.5H9.9A2 2 0 007.9 9.5v13a2 2 0 002 2c.7 0 1.4-.4 1.8-1l3.7-5.5c.3-.4-.3-.9-.7-.6l-3.6 3v-7.3c0-.2.3-.3.4-.1l9.6 11.5c.4.5 1 .8 1.6.8h.4a2 2 0 002-2v-13a2 2 0 00-2-2c-.7 0-1.4.4-1.8 1z" fill="#000"/></svg>`;
     }
     if (sym === 'PRL') {
-      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#0D1B2A"/><circle cx="16" cy="16" r="11" stroke="#22D3EE" stroke-width="1.4" stroke-opacity=".55"/><circle cx="16" cy="16" r="6.8" fill="url(#prlPearlClean)"/><circle cx="13.8" cy="13.8" r="1.8" fill="#fff" fill-opacity=".9"/><defs><radialGradient id="prlPearlClean" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(14 13.5) scale(9)"><stop stop-color="#FFFFFF"/><stop offset=".55" stop-color="#A5F3FC"/><stop offset="1" stop-color="#0891B2"/></radialGradient></defs></svg>`;
+      return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#FFFFFF"/><path d="M12.2 8.2C9 8.2 6.8 10.6 6.8 13.5C6.8 16.4 9 18.8 12.2 18.8V8.2Z" fill="#0B0F19"/><path fill-rule="evenodd" clip-rule="evenodd" d="M14.2 8.2H19.4C22.9 8.2 25.2 10.4 25.2 13.6C25.2 16.8 22.9 19 19.4 19H17.2V22.4H19.6V24H12.2V22.4H14.2V8.2ZM17.2 10.2V17H19.2C21.2 17 22.3 15.7 22.3 13.6C22.3 11.5 21.2 10.2 19.2 10.2H17.2Z" fill="#0B0F19"/></svg>`;
     }
     if (sym === 'BNB') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#F3BA2F"/><path d="M12.1 14.3L16 10.4l3.9 3.9 2.3-2.3L16 5.8 9.8 12l2.3 2.3zm-6.3 1.7L8.1 13.7 10.4 16l-2.3 2.3L5.8 16zm6.3 1.7L16 21.6l3.9-3.9 2.3 2.3L16 26.2 9.8 20l2.3-2.3zm9.5-1.7l2.3-2.3 2.3 2.3-2.3 2.3-2.3-2.3zM18.3 16L16 13.7 13.7 16 16 18.3 18.3 16z" fill="#fff"/></svg>`;
@@ -6699,9 +6699,9 @@
         }
       } else {
         state.nearSwap.quoteStatus = 'no_liquidity';
-        const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '该币对或金额暂未匹配到做市商';
+        const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '暂未匹配到做市商';
         if (statusLabel) {
-          statusLabel.innerText = `⚠️ 仅市价参考 · 做市商未报价 (${reason.slice(0, 28)})`;
+          statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 报价 (${reason.slice(0, 22)}) · <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">前往 near.com ↗</a>`;
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
       }
@@ -6940,11 +6940,12 @@
         deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
         referral: state.nearReferralAccount || 'zhic49280.near',
         appFees: [
-          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: 10 }
+          { recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }
         ]
       };
 
       let quoteResult = null;
+      let quoteErrMsg = '';
       try {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 8000);
@@ -6955,39 +6956,24 @@
           signal: controller.signal
         });
         clearTimeout(timer);
-        if (res.ok) {
-          quoteResult = await res.json();
+        const parsed = await res.json().catch(() => null);
+        if (res.ok && parsed) {
+          quoteResult = parsed;
+        } else if (parsed && (parsed.message || parsed.error)) {
+          quoteErrMsg = String(parsed.message || parsed.error);
         }
       } catch (err) {
-        // 网络抖动或公网做市商排队时，自动无缝降级至官方原生意图交割通道
+        quoteErrMsg = err && err.message ? err.message : '网络请求超时';
       }
 
-      // 获取或确定存入地址与交付凭据
-      let depositAddress = quoteResult?.depositAddress || quoteResult?.quote?.depositAddress;
-      let memo = '';
+      // 严禁伪造兜底充值地址：只有 1Click 返回真实托管充值地址时才允许下单
+      const depositAddress = quoteResult?.depositAddress || quoteResult?.quote?.depositAddress;
+      const memo = quoteResult?.memo || quoteResult?.quote?.depositMemo || '';
 
       if (!depositAddress) {
-        // Canonical NEAR Intents / Defuse Protocol Omnichain Gateway
-        if (isSell) {
-          // 卖出 PRL ➔ 存入 NEAR Intents Pearl 协议网关
-          depositAddress = 'prl1qnearintentsdefusegateway000000000000000000';
-          memo = `DEST:${state.nearSwap.recipientAddress.trim()}`;
-        } else {
-          // 买入 PRL ➔ 存入外链意图充值网关
-          if (targetToken.blockchain === 'near') {
-            depositAddress = 'defuse.near';
-            memo = `PRL:${wallet.address}`;
-          } else if (['eth', 'bsc', 'base', 'arbitrum', 'polygon'].includes(targetToken.blockchain)) {
-            depositAddress = '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06';
-            memo = `PRL:${wallet.address}`;
-          } else if (targetToken.blockchain === 'sol') {
-            depositAddress = 'DefuseIntents11111111111111111111111111111111';
-            memo = `PRL:${wallet.address}`;
-          } else {
-            depositAddress = 'defuse.near';
-            memo = `PRL:${wallet.address}`;
-          }
-        }
+        triggerHaptic('error');
+        showToast(`做市商暂未给该币对提供公网报价 (${quoteErrMsg || 'No liquidity available'})，请前往 near.com/crypto/pearl 交易`);
+        return;
       }
 
       triggerHaptic('success');
