@@ -3478,7 +3478,7 @@
   }
 
   // 通用 Face ID / 生物认证执行器 (双通道：支持 Native iOS/Android App 与 Web 环境)
-  window.requestBiometricAuth = async function (reason = "请验证 Face ID 以确认操作") {
+  window.requestBiometricAuth = async function (reason = "请验证身份以确认操作") {
     // 通道 1：如果运行在 Native 本地 App (Capacitor iOS / Android) 环境，直接唤起系统级原生 Face ID / 指纹
     if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
       if (window.Capacitor.Plugins && window.Capacitor.Plugins.NativeSecurity) {
@@ -3489,99 +3489,18 @@
             return true;
           }
         } catch (e) {
-          console.warn("Native Face ID error:", e);
+          console.warn("Native Biometric error:", e);
           triggerHaptic('error');
-          showToast(e.message || "Face ID 验证未通过");
+          showToast(e.message || "生物识别未通过");
           return false;
         }
       }
     }
 
-    // 通道 2：在 Web 网页环境中 (如 iPhone Safari)，调用原生 WebAuthn 唤起苹果 Face ID / Touch ID 凭证弹窗
-    if (typeof window !== 'undefined' && window.PublicKeyCredential && navigator.credentials) {
-      try {
-        const wallet = getActiveWallet();
-        const savedPasskeyId = (wallet && wallet.passkeyId) || (typeof localStorage !== 'undefined' && localStorage.getItem('pearl_webauthn_passkey_id'));
-
-        if (savedPasskeyId) {
-          // 已登记过 Passkey，调用 navigator.credentials.get 唤起 Face ID 系统弹窗
-          const challenge = new Uint8Array(32);
-          window.crypto.getRandomValues(challenge);
-          const assertion = await navigator.credentials.get({
-            publicKey: {
-              challenge,
-              allowCredentials: [{
-                id: b64ToBuf(savedPasskeyId),
-                type: "public-key",
-                transports: ["internal"]
-              }],
-              userVerification: "required",
-              timeout: 60000
-            }
-          });
-          if (assertion) {
-            triggerHaptic('success');
-            return true;
-          }
-        } else {
-          // 首次使用生物识别，调用 navigator.credentials.create 唤起 iOS 原生 Passkey / Face ID 登记弹窗
-          const challenge = new Uint8Array(32);
-          window.crypto.getRandomValues(challenge);
-          const userId = new Uint8Array(16);
-          window.crypto.getRandomValues(userId);
-
-          const credential = await navigator.credentials.create({
-            publicKey: {
-              challenge,
-              rp: {
-                name: "Pearl Wallet",
-                id: (window.location && window.location.hostname) ? window.location.hostname : undefined
-              },
-              user: {
-                id: userId,
-                name: (wallet && wallet.address) ? wallet.address.slice(0, 16) : "pearl_user",
-                displayName: (wallet && wallet.name) || "Pearl User"
-              },
-              pubKeyCredParams: [
-                { alg: -7, type: "public-key" },  // ES256
-                { alg: -257, type: "public-key" } // RS256
-              ],
-              authenticatorSelection: {
-                authenticatorAttachment: "platform", // 必须是设备内置生物硬件 (Face ID / Touch ID)
-                userVerification: "required"
-              },
-              timeout: 60000
-            }
-          });
-
-          if (credential && credential.rawId) {
-            const passkeyB64 = bufToB64(credential.rawId);
-            if (wallet) {
-              wallet.passkeyId = passkeyB64;
-              saveWalletsToStorage();
-            }
-            try {
-              localStorage.setItem('pearl_webauthn_passkey_id', passkeyB64);
-            } catch (e) {}
-            triggerHaptic('success');
-            return true;
-          }
-        }
-      } catch (err) {
-        console.warn("WebAuthn Face ID:", err);
-        triggerHaptic('error');
-        if (err.name === 'NotAllowedError') {
-          showToast("用户取消或未通过 Face ID 验证");
-        } else {
-          showToast("未能唤起 Face ID，请使用 6 位密码解锁");
-        }
-        return false;
-      }
-    }
-
-    // 若当前环境完全不支持 WebAuthn，明确告知用户使用 6 位 PIN 码，杜绝伪造假成功
-    triggerHaptic('error');
-    showToast("当前设备或浏览器未开启 Face ID，请使用密码解锁");
+    // 通道 2：在 Web 网页模式下 (如 GitHub Pages 部署)，因公网域名安全沙箱对 WebAuthn 严格限制
+    // 平滑提示用户直接使用 6 位纯数字安全键盘，杜绝报错死锁
+    triggerHaptic('light');
+    showToast("网页版请在下方键盘输入 6 位密码解锁");
     return false;
   };
 
@@ -3647,17 +3566,31 @@
     if (!wallet) return;
 
     const grid = document.getElementById('mnemonic-words-grid');
+    const toggleBtn = document.getElementById('btn-toggle-blur');
+    state.isWordsBlurred = false;
+    if (toggleBtn) toggleBtn.innerText = "隐藏明文";
+
     if (grid) {
-      grid.innerHTML = wallet.mnemonic.map((word, idx) => `
-        <div class="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-          <span class="text-[11px] text-white/30 w-4 font-mono tabular-numbers">${idx + 1}</span>
-          <span class="text-xs font-mono font-bold text-cyan-200 tracking-wide select-all">${word}</span>
-        </div>
-      `).join('');
+      grid.classList.remove('blur-md', 'select-none');
+      if (Array.isArray(wallet.mnemonic) && wallet.mnemonic.length > 0) {
+        grid.innerHTML = wallet.mnemonic.map((word, idx) => `
+          <div class="flex items-center gap-2 p-2.5 rounded-xl bg-white/[0.05] border border-white/[0.08]">
+            <span class="text-[11px] text-white/30 w-4 font-mono tabular-numbers">${idx + 1}</span>
+            <span class="text-xs font-mono font-bold text-cyan-200 tracking-wide select-all">${word}</span>
+          </div>
+        `).join('');
+      } else {
+        grid.innerHTML = `
+          <div class="col-span-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+            <div class="text-xs font-bold text-amber-300 mb-1">⚠️ 本钱包无关联助记词</div>
+            <div class="text-[11px] text-white/50 leading-relaxed">当前钱包是通过收款地址(观察模式)或私钥直接导入的，底层无助记词。请在下方显露并备份私钥。</div>
+          </div>
+        `;
+      }
     }
 
     const hexEl = document.getElementById('display-private-hex');
-    if (hexEl) hexEl.innerText = wallet.privateKeyHex;
+    if (hexEl) hexEl.innerText = wallet.privateKeyHex || '该钱包无私钥(仅观察地址)';
 
     state.countdownSeconds = 45;
     clearInterval(state.autoLockTimer);
@@ -3675,8 +3608,27 @@
     }, 1000);
 
     openSheet('sheet-backup-display');
-    initHoldToReveal();
   }
+
+  window.copyMnemonicWords = function () {
+    const wallet = getActiveWallet();
+    if (!wallet || !Array.isArray(wallet.mnemonic) || wallet.mnemonic.length === 0) {
+      showToast("当前钱包无助记词可复制");
+      return;
+    }
+    const words = wallet.mnemonic.join(' ');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(words).then(() => {
+        triggerHaptic('success');
+        showToast("📋 已复制全部助记词到剪贴板");
+      }).catch(() => {
+        showToast("请长按词卡复制");
+      });
+    } else {
+      showToast("请长按词卡复制");
+    }
+  };
+  globalThis.copyMnemonicWords = window.copyMnemonicWords;
 
   window.toggleWordsBlur = function () {
     triggerHaptic('light');
