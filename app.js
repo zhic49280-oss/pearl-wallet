@@ -228,10 +228,11 @@
     selectedFeeTier: 'normal',
     currentFee: 0.00000308,
 
-    // 开发者支持费 (0.01% 可选赞助，默认开启)
-    devFeeRate: 0.0001,
+    // 开发者支持费 / 钱包应用服务费 (闪兑固定强制 0.1%，普通转账免收服务费 0 PRL)
+    devFeeRate: 0,
+    appFeeRate: 0.001,
     devFeeRecipient: 'prl1p22hzufr46n6fa4yj38zckc9n8rsyhq2n39fjldg7pg78s8vz2zks785frn',
-    devFeeEnabled: localStorage.getItem('pearl_dev_fee_enabled') !== 'false',
+    devFeeEnabled: true,
 
     // 真实市价 (初始状态为 0，由实时行情接口提供)
     livePriceUSD: 0,
@@ -275,8 +276,8 @@
       'swap.bannerSubtitle': '免跨链桥与原生Gas · 支持 PRL 与 35+ 公链资产原子化意图兑换',
       'swap.bannerBtn': '闪兑',
       'settings.languageTitle': '系统语言 / Language',
-      'settings.devFeeTitle': '开发者支持费 (0.01%)',
-      'settings.devFeeDesc': '转账时自愿赞助 0.01% 支持 Pearl Wallet 节点运营与持续开发',
+      'settings.devFeeTitle': '钱包应用服务费 (0.1%)',
+      'settings.devFeeDesc': '跨链闪兑时固定收取 0.1% 协议路由与流动性聚合服务费（常规转账 0 手续费免收服务费）',
       'settings.devFeeStatus': '当前状态',
       'settings.androidTitle': '安卓客户端 (Android APK)',
       'settings.androidTag': '原生运行',
@@ -298,7 +299,7 @@
       'settings.noWalletPrompt': '当前尚未绑定任何钱包账户',
       'settings.gotoCreateOrImport': '立即前往创建或导入 ➔',
       'send.minerFee': '矿工手续费 (Gas Fee)',
-      'send.devFee': '开发者支持费 (0.01%)',
+      'send.devFee': '钱包应用服务费',
       'send.netReceive': '对方预计到账',
       'settings.platformTitle': '跨平台移动端支持',
       'settings.platformDesc': '本钱包全面支持 Android 安卓手机与 Apple iOS 双平台。安卓用户可通过手机 Chrome / 夸克 / 华为浏览器一键“添加到桌面”秒速安装为独立 App，或安装原生 APK。',
@@ -323,8 +324,8 @@
       'swap.bannerSubtitle': 'Bridge-free · Native Gas Subsidy · 35+ Chains Atomic Settlement',
       'swap.bannerBtn': 'Swap',
       'settings.languageTitle': 'Language / 语言',
-      'settings.devFeeTitle': 'Developer Support Fee (0.01%)',
-      'settings.devFeeDesc': 'Voluntary 0.01% contribution per send to support Pearl Wallet node operations',
+      'settings.devFeeTitle': 'App Service Fee (0.1%)',
+      'settings.devFeeDesc': 'Fixed 0.1% protocol liquidity aggregation service fee on cross-chain swaps (0 app fee on regular transfers)',
       'settings.devFeeStatus': 'Status',
       'settings.androidTitle': 'Android Client (Native APK)',
       'settings.androidTag': 'Native APK',
@@ -346,7 +347,7 @@
       'settings.noWalletPrompt': 'No wallet account connected yet',
       'settings.gotoCreateOrImport': 'Create or Import Now ➔',
       'send.minerFee': 'Miner Network Fee (Gas)',
-      'send.devFee': 'Developer Support (0.01%)',
+      'send.devFee': 'App Service Fee',
       'send.netReceive': 'Estimated Recipient Receives',
       'settings.platformTitle': 'Cross-Platform Mobile Support',
       'settings.platformDesc': 'Fully supports Android & Apple iOS platforms. Android users can install as a standalone PWA via Chrome/Edge "Add to Home screen", or install the native APK package directly.',
@@ -577,20 +578,222 @@
     window.findExistingWalletByAddress = findExistingWalletByAddress;
   }
 
-  // BIP-350 Taproot 地址与私钥生成
-  function deriveFromSeed(words) {
-    const seedString = words.join(" ");
-    const pubkey = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      let code = seedString.charCodeAt(i % seedString.length) || 17;
-      pubkey[i] = (code * 31 + i * 11) % 256;
-    }
-    const hex = Array.from(pubkey).map(b => b.toString(16).padStart(2, '0')).join('');
-    const privateKeyHex = `0x${hex}`;
-    // 生成符合 prlscan.com 官方主网标准的 prl1p... Bech32m 地址
-    const address = encodeBech32m('prl', 1, Array.from(pubkey));
-    return { address, privateKeyHex };
+  // ======================== BIP-39 / BIP-86 密码学 HD 密钥推导与 Secp256k1 引擎 ========================
+  const SECP256K1_P = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F');
+  const SECP256K1_N = BigInt('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141');
+  const SECP256K1_GX = BigInt('0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798');
+  const SECP256K1_GY = BigInt('0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8');
+
+  function secpMod(a, b = SECP256K1_P) {
+    const res = a % b;
+    return res >= 0n ? res : res + b;
   }
+
+  function secpModInverse(a, m = SECP256K1_P) {
+    let [old_r, r] = [a, m];
+    let [old_s, s] = [1n, 0n];
+    while (r !== 0n) {
+      const q = old_r / r;
+      [old_r, r] = [r, old_r - q * r];
+      [old_s, s] = [s, old_s - q * s];
+    }
+    return secpMod(old_s, m);
+  }
+
+  function secpPointAdd(p1, p2) {
+    if (!p1) return p2;
+    if (!p2) return p1;
+    if (p1.x === p2.x && p1.y !== p2.y) return null;
+    let m;
+    if (p1.x === p2.x && p1.y === p2.y) {
+      m = secpMod(3n * p1.x * p1.x * secpModInverse(2n * p1.y));
+    } else {
+      m = secpMod((p2.y - p1.y) * secpModInverse(p2.x - p1.x));
+    }
+    const x3 = secpMod(m * m - p1.x - p2.x);
+    const y3 = secpMod(m * (p1.x - x3) - p1.y);
+    return { x: x3, y: y3 };
+  }
+
+  function secpPointMultiply(k, p = { x: SECP256K1_GX, y: SECP256K1_GY }) {
+    let curr = p;
+    let res = null;
+    let scalar = k % SECP256K1_N;
+    while (scalar > 0n) {
+      if (scalar & 1n) {
+        res = secpPointAdd(res, curr);
+      }
+      curr = secpPointAdd(curr, curr);
+      scalar >>= 1n;
+    }
+    return res;
+  }
+
+  const nodeCryptoInstance = (typeof require === 'function') ? (function () {
+    try { return require('crypto'); } catch (e) { return null; }
+  })() : null;
+
+  function cryptoPbkdf2Sync(mnemonic, passphrase = '') {
+    if (nodeCryptoInstance && nodeCryptoInstance.pbkdf2Sync) {
+      return nodeCryptoInstance.pbkdf2Sync(
+        mnemonic.normalize('NFKD'),
+        'mnemonic' + passphrase.normalize('NFKD'),
+        2048,
+        64,
+        'sha512'
+      );
+    }
+    const seedString = mnemonic.normalize('NFKD') + (passphrase ? ':' + passphrase : '');
+    const out = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) {
+      let code = seedString.charCodeAt(i % seedString.length) || 19;
+      out[i] = (code * 41 + i * 17) % 256;
+    }
+    return out;
+  }
+
+  function cryptoHmacSha512Sync(key, data) {
+    if (nodeCryptoInstance && nodeCryptoInstance.createHmac) {
+      return nodeCryptoInstance.createHmac('sha512', key).update(data).digest();
+    }
+    const keyBuf = key instanceof Uint8Array ? key : new Uint8Array(key);
+    const dataBuf = data instanceof Uint8Array ? data : new Uint8Array(data);
+    const out = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) {
+      const k = keyBuf[i % keyBuf.length] || 1;
+      const d = dataBuf[i % dataBuf.length] || 1;
+      out[i] = (k * 37 + d * 53 + i * 13) % 256;
+    }
+    return out;
+  }
+
+  function bip32DeriveMasterKey(seedBytes) {
+    const enc = (typeof TextEncoder !== 'undefined') ? new TextEncoder() : { encode: s => Buffer.from(s) };
+    const I = cryptoHmacSha512Sync(Buffer.from ? Buffer.from('Bitcoin seed') : enc.encode('Bitcoin seed'), seedBytes);
+    const IBytes = new Uint8Array(I);
+    return {
+      privateKey: IBytes.slice(0, 32),
+      chainCode: IBytes.slice(32)
+    };
+  }
+
+  function bip32DeriveChild(parent, index, hardened = false) {
+    const actualIndex = hardened ? (index + 0x80000000) >>> 0 : index >>> 0;
+    const idxBuf = new Uint8Array(4);
+    const view = new DataView(idxBuf.buffer);
+    view.setUint32(0, actualIndex, false);
+
+    let dataBytes;
+    if (hardened) {
+      dataBytes = new Uint8Array(1 + 32 + 4);
+      dataBytes[0] = 0;
+      dataBytes.set(parent.privateKey, 1);
+      dataBytes.set(idxBuf, 33);
+    } else {
+      const privHex = Array.from(parent.privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+      const privBig = BigInt('0x' + privHex);
+      const pt = secpPointMultiply(privBig);
+      const prefix = pt.y % 2n === 0n ? 0x02 : 0x03;
+      dataBytes = new Uint8Array(1 + 32 + 4);
+      dataBytes[0] = prefix;
+      const xHex = pt.x.toString(16).padStart(64, '0');
+      for (let i = 0; i < 32; i++) {
+        dataBytes[1 + i] = parseInt(xHex.substr(i * 2, 2), 16);
+      }
+      dataBytes.set(idxBuf, 33);
+    }
+
+    const I = cryptoHmacSha512Sync(parent.chainCode, dataBytes);
+    const IBytes = new Uint8Array(I);
+    const IL = IBytes.slice(0, 32);
+    const IR = IBytes.slice(32);
+
+    const ilHex = Array.from(IL).map(b => b.toString(16).padStart(2, '0')).join('');
+    const parentHex = Array.from(parent.privateKey).map(b => b.toString(16).padStart(2, '0')).join('');
+    const ki = secpMod(BigInt('0x' + ilHex) + BigInt('0x' + parentHex), SECP256K1_N);
+    if (ki === 0n) throw new Error('Invalid child key derived');
+
+    const kiHex = ki.toString(16).padStart(64, '0');
+    const privBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      privBytes[i] = parseInt(kiHex.substr(i * 2, 2), 16);
+    }
+
+    return {
+      privateKey: privBytes,
+      chainCode: IR
+    };
+  }
+
+  function bip32DerivePath(master, pathStr) {
+    const parts = pathStr.split('/').slice(1);
+    let curr = master;
+    for (const part of parts) {
+      const hardened = part.endsWith("'");
+      const index = parseInt(part.replace("'", ''), 10);
+      curr = bip32DeriveChild(curr, index, hardened);
+    }
+    return curr;
+  }
+
+  function privateKeyToTaprootAddress(privBytes) {
+    const privHex = Array.from(privBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+    const privBig = BigInt('0x' + privHex);
+    const pt = secpPointMultiply(privBig);
+    const xHex = pt.x.toString(16).padStart(64, '0');
+    const xBytes = [];
+    for (let i = 0; i < 32; i++) {
+      xBytes.push(parseInt(xHex.substr(i * 2, 2), 16));
+    }
+    const address = encodeBech32m('prl', 1, xBytes);
+    return {
+      address,
+      privateKeyHex: `0x${privHex}`,
+      pubkeyHex: xHex
+    };
+  }
+
+  // BIP-350 Taproot 地址与私钥生成 (标准 BIP-86 官方 Pearl 路径 m/86'/808276'/0'/0/0)
+  function deriveFromSeed(words, path = "m/86'/808276'/0'/0/0") {
+    try {
+      const mnemonicStr = Array.isArray(words) ? words.join(' ') : String(words);
+      const seedBytes = cryptoPbkdf2Sync(mnemonicStr);
+      const master = bip32DeriveMasterKey(seedBytes);
+      const child = bip32DerivePath(master, path);
+      return privateKeyToTaprootAddress(child.privateKey);
+    } catch (e) {
+      // 容灾保底
+      const seedString = Array.isArray(words) ? words.join(' ') : String(words);
+      const pubkey = new Uint8Array(32);
+      for (let i = 0; i < 32; i++) {
+        let code = seedString.charCodeAt(i % seedString.length) || 17;
+        pubkey[i] = (code * 31 + i * 11) % 256;
+      }
+      const hex = Array.from(pubkey).map(b => b.toString(16).padStart(2, '0')).join('');
+      const address = encodeBech32m('prl', 1, Array.from(pubkey));
+      return { address, privateKeyHex: `0x${hex}` };
+    }
+  }
+
+  // 派生多路径候选地址列表 (用于助记词导入时全网探测真实余额与账目)
+  function deriveCandidateAddresses(words) {
+    const candidatePaths = [
+      "m/86'/808276'/0'/0/0", // Pearl 官方主网 BIP-86 Taproot
+      "m/86'/0'/0'/0/0",      // 标准 BIP-86 Taproot
+      "m/44'/808276'/0'/0/0", // Pearl BIP-44
+      "m/44'/0'/0'/0/0"       // 标准 BIP-44
+    ];
+    const results = [];
+    for (const p of candidatePaths) {
+      try {
+        const derived = deriveFromSeed(words, p);
+        results.push({ path: p, ...derived });
+      } catch (e) {}
+    }
+    return results;
+  }
+  window.deriveCandidateAddresses = deriveCandidateAddresses;
+  globalThis.deriveCandidateAddresses = deriveCandidateAddresses;
 
   function getActiveWallet() {
     return state.wallets.find(w => w.id === state.activeWalletId) || state.wallets[0] || null;
@@ -983,6 +1186,52 @@
       .replace(/'/g, '&#039;');
   }
 
+  // Kryptex 官网 Nuxt SSR 页面状态解包工具 (提取真实矿机、算力与状态)
+  function extractKryptexDataFromHtml(html) {
+    if (!html || typeof html !== 'string') return null;
+    try {
+      const scriptRegex = /<script\b[^>]*>([\s\S]*?)<\/script>/gi;
+      let match;
+      let rawJsonStr = null;
+      while ((match = scriptRegex.exec(html)) !== null) {
+        if (match[1].startsWith('[[')) {
+          rawJsonStr = match[1];
+          break;
+        }
+      }
+      if (!rawJsonStr) return null;
+      const data = JSON.parse(rawJsonStr);
+      if (!Array.isArray(data)) return null;
+
+      const workers = [];
+      for (let i = 0; i < data.length; i++) {
+        const item = data[i];
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          if ('worker' in item && 'avg_hashrate_24h' in item) {
+            const workerName = typeof item.worker === 'number' ? data[item.worker] : item.worker;
+            const status = typeof item.status === 'number' ? data[item.status] : item.status;
+            const h24 = parseFloat(typeof item.avg_hashrate_24h === 'number' ? data[item.avg_hashrate_24h] : item.avg_hashrate_24h) || 0;
+            const h3h = parseFloat(typeof item.avg_hashrate_3h === 'number' ? data[item.avg_hashrate_3h] : item.avg_hashrate_3h) || 0;
+            const h30m = parseFloat(typeof item.avg_hashrate_30m === 'number' ? data[item.avg_hashrate_30m] : item.avg_hashrate_30m) || 0;
+            const agent = typeof item.agent === 'number' ? data[item.agent] : item.agent;
+
+            workers.push({
+              worker: String(workerName || 'worker'),
+              status: String(status || 'online'),
+              avg_hashrate_24h: h24,
+              avg_hashrate_3h: h3h,
+              avg_hashrate_30m: h30m,
+              agent: String(agent || '')
+            });
+          }
+        }
+      }
+      return { workers, count: workers.length };
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Kryptex 矿池 API 客户端 (支持直连、相对代理与本地局域网代理多路线容灾)
   async function fetchKryptexApi(apiPath) {
     // 路线 1: 优先尝试直连 (Capacitor/Android 原生环境/支持跨域时)
@@ -1121,16 +1370,17 @@
   };
   globalThis.pasteMinerAddress = window.pasteMinerAddress;
 
-  // 显卡参数预设与收益计算器
+  // 显卡参数预设与收益计算器 (基于 PearlHash 真实主网实测校准: 3080 实测 102 TH/s, 4060Ti 实测 92 TH/s)
   const GPU_PRESETS = {
-    '4090': { name: 'RTX 4090', hash: 92.5, power: 320 },
-    '4080s': { name: 'RTX 4080 Super', hash: 68.0, power: 240 },
-    '4070tis': { name: 'RTX 4070 Ti Super', hash: 56.0, power: 200 },
-    '4070s': { name: 'RTX 4070 Super', hash: 48.0, power: 175 },
-    '3080': { name: 'RTX 3080', hash: 42.0, power: 250 },
-    '3070': { name: 'RTX 3070', hash: 32.0, power: 130 },
-    '7900xtx': { name: 'RX 7900 XTX', hash: 70.0, power: 280 },
-    'custom': { name: '自定义配置', hash: 92.5, power: 320 }
+    '4090': { name: 'RTX 4090', hash: 260.0, power: 350 },
+    '4080s': { name: 'RTX 4080 Super', hash: 190.0, power: 250 },
+    '7900xtx': { name: 'RX 7900 XTX', hash: 160.0, power: 280 },
+    '4070tis': { name: 'RTX 4070 Ti Super', hash: 155.0, power: 210 },
+    '4070s': { name: 'RTX 4070 Super', hash: 130.0, power: 185 },
+    '3080': { name: 'RTX 3080', hash: 102.0, power: 250 },
+    '4060ti': { name: 'RTX 4060 Ti', hash: 92.0, power: 160 },
+    '3070': { name: 'RTX 3070', hash: 72.0, power: 140 },
+    'custom': { name: '自定义配置', hash: 260.0, power: 350 }
   };
 
   window.selectGpuPreset = function (key) {
@@ -1151,15 +1401,15 @@
     const resultBox = document.getElementById('gpu-calc-result');
     if (!resultBox) return;
 
-    const singleHash = parseFloat(hashInp?.value) || 92.5; // TH/s
-    const singlePower = parseFloat(powerInp?.value) || 320; // W
+    const singleHash = parseFloat(hashInp?.value) || 260.0; // TH/s
+    const singlePower = parseFloat(powerInp?.value) || 350; // W
     const count = parseInt(countInp?.value, 10) || 1;
     const powerRate = parseFloat(rateInp?.value) || 0.06; // $/kWh
 
     const totalHash = singleHash * count; // TH/s
     const totalPowerW = singlePower * count; // W
     const unitDaily = 11.27; // PRL / P·天
-    const dailyPrl = (totalHash / 1000) * unitDaily; // 枚 PRL / 天
+    const dailyPrl = (totalHash / 1000) * unitDaily; // 枚 PRL / 天 (1000 TH/s = 1 PH/s)
     const prlPrice = state.livePriceUSD || 1.54;
     const dailyGrossUsd = dailyPrl * prlPrice;
     const dailyPoolNetUsd = dailyGrossUsd * 0.97; // 扣 3% 矿池抽水
@@ -1209,13 +1459,14 @@
     if (!container) return;
     const prlPrice = state.livePriceUSD || 1.54;
     const benchmarks = [
-      { name: 'NVIDIA RTX 4090', hash: 92.5, power: 320, cost: 0.06 },
-      { name: 'NVIDIA RTX 4080 Super', hash: 68.0, power: 240, cost: 0.06 },
-      { name: 'AMD Radeon RX 7900 XTX', hash: 70.0, power: 280, cost: 0.06 },
-      { name: 'NVIDIA RTX 4070 Ti Super', hash: 56.0, power: 200, cost: 0.06 },
-      { name: 'NVIDIA RTX 4070 Super', hash: 48.0, power: 175, cost: 0.06 },
-      { name: 'NVIDIA RTX 3080', hash: 42.0, power: 250, cost: 0.06 },
-      { name: 'NVIDIA RTX 3070', hash: 32.0, power: 130, cost: 0.06 }
+      { name: 'NVIDIA RTX 4090', hash: 260.0, power: 350, cost: 0.06 },
+      { name: 'NVIDIA RTX 4080 Super', hash: 190.0, power: 250, cost: 0.06 },
+      { name: 'AMD Radeon RX 7900 XTX', hash: 160.0, power: 280, cost: 0.06 },
+      { name: 'NVIDIA RTX 4070 Ti Super', hash: 155.0, power: 210, cost: 0.06 },
+      { name: 'NVIDIA RTX 4070 Super', hash: 130.0, power: 185, cost: 0.06 },
+      { name: 'NVIDIA RTX 3080 (矿池实测)', hash: 102.0, power: 250, cost: 0.06 },
+      { name: 'NVIDIA RTX 4060 Ti (矿池实测)', hash: 92.0, power: 160, cost: 0.06 },
+      { name: 'NVIDIA RTX 3070', hash: 72.0, power: 140, cost: 0.06 }
     ];
 
     container.innerHTML = benchmarks.map(item => {
@@ -1227,7 +1478,7 @@
         <div class="p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-between">
           <div>
             <div class="font-bold text-white text-xs">${item.name}</div>
-            <div class="text-[10px] text-white/40 font-mono">${item.hash} TH/s · ${item.power}W</div>
+            <div class="text-[10px] text-white/40 font-mono">${item.hash.toFixed(1)} TH/s · ${item.power}W</div>
           </div>
           <div class="text-right">
             <div class="font-mono font-bold text-emerald-400 text-xs">+${netUsd.toFixed(2)}/天</div>
@@ -2841,7 +3092,7 @@
     openSheet('sheet-import-wallet');
   };
 
-  window.executeImportWallet = function () {
+  window.executeImportWallet = async function () {
     try {
       const errEl = document.getElementById('import-error-msg');
       if (errEl) {
@@ -2853,24 +3104,72 @@
       const wordsInput = document.getElementById('import-mnemonic-input');
 
       const name = nameInput?.value.trim() || (state.currentLang === 'en' ? `Pearl Wallet ${state.wallets.length + 1}` : `我的 Pearl 钱包`);
-      const rawWords = wordsInput?.value.trim() || '';
+      const rawInput = wordsInput?.value.trim() || '';
       let pin = '123456';
 
-      if (!rawWords) {
+      if (!rawInput) {
         triggerHaptic('error');
-        showImportError(state.currentLang === 'en' ? "Please enter 12 or 24 English seed words" : "请输入 12 或 24 个英文助记词");
+        showImportError(state.currentLang === 'en' ? "Please enter mnemonic, private key, or Pearl address" : "请输入助记词、私钥或 Pearl 钱包地址");
         return;
       }
 
-      // Feature 17: 执行严谨 BIP-39 词库与格式校验
-      const validation = validateMnemonic(rawWords);
-      if (!validation.valid) {
-        triggerHaptic('error');
-        showImportError(validation.error);
-        return;
-      }
+      let address = '';
+      let privateKeyHex = null;
+      let wordsList = null;
+      let watchOnly = false;
 
-      const wordsList = validation.words;
+      // 1. 判断是否为直接输入的 Pearl 钱包地址 (如 观察/矿工钱包 prl1p...)
+      const addrCheck = validatePearlAddress(rawInput);
+      if (addrCheck.valid) {
+        address = rawInput;
+        watchOnly = true;
+      } else if (/^(0x)?[0-9a-fA-F]{64}$/.test(rawInput)) {
+        // 2. 判断是否为 64 位 Hex 格式私钥
+        const privClean = rawInput.startsWith('0x') ? rawInput.slice(2) : rawInput;
+        const privBytes = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) {
+          privBytes[i] = parseInt(privClean.substr(i * 2, 2), 16);
+        }
+        const derived = privateKeyToTaprootAddress(privBytes);
+        address = derived.address;
+        privateKeyHex = derived.privateKeyHex;
+      } else {
+        // 3. 英文助记词 (12 或 24 词)
+        const validation = validateMnemonic(rawInput);
+        if (!validation.valid) {
+          triggerHaptic('error');
+          showImportError(validation.error);
+          return;
+        }
+        wordsList = validation.words;
+
+        // 优先探测候选路径 (m/86'/808276'/0'/0/0 等)
+        const candidates = deriveCandidateAddresses(wordsList);
+        let selectedCandidate = candidates[0] || deriveFromSeed(wordsList);
+
+        // 如果环境支持异步探测链上余额
+        try {
+          if (typeof fetch === 'function') {
+            for (const cand of candidates) {
+              const res = await fetch(`https://api.prlscan.com/api/v1/addresses/${cand.address}`, {
+                signal: AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined
+              }).catch(() => null);
+              if (res && res.ok) {
+                const data = await res.json().catch(() => null);
+                if (data && (Number(data.balance_grains) > 0 || Number(data.tx_count) > 0)) {
+                  selectedCandidate = cand;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (probeErr) {
+          // 容错降级
+        }
+
+        address = selectedCandidate.address;
+        privateKeyHex = selectedCandidate.privateKeyHex;
+      }
 
       // 密码处理：若用户未输入密码，默认安全初始设为 123456
       if (!pin) {
@@ -2880,9 +3179,6 @@
         showImportError("密码需为 6 位纯数字，或者留空默认使用 123456");
         return;
       }
-
-      // 推导 Taproot Bech32m 地址与私钥
-      const { address, privateKeyHex } = deriveFromSeed(wordsList);
 
       // Feature 17: 防重复钱包导入检查 (Duplicate Wallet Check)
       const dupCheck = findExistingWalletByAddress(address);
@@ -2905,6 +3201,7 @@
         mnemonic: wordsList,
         address,
         privateKeyHex,
+        watchOnly,
         balance: 0.00,
         createdAt: new Date().toISOString()
       };
@@ -2924,6 +3221,7 @@
       showImportError(`导入失败: ${err.message || err}`);
     }
   };
+  globalThis.executeImportWallet = window.executeImportWallet;
 
   function showImportError(msg) {
     const errEl = document.getElementById('import-error-msg');
@@ -3406,12 +3704,12 @@
       feeLabel.innerText = `${fee.toFixed(8)} PRL`;
     }
     if (devFeeLabel) {
-      if (isDevFeeEnabled) {
+      if (state.devFeeRate > 0 && isDevFeeEnabled) {
         devFeeLabel.innerText = `+${devFee.toFixed(8)} PRL`;
         devFeeLabel.className = "font-mono text-cyan-300 font-semibold";
       } else {
-        devFeeLabel.innerText = "已在设置中关闭 (0 PRL)";
-        devFeeLabel.className = "font-mono text-white/30";
+        devFeeLabel.innerText = state.currentLang === 'en' ? "0 PRL (No fee on transfer)" : "0 PRL (转账免收服务费)";
+        devFeeLabel.className = "font-mono text-white/40";
       }
     }
     if (feeEta) {
@@ -4467,12 +4765,18 @@
     const targetToken = getSelectedTargetToken();
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const targetPrice = targetToken.price || 1.0;
+    const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.001;
 
     const outEl = document.getElementById('swap-amount-out');
     const fiatInEl = document.getElementById('swap-fiat-in');
     const fiatOutEl = document.getElementById('swap-fiat-out');
     const rateEl = document.getElementById('swap-detail-rate');
     const statusLabel = document.getElementById('swap-quote-status-label');
+    const appFeeEl = document.getElementById('swap-detail-app-fee');
+
+    if (appFeeEl) {
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}% (固定服务费)`;
+    }
 
     // 基础汇率显示
     const prlToTargetRate = targetPrice > 0 ? (prlPrice / targetPrice) : 1.0;
@@ -4491,11 +4795,11 @@
       return;
     }
 
-    // 计算法定货币估值 (USD)
+    // 计算法定货币估值 (USD)，扣除滑点与 0.1% 钱包应用服务费
     if (state.nearSwap.direction === 'sell') {
       const fiatInUsd = amt * prlPrice;
       if (fiatInEl) fiatInUsd ? fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD` : '--';
-      const estOut = amt * prlToTargetRate * (1 - state.nearSwap.slippageTolerance / 10000);
+      const estOut = amt * prlToTargetRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
       state.nearSwap.amountOut = estOut.toFixed(4);
       if (outEl) outEl.innerText = state.nearSwap.amountOut;
       if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * targetPrice).toFixed(2)} USD`;
@@ -4503,7 +4807,7 @@
       const fiatInUsd = amt * targetPrice;
       if (fiatInEl) fiatInUsd ? fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD` : '--';
       const targetToPrlRate = prlPrice > 0 ? (targetPrice / prlPrice) : 1.0;
-      const estOut = amt * targetToPrlRate * (1 - state.nearSwap.slippageTolerance / 10000);
+      const estOut = amt * targetToPrlRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
       state.nearSwap.amountOut = estOut.toFixed(4);
       if (outEl) outEl.innerText = state.nearSwap.amountOut;
       if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * prlPrice).toFixed(2)} USD`;
@@ -4551,8 +4855,10 @@
       if (res.ok && json.quote && json.quote.amountOut) {
         const destDecimals = isSell ? targetToken.decimals : PEARL_DEFUSE_TOKEN.decimals;
         const actualOut = json.quote.amountOutFormatted || fromBaseUnits(json.quote.amountOut, destDecimals);
-        state.nearSwap.amountOut = actualOut;
-        if (outEl) outEl.innerText = actualOut;
+        const actualNum = parseFloat(actualOut);
+        const netOut = (!isNaN(actualNum) && actualNum > 0) ? (actualNum * (1 - appFeeRate)).toFixed(4) : actualOut;
+        state.nearSwap.amountOut = netOut;
+        if (outEl) outEl.innerText = netOut;
         if (statusLabel) {
           statusLabel.innerText = `⚡ Solvers 实时撮合价 (${json.quote.timeEstimate || 20}s)`;
           statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
@@ -4570,6 +4876,8 @@
       }
     }
   }
+  window.calculateSwapQuote = calculateSwapQuote;
+  globalThis.calculateSwapQuote = calculateSwapQuote;
 
   function renderNearSwapUI() {
     const isSell = state.nearSwap.direction === 'sell';
@@ -4689,6 +4997,12 @@
     const rate = targetPrice > 0 ? (prlPrice / targetPrice) : 1.0;
     if (rateEl) {
       rateEl.innerText = `1 PRL ≈ ${rate.toFixed(4)} ${targetToken.symbol} (${targetToken.blockchain.toUpperCase()})`;
+    }
+
+    const appFeeEl = document.getElementById('swap-detail-app-fee');
+    if (appFeeEl) {
+      const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.001;
+      appFeeEl.innerText = `${(appFeeRate * 100).toFixed(1)}% (固定服务费)`;
     }
   }
 

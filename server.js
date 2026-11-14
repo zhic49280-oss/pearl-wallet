@@ -24,9 +24,15 @@ const server = http.createServer((req, res) => {
     }
     const https = require('https');
     const targetUrl = `https://pool.kryptex.com${pathParam}`;
-    const proxyReq = https.get(targetUrl, { headers: { 'User-Agent': 'Pearl-Wallet/5.0', 'Accept': 'application/json' } }, (proxyRes) => {
+    const proxyReq = https.get(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,application/json,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7'
+      }
+    }, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, {
-        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Type': proxyRes.headers['content-type'] || 'text/html; charset=utf-8',
         'Access-Control-Allow-Origin': '*'
       });
       proxyRes.pipe(res);

@@ -402,3 +402,44 @@ test('T6.11: Custom Web3 token picker modal lifecycle, search filtering, and sel
   // Modal closes cleanly
   closeSwapTokenPickerModal();
 });
+
+test('T6.12: App Service Fee (0.1% fixed on swap, 0 on regular transfers)', async () => {
+  const sandbox = initAppSandbox({
+    'pearl_user_wallets_v4': JSON.stringify({
+      wallets: [{
+        id: 'w_fee_test',
+        name: 'Fee Test Wallet',
+        address: VALID_PEARL_ADDR,
+        balance: 100.0
+      }],
+      activeWalletId: 'w_fee_test'
+    })
+  });
+
+  const { state, calculateSwapQuote, handleSendAmountInput } = sandbox.window;
+
+  // 1. Verify state fee rates
+  assert.equal(state.appFeeRate, 0.001, 'state.appFeeRate must be 0.001 (0.1%)');
+  assert.equal(state.devFeeRate, 0, 'state.devFeeRate must be 0 for standard transfers');
+
+  // 2. Test send amount input: regular transfer has 0 app fee
+  const sendInput = sandbox.document.getElementById('send-amount-input');
+  sendInput.value = '10.0';
+  handleSendAmountInput(sendInput);
+
+  const sendDevFeeEl = sandbox.document.getElementById('send-dev-fee');
+  assert.ok(sendDevFeeEl.innerText.includes('转账免收服务费') || sendDevFeeEl.innerText.includes('0 PRL'),
+    `Send dev fee label must indicate 0 fee on transfer, got: ${sendDevFeeEl.innerText}`);
+
+  // 3. Test swap quote deduction: 0.1% app service fee deducted
+  state.nearSwap.direction = 'sell';
+  state.nearSwap.amountIn = '100';
+  state.nearSwap.prlPrice = 2.0;
+  state.nearSwap.slippageTolerance = 100; // 1%
+  // target token default USDT (price 1.0)
+  await calculateSwapQuote();
+
+  const appFeeEl = sandbox.document.getElementById('swap-detail-app-fee');
+  assert.ok(appFeeEl.innerText.includes('0.1%'), 'Swap detail must explicitly show 0.1% app fee');
+  assert.ok(Number(state.nearSwap.amountOut) > 0, 'Swap amountOut must be positive');
+});

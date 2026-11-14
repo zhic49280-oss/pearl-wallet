@@ -112,8 +112,8 @@ test('T7.3: GPU profitability calculator computes accurate daily PRL, power expe
   window.selectGpuPreset('4090');
   const hashInp = document.getElementById('gpu-calc-hash');
   const powerInp = document.getElementById('gpu-calc-power');
-  assert.equal(Number(hashInp.value), 92.5);
-  assert.equal(Number(powerInp.value), 320);
+  assert.equal(Number(hashInp.value), 260.0);
+  assert.equal(Number(powerInp.value), 350);
 
   // Set card count = 2
   const countInp = document.getElementById('gpu-calc-count');
@@ -121,9 +121,14 @@ test('T7.3: GPU profitability calculator computes accurate daily PRL, power expe
   window.calculateGpuProfit();
 
   const resultBox = document.getElementById('gpu-calc-result');
-  assert.ok(resultBox.innerHTML.includes('185.00 TH/s'), 'Result must show 185.00 TH/s total hashrate');
+  assert.ok(resultBox.innerHTML.includes('520.00 TH/s'), 'Result must show 520.00 TH/s total hashrate');
   assert.ok(resultBox.innerHTML.includes('预估日产 PRL'), 'Result must show estimated daily PRL');
   assert.ok(resultBox.innerHTML.includes('每日纯净利'), 'Result must show daily net profit');
+
+  // Also verify RTX 3080 preset (实测基准 102 TH/s)
+  window.selectGpuPreset('3080');
+  assert.equal(Number(hashInp.value), 102.0);
+  assert.equal(Number(powerInp.value), 250);
 });
 
 test('T7.4: GPU benchmark table populates live comparison values', () => {
@@ -221,4 +226,57 @@ test('T7.7: Viral mining report generator formats shareable community text with 
   assert.ok(copiedText.includes('185.46 TH/s'), 'Report must include hashrate');
   assert.ok(copiedText.includes('2.1 PRL'), 'Report must include daily PRL');
   assert.ok(copiedText.includes('免上小所一键跨链换 USDT'), 'Report must highlight in-wallet cross-chain swap feature');
+});
+
+test('T7.8: GPU presets calibration and TH/s unit integrity (RTX 3080 @ 102 TH/s, 4060Ti @ 92 TH/s)', () => {
+  const sandbox = initAppSandbox();
+  const { document, window } = sandbox;
+
+  // 1. Verify TH/s unit in index.html template statically
+  const indexHtml = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
+  assert.ok(indexHtml.includes('单卡算力 (TH/s)'), 'index.html must display TH/s in label');
+  assert.ok(indexHtml.includes('NVIDIA RTX 3080 (102 TH/s'), 'index.html must include RTX 3080 with 102 TH/s');
+  assert.ok(indexHtml.includes('NVIDIA RTX 4060 Ti (92 TH/s'), 'index.html must include RTX 4060 Ti with 92 TH/s');
+  assert.ok(indexHtml.includes('NVIDIA RTX 4090 (260 TH/s'), 'index.html must include RTX 4090 with 260 TH/s');
+
+  // 2. Verify RTX 3080 calibrated preset
+  window.selectGpuPreset('3080');
+  const hashInp = document.getElementById('gpu-calc-hash');
+  const powerInp = document.getElementById('gpu-calc-power');
+  assert.equal(Number(hashInp.value), 102.0, 'RTX 3080 must be calibrated to 102.0 TH/s');
+  assert.equal(Number(powerInp.value), 250, 'RTX 3080 power must be 250W');
+
+  // 3. Verify RTX 4060 Ti calibrated preset
+  window.selectGpuPreset('4060ti');
+  assert.equal(Number(hashInp.value), 92.0, 'RTX 4060 Ti must be calibrated to 92.0 TH/s');
+  assert.equal(Number(powerInp.value), 160, 'RTX 4060 Ti power must be 160W');
+
+  // 4. Verify RTX 4090 calibrated preset
+  window.selectGpuPreset('4090');
+  assert.equal(Number(hashInp.value), 260.0, 'RTX 4090 must be calibrated to 260.0 TH/s');
+  assert.equal(Number(powerInp.value), 350, 'RTX 4090 power must be 350W');
+});
+
+test('T7.9: Multi-format wallet import (address watch-only & candidate derivation)', async () => {
+  const sandbox = initAppSandbox();
+  const { document, window } = sandbox;
+
+  // 1. Direct address import (e.g. miner address prl1p...)
+  window.startImportWalletFlow();
+  const wordsInput = document.getElementById('import-mnemonic-input');
+  wordsInput.value = VALID_PEARL_ADDR;
+
+  await window.executeImportWallet();
+  const activeW = window.state.wallets.find(w => w.id === window.state.activeWalletId);
+  assert.ok(activeW, 'Wallet must be imported and active');
+  assert.equal(activeW.address, VALID_PEARL_ADDR, 'Imported address must match input address exactly');
+
+  // 2. Candidate derivation paths verification
+  const testWords = ["abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "abandon", "about"];
+  const candidates = window.deriveCandidateAddresses(testWords);
+  assert.ok(Array.isArray(candidates), 'Candidates must be an array');
+  assert.ok(candidates.length >= 4, 'Must have at least 4 candidate derivation paths');
+  const bip86Pearl = candidates.find(c => c.path === "m/86'/808276'/0'/0/0");
+  assert.ok(bip86Pearl, 'Must include Pearl BIP-86 path');
+  assert.ok(bip86Pearl.address.startsWith('prl1p'), 'Candidate address must start with prl1p');
 });

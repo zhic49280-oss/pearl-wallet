@@ -471,25 +471,26 @@
             <div>
               <label class="block text-[11px] text-white/50 mb-1">选择显卡型号或预设</label>
               <select id="gpu-calc-model" onchange="selectGpuPreset(this.value)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
-                <option value="4090" class="bg-[#181B26]">NVIDIA RTX 4090 (120 GH/s · 320W)</option>
-                <option value="4080s" class="bg-[#181B26]">NVIDIA RTX 4080 Super (88 GH/s · 240W)</option>
-                <option value="4070tis" class="bg-[#181B26]">NVIDIA RTX 4070 Ti Super (72 GH/s · 200W)</option>
-                <option value="4070s" class="bg-[#181B26]">NVIDIA RTX 4070 Super (62 GH/s · 175W)</option>
-                <option value="3080" class="bg-[#181B26]">NVIDIA RTX 3080 (65 GH/s · 250W)</option>
-                <option value="3070" class="bg-[#181B26]">NVIDIA RTX 3070 (42 GH/s · 130W)</option>
-                <option value="7900xtx" class="bg-[#181B26]">AMD Radeon RX 7900 XTX (90 GH/s · 280W)</option>
+                <option value="4090" class="bg-[#181B26]">NVIDIA RTX 4090 (260 TH/s · 350W)</option>
+                <option value="4080s" class="bg-[#181B26]">NVIDIA RTX 4080 Super (190 TH/s · 250W)</option>
+                <option value="7900xtx" class="bg-[#181B26]">AMD Radeon RX 7900 XTX (160 TH/s · 280W)</option>
+                <option value="4070tis" class="bg-[#181B26]">NVIDIA RTX 4070 Ti Super (155 TH/s · 210W)</option>
+                <option value="4070s" class="bg-[#181B26]">NVIDIA RTX 4070 Super (130 TH/s · 185W)</option>
+                <option value="3080" class="bg-[#181B26]">NVIDIA RTX 3080 (102 TH/s · 250W · 矿池实测)</option>
+                <option value="4060ti" class="bg-[#181B26]">NVIDIA RTX 4060 Ti (92 TH/s · 160W · 矿池实测)</option>
+                <option value="3070" class="bg-[#181B26]">NVIDIA RTX 3070 (72 TH/s · 140W)</option>
                 <option value="custom" class="bg-[#181B26]">自定义算力与功耗...</option>
               </select>
             </div>
 
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="block text-[11px] text-white/50 mb-1">单卡算力 (GH/s)</label>
-                <input id="gpu-calc-hash" type="number" step="1" value="120" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+                <label class="block text-[11px] text-white/50 mb-1">单卡算力 (TH/s)</label>
+                <input id="gpu-calc-hash" type="number" step="1" value="260" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
               </div>
               <div>
                 <label class="block text-[11px] text-white/50 mb-1">单卡功耗 (W)</label>
-                <input id="gpu-calc-power" type="number" step="1" value="320" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
+                <input id="gpu-calc-power" type="number" step="1" value="350" oninput="calculateGpuProfit()" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
               </div>
             </div>
 
@@ -615,14 +616,14 @@
         </div>
       </div>
 
-      <!-- 开发者支持费设置卡片 (默认开启，可自由切换) -->
+      <!-- 钱包应用服务费设置卡片 (0.1% 仅限闪兑，转账免收) -->
       <div class="ios-glass-card rounded-2xl p-4">
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2.5">
-            <span class="text-base">☕</span>
+            <span class="text-base">💎</span>
             <div>
-              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">开发者支持费 (0.01%)</h3>
-              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">转账时自愿赞助 0.01% 支持 Pearl Wallet 节点运营与持续开发</p>
+              <h3 class="text-sm font-bold text-white" data-i18n="settings.devFeeTitle">钱包应用服务费 (0.1%)</h3>
+              <p class="text-[11px] text-white/40 mt-0.5 leading-snug" data-i18n="settings.devFeeDesc">跨链闪兑时固定收取 0.1% 协议路由与流动性聚合服务费（常规转账 0 手续费免收服务费）</p>
             </div>
           </div>
           <!-- iOS 风格弹性滑动开关 (默认开) -->
@@ -632,7 +633,7 @@
         </div>
         <div class="flex items-center justify-between text-[11px] text-white/50 pt-2 border-t border-white/[0.05]">
           <span data-i18n="settings.devFeeStatus">当前状态</span>
-          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">已开启 (转账时自动计算)</span>
+          <span id="dev-fee-status-label" class="text-cyan-400 font-medium">固定收取 0.1% (已开启 · 仅限闪兑)</span>
         </div>
       </div>
 
@@ -944,8 +945,8 @@
       <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
     </div>
     <div class="text-center mb-4">
-      <h3 class="text-base font-bold text-white">导入已有助记词</h3>
-      <p class="text-xs text-white/40 mt-0.5">支持官方电脑客户端导出的 12 或 24 位真实单词</p>
+      <h3 class="text-base font-bold text-white">导入已有钱包</h3>
+      <p class="text-xs text-white/40 mt-0.5">支持 12/24 助记词、prl1p... 主网地址或 64 位私钥</p>
     </div>
 
     <div class="mb-3">
@@ -954,15 +955,23 @@
     </div>
 
     <div class="mb-4">
-      <label class="block text-xs text-white/60 mb-1" data-i18n="import.wordsLabel">助记词 (英文空格隔开)</label>
-      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: word1 word2 word3 ... 填入 12 或 24 个英文单词" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <div class="flex items-center justify-between mb-1">
+        <label class="text-xs text-white/60" data-i18n="import.wordsLabel">助记词 / 钱包地址 / 私钥</label>
+        <span class="text-[10px] text-cyan-400 font-mono">智能自动识别</span>
+      </div>
+      <textarea id="import-mnemonic-input" rows="3" placeholder="例如: 填入 12 或 24 个英文助记词，或直接粘贴 prl1p... 链上地址，或 64 位私钥" class="w-full p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-cyan-200 placeholder-white/20 focus:outline-none focus:border-cyan-400 leading-relaxed"></textarea>
+      <div class="flex items-center gap-1.5 mt-1.5 text-[10px] text-white/40">
+        <span class="px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60 font-mono">BIP-86 助记词</span>
+        <span class="px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60 font-mono">prl1p Taproot</span>
+        <span class="px-1.5 py-0.5 rounded bg-white/[0.05] text-white/60 font-mono">64 位 Hex 私钥</span>
+      </div>
     </div>
 
     <!-- 显式错误提示区 (让用户第一时间看清任何格式问题，绝不静默拦截) -->
     <div id="import-error-msg" class="hidden mb-3 p-3 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center font-medium leading-relaxed"></div>
 
     <button id="btn-execute-import" type="button" onclick="executeImportWallet()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-400 to-cyan-500 text-black font-bold text-sm shadow-xl shadow-cyan-500/20 btn-active mb-2.5">
-      验证助记词并立即导入
+      验证并立即导入
     </button>
     <button type="button" onclick="closeSheet()" class="w-full py-3.5 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active">
       取消
@@ -1119,10 +1128,10 @@
       </div>
       <div id="send-dev-fee-row" class="flex items-center justify-between text-white/60">
         <div class="flex items-center gap-1.5">
-          <span data-i18n="send.devFee">开发者支持费 (0.01%)</span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-400/20">应用费</span>
+          <span data-i18n="send.devFee">钱包应用服务费</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-400/20">转账免收</span>
         </div>
-        <span id="send-dev-fee" class="font-mono text-cyan-300 font-semibold">--</span>
+        <span id="send-dev-fee" class="font-mono text-emerald-400 font-semibold">0 PRL (转账免收服务费)</span>
       </div>
       <div class="flex items-center justify-between text-white/60">
         <span data-i18n="send.netReceive">对方预计到账</span>
@@ -1402,6 +1411,13 @@
           <div class="flex items-center justify-between">
             <span>做市汇率参考</span>
             <span id="swap-detail-rate" class="font-mono text-white/80 font-medium">1 PRL ≈ --</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="flex items-center gap-1">
+              <span>钱包应用服务费 (App Fee)</span>
+              <span class="text-[9px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">0.1%</span>
+            </span>
+            <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.1% (固定服务费)</span>
           </div>
           <div class="flex items-center justify-between">
             <span>跨链结算协议</span>
