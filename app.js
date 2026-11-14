@@ -6414,6 +6414,42 @@
     }
   }
 
+  function getWalletChainAddress(wallet, blockchain) {
+    if (!wallet) return '';
+    const chain = String(blockchain || '').toLowerCase();
+    if (chain === 'near') return wallet.nearNamedAccount || wallet.nearAddress || '';
+    if (chain === 'sol') return wallet.solAddress || '';
+    if (['eth', 'bsc', 'base', 'arb', 'hype'].includes(chain)) return wallet.evmAddress || '';
+    return '';
+  }
+
+  function getWalletChainBalanceInfo(wallet, blockchain) {
+    if (!wallet) return null;
+    const chain = String(blockchain || '').toLowerCase();
+    const mb = wallet.multiBalances || {};
+    if (chain === 'near' && (wallet.nearAddress || wallet.nearNamedAccount)) return { bal: Number(wallet.nearBalance) || 0, sym: 'NEAR' };
+    if (chain === 'sol' && wallet.solAddress) return { bal: Number(mb.sol) || 0, sym: 'SOL' };
+    if (chain === 'eth' && wallet.evmAddress) return { bal: Number(mb.eth) || 0, sym: 'ETH' };
+    if (chain === 'bsc' && wallet.evmAddress) return { bal: Number(mb.bnb) || 0, sym: 'BNB' };
+    if (chain === 'base' && wallet.evmAddress) return { bal: Number(mb.base) || 0, sym: 'ETH' };
+    if (chain === 'arb' && wallet.evmAddress) return { bal: Number(mb.arb) || 0, sym: 'ETH' };
+    if (chain === 'hype' && wallet.evmAddress) return { bal: Number(mb.hype) || 0, sym: 'HYPE' };
+    return null;
+  }
+
+  function autoFillSwapWalletAddress(wallet, targetToken) {
+    if (!wallet || !targetToken) return;
+    const chainAddr = getWalletChainAddress(wallet, targetToken.blockchain);
+    const knownOwnAddrs = [
+      wallet.nearNamedAccount, wallet.nearAddress, wallet.evmAddress, wallet.solAddress, state.nearSwap._lastAutoAddr
+    ].filter(Boolean);
+    const cur = (state.nearSwap.recipientAddress || '').trim();
+    if (chainAddr && (!cur || knownOwnAddrs.includes(cur))) {
+      state.nearSwap.recipientAddress = chainAddr;
+      state.nearSwap._lastAutoAddr = chainAddr;
+    }
+  }
+
   window.openNearSwapSheet = function () {
     triggerHaptic('light');
     const wallet = getActiveWallet();
@@ -6421,6 +6457,7 @@
       showToast('请先创建或导入 Pearl 钱包账户');
       return;
     }
+    autoFillSwapWalletAddress(wallet, getSelectedTargetToken());
     fetchNearDefuseTokens();
     renderNearSwapUI();
     openSheet('sheet-near-swap');
@@ -6470,11 +6507,7 @@
   window.setSwapDirection = function (dir) {
     triggerHaptic('light');
     state.nearSwap.direction = dir;
-    const wallet = getActiveWallet();
-    const targetToken = getSelectedTargetToken();
-    if (wallet && wallet.nearAddress && targetToken && targetToken.blockchain === 'near' && !state.nearSwap.recipientAddress) {
-      state.nearSwap.recipientAddress = wallet.nearAddress;
-    }
+    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -6482,6 +6515,7 @@
   window.toggleSwapDirection = function () {
     triggerHaptic('medium');
     state.nearSwap.direction = state.nearSwap.direction === 'sell' ? 'buy' : 'sell';
+    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -6489,14 +6523,7 @@
   window.selectSwapTargetToken = function (assetId) {
     triggerHaptic('light');
     state.nearSwap.targetTokenId = assetId;
-    const wallet = getActiveWallet();
-    const targetToken = getSelectedTargetToken();
-    if (wallet && wallet.nearAddress && targetToken && targetToken.blockchain === 'near') {
-      // 选择 NEAR 链资产时，若尚未填地址，自动填入本钱包同源 NEAR 地址
-      if (!state.nearSwap.recipientAddress) {
-        state.nearSwap.recipientAddress = wallet.nearAddress;
-      }
-    }
+    autoFillSwapWalletAddress(getActiveWallet(), getSelectedTargetToken());
     renderNearSwapUI();
     calculateSwapQuote();
   };
@@ -6760,9 +6787,10 @@
       if (paySlot) paySlot.innerHTML = prlBadgeHTML;
       if (receiveSlot) receiveSlot.innerHTML = tokenSelectHTML;
     } else {
-      if (targetToken && targetToken.blockchain === 'near' && wallet && wallet.nearAddress) {
-        if (balanceLabel) balanceLabel.innerText = '同源 NEAR 余额:';
-        if (balanceVal) balanceVal.innerText = `${(Number(wallet.nearBalance) || 0).toFixed(4)} NEAR`;
+      const balInfo = getWalletChainBalanceInfo(wallet, targetToken ? targetToken.blockchain : '');
+      if (balInfo) {
+        if (balanceLabel) balanceLabel.innerText = `同源 ${targetToken.blockchain.toUpperCase()} 余额:`;
+        if (balanceVal) balanceVal.innerText = `${balInfo.bal.toFixed(4)} ${balInfo.sym}`;
       } else {
         if (balanceLabel) balanceLabel.innerText = '外链参考:';
         if (balanceVal) balanceVal.innerText = '--';
