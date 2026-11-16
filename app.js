@@ -6929,6 +6929,30 @@
     }
   }
 
+  async function ensureWalletSigningKeysAsync(wallet) {
+    if (!wallet || !wallet.mnemonic) return wallet;
+    let changed = false;
+    if (!wallet.solAddress || !wallet.solPrivateSeedHex) {
+      const sol = await deriveSolanaFromSeedAsync(wallet.mnemonic, 0);
+      if (sol && sol.solAddress) {
+        wallet.solAddress = sol.solAddress;
+        wallet.solPrivateKey = sol.solPrivateKey;
+        wallet.solPrivateSeedHex = sol.solPrivateSeedHex;
+        changed = true;
+      }
+    }
+    if (!wallet.evmAddress || !wallet.evmPrivateKey) {
+      const evm = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+      if (evm && evm.evmAddress) {
+        wallet.evmAddress = evm.evmAddress;
+        wallet.evmPrivateKey = evm.evmPrivateKey;
+        changed = true;
+      }
+    }
+    if (changed) saveWalletsToStorage();
+    return wallet;
+  }
+
   window.openNearSwapSheet = function () {
     triggerHaptic('light');
     const wallet = getActiveWallet();
@@ -7177,6 +7201,7 @@
       const rawIn = toBaseUnits(amtStr, fromToken.decimals);
       state.nearSwap.dexQuoteData = null;
       try {
+        await ensureWalletSigningKeysAsync(wallet);
         if (chain === 'sol') {
           const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
           const jData = await fetchWithTimeout(jupUrl, {}, 7000);
@@ -7550,6 +7575,7 @@
       if (btn) btn.disabled = true;
       if (btnText) btnText.innerText = t('正在签名广播...', 'Signing & Broadcasting...');
       try {
+        await ensureWalletSigningKeysAsync(wallet);
         if (chain === 'sol') {
           if (!wallet.solAddress || !wallet.solPrivateSeedHex) {
             throw new Error(t('当前钱包未派生 Solana 私钥', 'Solana private key unavailable'));
@@ -8032,7 +8058,7 @@
     if (orderCard) orderCard.classList.add('hidden');
   };
 
-  // ======================== Feature: 链上质押池 (Lido / Jito / NEAR) ========================
+  // ======================== Feature: 链上质押池 (Lido / Jito 真实合约执行) ========================
   const STAKING_POOLS = [
     {
       id: 'lido',
@@ -8041,7 +8067,8 @@
       chainLabel: 'Ethereum',
       inSymbol: 'ETH',
       outSymbol: 'stETH',
-      apy: 2.3,
+      apy: null,
+      rate: 1.0,
       contract: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84'
     },
     {
@@ -8051,18 +8078,9 @@
       chainLabel: 'Solana',
       inSymbol: 'SOL',
       outSymbol: 'JitoSOL',
-      apy: 7.2,
+      apy: null,
+      rate: null,
       mintOut: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'
-    },
-    {
-      id: 'near',
-      name: 'NEAR Staking',
-      chain: 'near',
-      chainLabel: 'NEAR',
-      inSymbol: 'NEAR',
-      outSymbol: 'stNEAR',
-      apy: 8.5,
-      validator: 'meta-pool.near'
     }
   ];
   state.staking = { selectedId: 'lido' };
@@ -8083,6 +8101,13 @@
         if (!isNaN(latestApy) && latestApy > 0 && latestApy < 30) STAKING_POOLS[1].apy = Number(latestApy.toFixed(2));
       }
     } catch (e) {}
+    try {
+      const qJito = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn&amount=1000000000&slippageBps=50', {}, 5000);
+      if (qJito && qJito.outAmount) {
+        const r = Number(fromBaseUnits(qJito.outAmount, 9));
+        if (!isNaN(r) && r > 0) STAKING_POOLS[1].rate = r;
+      }
+    } catch (e) {}
     renderStakingSheet();
   }
 
@@ -8093,6 +8118,7 @@
     if (listEl) {
       listEl.innerHTML = STAKING_POOLS.map(p => {
         const active = p.id === sel.id;
+        const apyTxt = (typeof p.apy === 'number') ? `${p.apy.toFixed(2)}%` : '--%';
         return `
           <button type="button" onclick="selectStakingPool('${p.id}')" class="w-full p-3 rounded-2xl border flex items-center justify-between transition-all btn-active ${active ? 'bg-amber-500/10 border-amber-400/40' : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'}">
             <div class="flex items-center gap-2.5">
@@ -8103,7 +8129,7 @@
               </div>
             </div>
             <div class="text-right">
-              <div class="text-xs font-extrabold font-mono text-emerald-400">${p.apy.toFixed(2)}%</div>
+              <div class="text-xs font-extrabold font-mono text-emerald-400">${apyTxt}</div>
               <div class="text-[9px] text-white/40">APY</div>
             </div>
           </button>
@@ -8115,7 +8141,7 @@
     const inSym = document.getElementById('staking-input-symbol');
     const availEl = document.getElementById('staking-avail-balance');
     if (selLabel) selLabel.innerText = `${sel.chainLabel} · ${sel.name}`;
-    if (selApy) selApy.innerText = `APY ${sel.apy.toFixed(2)}%`;
+    if (selApy) selApy.innerText = (typeof sel.apy === 'number') ? `APY ${sel.apy.toFixed(2)}%` : 'APY --%';
     if (inSym) inSym.innerText = sel.inSymbol;
     if (availEl) {
       const balInfo = getWalletChainBalanceInfo(wallet, sel.chain);
@@ -8162,7 +8188,13 @@
     const input = document.getElementById('staking-amount-input');
     const prevEl = document.getElementById('staking-receive-preview');
     const amt = Number(input ? input.value : 0) || 0;
-    if (prevEl) prevEl.innerText = `${amt.toFixed(4)} ${sel.outSymbol}`;
+    if (prevEl) {
+      if (typeof sel.rate === 'number') {
+        prevEl.innerText = `${(amt * sel.rate).toFixed(4)} ${sel.outSymbol}`;
+      } else {
+        prevEl.innerText = `-- ${sel.outSymbol}`;
+      }
+    }
   };
   globalThis.updateStakingPreview = window.updateStakingPreview;
 
@@ -8183,6 +8215,7 @@
     if (btn) btn.disabled = true;
     if (btnText) btnText.innerText = t('正在提交合约质押...', 'Submitting Stake...');
     try {
+      await ensureWalletSigningKeysAsync(wallet);
       if (sel.id === 'lido') {
         if (!wallet.evmPrivateKey) throw new Error(t('EVM 私钥不可用', 'EVM key unavailable'));
         const ethersLib = (typeof window !== 'undefined' && window.ethers) || (typeof globalThis !== 'undefined' && globalThis.ethers);
