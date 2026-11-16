@@ -6790,6 +6790,7 @@
     state.nearSwap.dexToId = (list[1] || list[0]).assetId;
     state.nearSwap.dexQuoteData = null;
     renderNearSwapUI();
+    refreshDexFromTokenBalance();
     calculateSwapQuote();
   };
   globalThis.setDexSwapChain = window.setDexSwapChain;
@@ -6856,6 +6857,7 @@
         state.nearSwap.dexToId = assetId;
       }
       renderNearSwapUI();
+      refreshDexFromTokenBalance();
       calculateSwapQuote();
       window.closeSwapTokenPickerModal();
       return;
@@ -7088,9 +7090,9 @@
     }
     if (!wallet.evmAddress || !wallet.evmPrivateKey) {
       const evm = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
-      if (evm && evm.evmAddress) {
-        wallet.evmAddress = evm.evmAddress;
-        wallet.evmPrivateKey = evm.evmPrivateKey;
+      if (evm && (evm.address || evm.evmAddress)) {
+        wallet.evmAddress = evm.address || evm.evmAddress;
+        wallet.evmPrivateKey = evm.privateKeyHex || evm.evmPrivateKey;
         changed = true;
       }
     }
@@ -7107,6 +7109,65 @@
     return wallet;
   }
 
+  async function refreshDexFromTokenBalance() {
+    const wallet = getActiveWallet();
+    if (!wallet || state.nearSwap.engineMode !== 'dex') return;
+    await ensureWalletSigningKeysAsync(wallet);
+    const chain = state.nearSwap.dexChain;
+    const fromToken = getSwapFromToken();
+    if (!fromToken) return;
+
+    const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH' };
+    if (fromToken.symbol === nativeSymbols[chain]) {
+      const balInfo = getWalletChainBalanceInfo(wallet, chain);
+      state.nearSwap.dexFromBalance = balInfo ? balInfo.bal : 0;
+      const balVal = document.getElementById('swap-balance-value');
+      if (balVal) balVal.innerText = `${state.nearSwap.dexFromBalance.toFixed(4)} ${fromToken.symbol}`;
+      syncSwapButtonBalanceState();
+      return;
+    }
+
+    state.nearSwap.dexFromBalance = null;
+    try {
+      if (chain === 'sol' && wallet.solAddress) {
+        const res = await fetchWithTimeout('https://solana-rpc.publicnode.com', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1, method: 'getTokenAccountsByOwner',
+            params: [wallet.solAddress, { mint: fromToken.assetId }, { encoding: 'jsonParsed' }]
+          })
+        }, 6000);
+        const list = res && res.result && Array.isArray(res.result.value) ? res.result.value : [];
+        let sum = 0;
+        for (const item of list) {
+          sum += Number(item?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0);
+        }
+        state.nearSwap.dexFromBalance = sum;
+      } else if (EVM_CHAIN_CONFIGS[chain] && wallet.evmAddress) {
+        const cfg = EVM_CHAIN_CONFIGS[chain];
+        const paddedAddr = wallet.evmAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+        const callRes = await fetchWithTimeout(cfg.rpc, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0', id: 1, method: 'eth_call',
+            params: [{ to: fromToken.assetId, data: '0x70a08231' + paddedAddr }, 'latest']
+          })
+        }, 6000);
+        if (callRes && typeof callRes.result === 'string' && callRes.result.startsWith('0x')) {
+          const rawBig = BigInt(callRes.result === '0x' ? '0x0' : callRes.result);
+          state.nearSwap.dexFromBalance = Number(fromBaseUnits(rawBig.toString(), fromToken.decimals));
+        }
+      }
+    } catch (e) {}
+    if (typeof state.nearSwap.dexFromBalance === 'number') {
+      const balVal = document.getElementById('swap-balance-value');
+      if (balVal) balVal.innerText = `${state.nearSwap.dexFromBalance.toFixed(4)} ${fromToken.symbol}`;
+    }
+    syncSwapButtonBalanceState();
+  }
+
   window.openNearSwapSheet = function () {
     triggerHaptic('light');
     const wallet = getActiveWallet();
@@ -7121,6 +7182,7 @@
     autoFillSwapWalletAddress(wallet, getSelectedTargetToken());
     fetchNearDefuseTokens();
     renderNearSwapUI();
+    refreshDexFromTokenBalance();
     openSheet('sheet-near-swap');
   };
 
@@ -7244,6 +7306,8 @@
           const balInfo = getWalletChainBalanceInfo(wallet, chain);
           const avail = balInfo ? balInfo.bal : 0;
           if (amt > avail) insufficient = true;
+        } else if (typeof state.nearSwap.dexFromBalance === 'number') {
+          if (amt > state.nearSwap.dexFromBalance) insufficient = true;
         }
       }
     }
@@ -7692,6 +7756,17 @@
     if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
       if (balanceLabel) balanceLabel.innerText = t('PRL 可用:', 'PRL Bal:');
       if (balanceVal) balanceVal.innerText = wallet ? (Number(wallet.balance) || 0).toFixed(4) : '0.00';
+    } else if (isDex) {
+      if (balanceLabel) balanceLabel.innerText = t(`${fromToken.symbol} 余额:`, `${fromToken.symbol} Bal:`);
+      const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH' };
+      if (fromToken.symbol === nativeSymbols[state.nearSwap.dexChain]) {
+        const balInfo = getWalletChainBalanceInfo(wallet, state.nearSwap.dexChain);
+        if (balanceVal) balanceVal.innerText = balInfo ? `${balInfo.bal.toFixed(4)} ${fromToken.symbol}` : `0.0000 ${fromToken.symbol}`;
+      } else if (typeof state.nearSwap.dexFromBalance === 'number') {
+        if (balanceVal) balanceVal.innerText = `${state.nearSwap.dexFromBalance.toFixed(4)} ${fromToken.symbol}`;
+      } else {
+        if (balanceVal) balanceVal.innerText = `-- ${fromToken.symbol}`;
+      }
     } else {
       const balInfo = getWalletChainBalanceInfo(wallet, fromToken.blockchain);
       if (balInfo) {
@@ -7819,6 +7894,9 @@
           showToast(t(`${fromToken.symbol} 余额不足 (当前可用: ${avail.toFixed(4)} ${fromToken.symbol})`, `Insufficient ${fromToken.symbol} (Available: ${avail.toFixed(4)} ${fromToken.symbol})`));
           return;
         }
+      } else if (typeof state.nearSwap.dexFromBalance === 'number' && amt > state.nearSwap.dexFromBalance) {
+        showToast(t(`${fromToken.symbol} 余额不足 (当前可用: ${state.nearSwap.dexFromBalance.toFixed(4)} ${fromToken.symbol})`, `Insufficient ${fromToken.symbol} (Available: ${state.nearSwap.dexFromBalance.toFixed(4)} ${fromToken.symbol})`));
+        return;
       }
       const btn = document.getElementById('btn-execute-swap');
       const btnText = document.getElementById('btn-swap-text');
