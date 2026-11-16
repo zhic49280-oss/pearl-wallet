@@ -333,6 +333,11 @@
       'swap.pickerAllNets': '全部网络',
       'stake.title': '质押池',
       'stake.amountLabel': '质押数量',
+      'nearDomain.title': 'NEAR 域名账户 (.near)',
+      'nearDomain.registerBtn': '注册激活',
+      'nearDomain.bindBtn': '绑定已有',
+      'nearDomain.unbindBtn': '解绑',
+      'nearDomain.hint': '选好可用域名后，向下方 NEAR 地址转入 ≥ 0.15 NEAR 即可自动链上注册激活；已有 .near 账户可直接绑定。',
       'stake.receiveLabel': '预计获得',
       'stake.ctaBtn': '立即质押'
     },
@@ -405,7 +410,12 @@
       'stake.title': 'Staking Pools',
       'stake.amountLabel': 'Stake Amount',
       'stake.receiveLabel': 'Estimated Receive',
-      'stake.ctaBtn': 'Stake Now'
+      'stake.ctaBtn': 'Stake Now',
+      'nearDomain.title': 'NEAR Named Account (.near)',
+      'nearDomain.registerBtn': 'Register',
+      'nearDomain.bindBtn': 'Bind Existing',
+      'nearDomain.unbindBtn': 'Unbind',
+      'nearDomain.hint': 'Pick an available name and fund ≥ 0.15 NEAR to the NEAR address below to auto-register on-chain, or bind an existing .near account.',
     }
   };
 
@@ -1761,6 +1771,8 @@
         if (nearDerived && nearDerived.nearAddress) {
           wallet.nearAddress = nearDerived.nearAddress;
           wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+          wallet.nearPublicKey = nearDerived.nearPublicKey;
+          wallet.nearPrivateKey = nearDerived.nearPrivateKey;
           saveWalletsToStorage();
         }
       } catch (e) {}
@@ -1793,6 +1805,12 @@
         wallet.nearBalance = Number(data.result.amount) / 1e24;
         saveWalletsToStorage();
         renderWalletBalances();
+        if (!wallet.nearNamedAccount && wallet.pendingNearNamedAccount && wallet.nearBalance >= 0.15 && !wallet._autoActivatingNear && typeof registerNearNamedAccount === 'function') {
+          wallet._autoActivatingNear = true;
+          registerNearNamedAccount(wallet.pendingNearNamedAccount, true).finally(() => {
+            wallet._autoActivatingNear = false;
+          });
+        }
       } else if (data && data.error) {
         // 未激活的 Implicit 账户会返回 UNKNOWN_ACCOUNT，余额为 0
         wallet.nearBalance = 0;
@@ -5071,6 +5089,174 @@
   };
   globalThis.unlockMultichainSecrets = window.unlockMultichainSecrets;
 
+  function normalizeNearDomainName(raw) {
+    let domain = String(raw || '').trim().toLowerCase();
+    if (!domain) return '';
+    if (!domain.endsWith('.near')) domain = `${domain}.near`;
+    return domain;
+  }
+
+  let _nearAvailTimer = null;
+  window.checkNearDomainAvailabilityDebounced = function (rawInput) {
+    if (_nearAvailTimer) clearTimeout(_nearAvailTimer);
+    const statusEl = document.getElementById('multichain-near-domain-status');
+    const domain = normalizeNearDomainName(rawInput);
+    if (!domain || domain === '.near') {
+      const w = getActiveWallet();
+      if (statusEl) {
+        statusEl.innerText = w && w.nearNamedAccount
+          ? t(`已绑定：${w.nearNamedAccount}`, `Bound: ${w.nearNamedAccount}`)
+          : (w && w.pendingNearNamedAccount
+            ? t(`待激活：${w.pendingNearNamedAccount}`, `Pending: ${w.pendingNearNamedAccount}`)
+            : t('当前：64位隐式账户', 'Current: 64-hex implicit'));
+      }
+      return;
+    }
+    if (!/^[a-z0-9_-]{2,59}\.near$/.test(domain)) {
+      if (statusEl) statusEl.innerText = t('仅支持 2-59 位小写字母/数字/-/_', 'Invalid .near format');
+      return;
+    }
+    if (statusEl) statusEl.innerText = t('正在查重...', 'Checking...');
+    _nearAvailTimer = setTimeout(async () => {
+      try {
+        const res = await fetchWithTimeout('https://rpc.mainnet.near.org', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 'check-near-avail',
+            method: 'query',
+            params: { request_type: 'view_account', finality: 'final', account_id: domain }
+          })
+        }, 6000);
+        if (res && res.error) {
+          if (statusEl) statusEl.innerText = t(`✅ ${domain} 可注册`, `✅ ${domain} available`);
+        } else if (res && res.result) {
+          const w = getActiveWallet();
+          let owned = false;
+          if (w && w.nearPublicKey) {
+            const keyRes = await fetchWithTimeout('https://rpc.mainnet.near.org', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: 'check-near-own',
+                method: 'query',
+                params: { request_type: 'view_access_key', finality: 'final', account_id: domain, public_key: w.nearPublicKey }
+              })
+            }, 6000).catch(() => null);
+            owned = !!(keyRes && keyRes.result && keyRes.result.permission);
+          }
+          if (statusEl) {
+            statusEl.innerText = owned
+              ? t(`✅ 已有权限，可点绑定已有`, `✅ Owned, click Bind`)
+              : t(`⚠️ ${domain} 已被占用`, `⚠️ ${domain} taken`);
+          }
+        }
+      } catch (_) {
+        if (statusEl) statusEl.innerText = t('查重超时', 'Check timeout');
+      }
+    }, 350);
+  };
+  globalThis.checkNearDomainAvailabilityDebounced = window.checkNearDomainAvailabilityDebounced;
+
+  window.registerNearNamedAccount = async function (overrideName = '', isAuto = false) {
+    if (!isAuto) triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.mnemonic) {
+      if (!isAuto) showToast(t('请先导入或创建助记词钱包', 'Create or import a mnemonic wallet first'));
+      return;
+    }
+    const inputEl = document.getElementById('multichain-near-domain-input');
+    const statusEl = document.getElementById('multichain-near-domain-status');
+    const domain = normalizeNearDomainName(overrideName || (inputEl ? inputEl.value : ''));
+    if (!/^[a-z0-9_-]{2,59}\.near$/.test(domain)) {
+      if (!isAuto) showToast(t('请输入有效的 .near 域名（如 alice.near）', 'Enter a valid .near name (e.g. alice.near)'));
+      return;
+    }
+
+    if (!wallet.nearAddress || !wallet.nearPublicKey || !wallet.nearPrivateKey) {
+      const nearDerived = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+      if (nearDerived && nearDerived.nearAddress) {
+        wallet.nearAddress = nearDerived.nearAddress;
+        wallet.nearPrivateSeedHex = nearDerived.nearPrivateSeedHex;
+        wallet.nearPublicKey = nearDerived.nearPublicKey;
+        wallet.nearPrivateKey = nearDerived.nearPrivateKey;
+        saveWalletsToStorage();
+      }
+    }
+    if (!wallet.nearAddress || !wallet.nearPublicKey || !wallet.nearPrivateKey) {
+      if (!isAuto) showToast(t('NEAR 私钥派生失败', 'NEAR key derivation failed'));
+      return;
+    }
+
+    try {
+      if (statusEl) statusEl.innerText = t('检查域名与余额...', 'Checking name & balance...');
+      const [accRes, balRes] = await Promise.all([
+        fetchWithTimeout('https://rpc.mainnet.near.org', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 'reg-check', method: 'query', params: { request_type: 'view_account', finality: 'final', account_id: domain } })
+        }, 8000),
+        fetchWithTimeout('https://rpc.mainnet.near.org', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: 'reg-bal', method: 'query', params: { request_type: 'view_account', finality: 'final', account_id: wallet.nearAddress } })
+        }, 8000)
+      ]);
+
+      if (accRes && accRes.result) {
+        const msg = t(`${domain} 已被注册占用`, `${domain} is already registered`);
+        if (statusEl) statusEl.innerText = `⚠️ ${msg}`;
+        if (!isAuto) showToast(msg);
+        if (wallet.pendingNearNamedAccount === domain) {
+          delete wallet.pendingNearNamedAccount;
+          saveWalletsToStorage();
+        }
+        return;
+      }
+
+      const implicitBal = (balRes && balRes.result && balRes.result.amount) ? (Number(balRes.result.amount) / 1e24) : 0;
+      if (implicitBal < 0.15) {
+        wallet.pendingNearNamedAccount = domain;
+        saveWalletsToStorage();
+        if (statusEl) statusEl.innerText = t(`待激活：${domain} (需 ≥ 0.15 NEAR)`, `Pending: ${domain} (need ≥ 0.15 NEAR)`);
+        if (!isAuto) {
+          showToast(t(`已预选 ${domain}！当前隐式地址余额 ${implicitBal.toFixed(4)} NEAR，向该 64 位地址转入 ≥ 0.15 NEAR 后将自动激活`, `Saved ${domain}! Fund ≥ 0.15 NEAR to your 64-hex NEAR address to auto-activate.`));
+        }
+        return;
+      }
+
+      if (statusEl) statusEl.innerText = t(`正在链上注册 ${domain}...`, `Registering ${domain}...`);
+      const txHash = await signAndSendNearFunctionCall({
+        accountId: wallet.nearAddress,
+        publicKeyStr: wallet.nearPublicKey,
+        privateKeyStr: wallet.nearPrivateKey,
+        receiverId: 'near',
+        methodName: 'create_account',
+        argsJson: JSON.stringify({
+          new_account_id: domain,
+          new_public_key: wallet.nearPublicKey
+        }),
+        gas: '30000000000000',
+        depositYocto: '150000000000000000000000'
+      });
+
+      wallet.nearNamedAccount = domain;
+      delete wallet.pendingNearNamedAccount;
+      saveWalletsToStorage();
+      renderWalletBalances();
+      refreshActiveWalletNearBalance();
+      renderMultichainAddressesList();
+      triggerHaptic('success');
+      showToast(t(`🎉 已注册并激活 ${domain} (${txHash.slice(0, 8)}...)`, `🎉 Activated ${domain} (${txHash.slice(0, 8)}...)`));
+    } catch (e) {
+      if (statusEl) statusEl.innerText = t('注册失败，请重试', 'Registration failed');
+      if (!isAuto) showToast(t(`注册失败: ${e.message || '网络异常'}`, `Failed: ${e.message || 'Network error'}`));
+    }
+  };
+  globalThis.registerNearNamedAccount = window.registerNearNamedAccount;
+
   window.bindNearNamedAccount = async function () {
     triggerHaptic('light');
     const wallet = getActiveWallet();
@@ -5167,11 +5353,15 @@
       } else {
         domainBox.classList.remove('hidden');
         if (wallet.nearNamedAccount) {
-          if (domainStatus) domainStatus.innerText = `已绑定：${wallet.nearNamedAccount}`;
+          if (domainStatus) domainStatus.innerText = t(`已绑定：${wallet.nearNamedAccount}`, `Bound: ${wallet.nearNamedAccount}`);
           if (domainInput && !domainInput.value) domainInput.value = wallet.nearNamedAccount;
           if (unbindBtn) unbindBtn.classList.remove('hidden');
+        } else if (wallet.pendingNearNamedAccount) {
+          if (domainStatus) domainStatus.innerText = t(`⏳ 待激活：${wallet.pendingNearNamedAccount} (需 ≥ 0.15 NEAR)`, `⏳ Pending: ${wallet.pendingNearNamedAccount} (need ≥ 0.15 NEAR)`);
+          if (domainInput && !domainInput.value) domainInput.value = wallet.pendingNearNamedAccount;
+          if (unbindBtn) unbindBtn.classList.add('hidden');
         } else {
-          if (domainStatus) domainStatus.innerText = '当前：64位隐式账户';
+          if (domainStatus) domainStatus.innerText = t('当前：64位隐式账户', 'Current: 64-hex implicit');
           if (unbindBtn) unbindBtn.classList.add('hidden');
         }
       }

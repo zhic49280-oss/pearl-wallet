@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=8.9">
+  <link rel="stylesheet" href="style.css?v=9.0">
   <script>
     tailwind.config = {
       theme: {
@@ -1709,23 +1709,26 @@
       </button>
     </div>
 
-    <!-- .near 域名账户绑定区 -->
+    <!-- .near 域名账户绑定与注册区 -->
     <div id="multichain-near-domain-box" class="mb-3 p-3 rounded-2xl bg-emerald-500/[0.06] border border-emerald-400/20 flex-shrink-0">
-      <div class="flex items-center justify-between mb-1.5">
-        <span class="text-[11px] font-bold text-emerald-300">NEAR 人类可读域名绑定 (.near)</span>
-        <span id="multichain-near-domain-status" class="text-[10px] text-white/45">当前：64位隐式账户</span>
+      <div class="flex items-center justify-between mb-1.5 gap-2">
+        <span class="text-[11px] font-bold text-emerald-300" data-i18n="nearDomain.title">NEAR 域名账户 (.near)</span>
+        <span id="multichain-near-domain-status" class="text-[10px] text-white/45 text-right truncate">当前：64位隐式账户</span>
       </div>
-      <div class="flex items-center gap-2">
-        <input id="multichain-near-domain-input" type="text" placeholder="输入已拥有本钱包公钥的 xxx.near 域名" class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50 font-mono">
-        <button type="button" onclick="bindNearNamedAccount()" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active whitespace-nowrap">
-          验证绑定
+      <div class="flex items-center gap-1.5">
+        <input id="multichain-near-domain-input" type="text" oninput="checkNearDomainAvailabilityDebounced(this.value)" placeholder="输入想要的用户名 (如 alice.near)" class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50 font-mono">
+        <button type="button" onclick="registerNearNamedAccount()" id="btn-register-near-domain" data-i18n="nearDomain.registerBtn" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold border border-cyan-400/30 btn-active whitespace-nowrap">
+          注册激活
         </button>
-        <button type="button" onclick="unbindNearNamedAccount()" id="btn-unbind-near-domain" class="hidden px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 text-xs border border-white/10 btn-active whitespace-nowrap">
+        <button type="button" onclick="bindNearNamedAccount()" id="btn-bind-near-domain" data-i18n="nearDomain.bindBtn" class="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active whitespace-nowrap">
+          绑定已有
+        </button>
+        <button type="button" onclick="unbindNearNamedAccount()" id="btn-unbind-near-domain" data-i18n="nearDomain.unbindBtn" class="hidden px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 text-xs border border-white/10 btn-active whitespace-nowrap">
           解绑
         </button>
       </div>
-      <p class="text-[10px] text-white/40 mt-1.5 leading-relaxed">
-        说明：64位哈希是 NEAR 官方隐式主网地址；若你已在 Meteor 等钱包注册过 `.near` 域名并将本钱包 `ed25519` 公钥添加为 Access Key，可在此链上验签绑定。
+      <p class="text-[10px] text-white/40 mt-1.5 leading-relaxed" data-i18n="nearDomain.hint">
+        选好可用域名后，向下方 NEAR 地址转入 ≥ 0.15 NEAR 即可自动链上注册激活；已有 .near 账户可直接绑定。
       </p>
     </div>
 
@@ -1755,12 +1758,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=8.9"></script>
+  <script src="bip39-wordlist.js?v=9.0"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=8.9"></script>
+  <script src="qrcode.min.js?v=9.0"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=8.9"></script>
+  <script src="ethers.umd.min.js?v=9.0"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=8.9"></script>
+  <script src="app.js?v=9.0"></script>
 </body>
 </html>
