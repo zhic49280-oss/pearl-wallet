@@ -340,6 +340,13 @@
       'nearDomain.hint': '选好可用域名后，向下方 NEAR 地址转入 ≥ 0.15 NEAR 即可自动链上注册激活；已有 .near 账户可直接绑定。',
       'settings.multichainTitle': '全链地址与私钥管理',
       'settings.multichainDesc': '查看/导出 PRL、NEAR、SOL、ETH、BSC、Base、ARB、Robinhood 私钥',
+      'wallet.totalBalance': '多链资产总净值 (USD)',
+      'wallet.tokenAssets': '代币资产',
+      'wallet.refreshBtn': '刷新余额',
+      'settings.changePinTitle': '修改安全密码 (PIN)',
+      'settings.changePinDesc': '自定义 6 位数字解锁密码',
+      'settings.savePinBtn': '保存新密码',
+      'import.pinLabel': '安全密码 (6 位数字，可选)',
       'receive.addrSlot': '地址序号',
       'receive.nextAddr': '换一个地址 ↻',
       'receive.copyBtn': '复制收款地址',
@@ -423,6 +430,13 @@
       'nearDomain.hint': 'Pick an available name and fund ≥ 0.15 NEAR to the NEAR address below to auto-register on-chain, or bind an existing .near account.',
       'settings.multichainTitle': 'Multi-Chain Addresses & Private Keys',
       'settings.multichainDesc': 'View / export PRL, NEAR, SOL, ETH, BSC, Base, ARB, Robinhood keys',
+      'wallet.totalBalance': 'Total Assets (USD)',
+      'wallet.tokenAssets': 'Assets',
+      'wallet.refreshBtn': 'Refresh',
+      'settings.changePinTitle': 'Change Security PIN',
+      'settings.changePinDesc': 'Set custom 6-digit unlock PIN',
+      'settings.savePinBtn': 'Save New PIN',
+      'import.pinLabel': 'Security PIN (6 digits, optional)',
       'receive.addrSlot': 'Address Index',
       'receive.nextAddr': 'Next ↻',
       'receive.copyBtn': 'Copy Address',
@@ -462,6 +476,9 @@
     if (tabMiningSpan) tabMiningSpan.innerText = dict['nav.mining'];
     if (tabSettingsSpan) tabSettingsSpan.innerText = dict['nav.settings'];
     if (typeof detectDeviceSecurityLabel === 'function') detectDeviceSecurityLabel();
+    const customSlipEl = document.getElementById('swap-custom-slippage');
+    if (customSlipEl) customSlipEl.placeholder = t('自定义 %', 'Custom %');
+    if (typeof renderWalletBalances === 'function') renderWalletBalances();
 
     // 同步刷新开发者支持费状态文案
     updateDevFeeUI();
@@ -3841,10 +3858,10 @@
     const prlPrice = state.livePriceUSD || prices.prl || 0;
 
     return [
-      { id: 'prl', symbol: 'PRL', name: 'Pearl Network', chain: 'prl', chainLabel: 'Pearl 主网', balance: prlBal, price: prlPrice, addr: wallet ? wallet.address : '', recvNet: 'prl', explorer: addr => `https://prlscan.com/address/${addr}` },
-      { id: 'near', symbol: 'NEAR', name: 'NEAR Protocol', chain: 'near', chainLabel: 'NEAR 主网', balance: nearBal, price: prices.near || 4.04, addr: wallet ? (wallet.nearNamedAccount || wallet.nearAddress || '') : '', recvNet: 'near', explorer: addr => `https://nearblocks.io/address/${addr}` },
+      { id: 'prl', symbol: 'PRL', name: 'Pearl Network', chain: 'prl', chainLabel: t('Pearl 主网', 'Pearl'), balance: prlBal, price: prlPrice, addr: wallet ? wallet.address : '', recvNet: 'prl', explorer: addr => `https://prlscan.com/address/${addr}` },
+      { id: 'near', symbol: 'NEAR', name: 'NEAR Protocol', chain: 'near', chainLabel: t('NEAR 主网', 'NEAR'), balance: nearBal, price: prices.near || 4.04, addr: wallet ? (wallet.nearNamedAccount || wallet.nearAddress || '') : '', recvNet: 'near', explorer: addr => `https://nearblocks.io/address/${addr}` },
       { id: 'eth', symbol: 'ETH', name: 'Ethereum', chain: 'eth', chainLabel: 'Ethereum', balance: Number(mb.eth) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'eth', explorer: addr => `https://etherscan.io/address/${addr}` },
-      { id: 'bnb', symbol: 'BNB', name: 'BNB Smart Chain', chain: 'bsc', chainLabel: 'BSC (币安链)', balance: Number(mb.bnb) || 0, price: prices.bnb || 610, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'bsc', explorer: addr => `https://bscscan.com/address/${addr}` },
+      { id: 'bnb', symbol: 'BNB', name: 'BNB Smart Chain', chain: 'bsc', chainLabel: t('BSC (币安链)', 'BSC'), balance: Number(mb.bnb) || 0, price: prices.bnb || 610, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'bsc', explorer: addr => `https://bscscan.com/address/${addr}` },
       { id: 'sol', symbol: 'SOL', name: 'Solana', chain: 'sol', chainLabel: 'Solana', balance: Number(mb.sol) || 0, price: prices.sol || 96, addr: wallet ? (wallet.solAddress || '') : '', recvNet: 'sol', explorer: addr => `https://solscan.io/account/${addr}` },
       { id: 'base', symbol: 'ETH', name: 'ETH (Base)', chain: 'base', chainLabel: 'Base', balance: Number(mb.base) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'base', explorer: addr => `https://basescan.org/address/${addr}` },
       { id: 'arb', symbol: 'ETH', name: 'ETH (Arbitrum)', chain: 'arb', chainLabel: 'Arbitrum', balance: Number(mb.arb) || 0, price: prices.eth || 2430, addr: wallet ? (wallet.evmAddress || '') : '', recvNet: 'arb', explorer: addr => `https://arbiscan.io/address/${addr}` },
@@ -4425,7 +4442,7 @@
   // ======================== 创建钱包极速流 (零密码阻碍 + 硬件级随机熵) ========================
   window.startCreateWalletFlow = async function () {
     triggerHaptic('success');
-    const name = `Pearl-${String(state.wallets.length + 1).padStart(2, '0')}`;
+    const name = `Wallet ${state.wallets.length + 1}`;
 
     // 严谨生成 12 位标准 BIP-39 助记词与双链地址 (Pearl BIP-86 + NEAR SLIP-0010)
     const words = generateMnemonic();
@@ -4571,9 +4588,11 @@
     triggerHaptic('light');
     const nameInput = document.getElementById('import-wallet-name');
     const wordsInput = document.getElementById('import-mnemonic-input');
+    const pinInput = document.getElementById('import-wallet-pin');
 
-    if (nameInput) nameInput.value = state.currentLang === 'en' ? `Pearl Wallet ${state.wallets.length + 1}` : `我的 Pearl 钱包`;
+    if (nameInput) nameInput.value = `Wallet ${state.wallets.length + 1}`;
     if (wordsInput) wordsInput.value = '';
+    if (pinInput) pinInput.value = '';
 
     openSheet('sheet-import-wallet');
   };
@@ -4588,10 +4607,11 @@
 
       const nameInput = document.getElementById('import-wallet-name');
       const wordsInput = document.getElementById('import-mnemonic-input');
+      const pinInput = document.getElementById('import-wallet-pin');
 
-      const name = nameInput?.value.trim() || (state.currentLang === 'en' ? `Pearl Wallet ${state.wallets.length + 1}` : `我的 Pearl 钱包`);
+      const name = nameInput?.value.trim() || `Wallet ${state.wallets.length + 1}`;
       const rawInput = wordsInput?.value.trim() || '';
-      let pin = '123456';
+      let pin = pinInput?.value.trim() || '';
 
       if (!rawInput) {
         triggerHaptic('error');
@@ -4866,7 +4886,7 @@
 
     if (state.enteredPin.length === 6) {
       const currentWallet = getActiveWallet();
-      const correctPin = currentWallet ? currentWallet.pin : "123456";
+      const correctPin = (currentWallet && currentWallet.pin) ? currentWallet.pin : "123456";
 
       setTimeout(() => {
         if (state.enteredPin === correctPin) {
@@ -5091,6 +5111,55 @@
     }
   };
   globalThis.copyMultichainValue = window.copyMultichainValue;
+
+  window.openChangePinSheet = function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    if (!wallet) {
+      showToast(t('请先创建或导入钱包', 'Create or import a wallet first'));
+      return;
+    }
+    const oldEl = document.getElementById('change-pin-old');
+    const newEl = document.getElementById('change-pin-new');
+    const cfmEl = document.getElementById('change-pin-confirm');
+    if (oldEl) { oldEl.value = ''; oldEl.placeholder = t('当前 6 位密码', 'Current 6-digit PIN'); }
+    if (newEl) { newEl.value = ''; newEl.placeholder = t('新 6 位数字密码', 'New 6-digit PIN'); }
+    if (cfmEl) { cfmEl.value = ''; cfmEl.placeholder = t('确认新 6 位密码', 'Confirm new PIN'); }
+    openSheet('sheet-change-pin');
+  };
+  globalThis.openChangePinSheet = window.openChangePinSheet;
+
+  window.saveChangedPin = function () {
+    triggerHaptic('medium');
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+    const oldPin = document.getElementById('change-pin-old')?.value.trim() || '';
+    const newPin = document.getElementById('change-pin-new')?.value.trim() || '';
+    const cfmPin = document.getElementById('change-pin-confirm')?.value.trim() || '';
+    const currentPin = wallet.pin || '123456';
+
+    if (oldPin !== currentPin) {
+      triggerHaptic('error');
+      showToast(t('当前密码不正确', 'Current PIN is incorrect'));
+      return;
+    }
+    if (!/^\d{6}$/.test(newPin)) {
+      triggerHaptic('error');
+      showToast(t('新密码必须是 6 位纯数字', 'New PIN must be 6 digits'));
+      return;
+    }
+    if (newPin !== cfmPin) {
+      triggerHaptic('error');
+      showToast(t('两次输入的新密码不一致', 'New PINs do not match'));
+      return;
+    }
+    wallet.pin = newPin;
+    saveWalletsToStorage();
+    closeSheet();
+    triggerHaptic('success');
+    showToast(t('✅ 安全密码已更新', '✅ Security PIN updated'));
+  };
+  globalThis.saveChangedPin = window.saveChangedPin;
 
   window.unlockMultichainSecrets = async function () {
     triggerHaptic('medium');
