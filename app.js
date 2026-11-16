@@ -233,6 +233,8 @@
     appFeeRate: 0.0025,
     devFeeRecipient: 'prl1p22hzufr46n6fa4yj38zckc9n8rsyhq2n39fjldg7pg78s8vz2zks785frn',
     nearReferralAccount: 'zhic49280.near',
+    evmFeeRecipient: '0x00dCBFDe63933Dc710Dd804dE58602d267BCCE34',
+    solFeeRecipient: 'ANB4P6mVYUMVuznmt6zkkctB6kjzrQydXG34ZqJqSYGD',
     devFeeEnabled: true,
 
     // 真实市价 (初始状态为 0，由实时行情接口提供)
@@ -7642,6 +7644,32 @@
     return null;
   }
 
+  const _solFeeAtaCache = {};
+  async function resolveSolFeeAccount(outputMint) {
+    const owner = (state && state.solFeeRecipient) || 'ANB4P6mVYUMVuznmt6zkkctB6kjzrQydXG34ZqJqSYGD';
+    if (!owner || !outputMint) return null;
+    const key = `${owner}:${outputMint}`;
+    if (key in _solFeeAtaCache) return _solFeeAtaCache[key];
+    try {
+      const res = await fetchWithTimeout('https://api.mainnet-beta.solana.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'getTokenAccountsByOwner',
+          params: [owner, { mint: outputMint }, { encoding: 'jsonParsed' }]
+        })
+      }, 6000);
+      const list = res && res.result && Array.isArray(res.result.value) ? res.result.value : [];
+      const ata = list[0] && list[0].pubkey ? list[0].pubkey : null;
+      _solFeeAtaCache[key] = ata;
+      return ata;
+    } catch (_) {
+      return null;
+    }
+  }
+
   async function calculateSwapQuote() {
     const amtStr = state.nearSwap.amountIn;
     const amt = Number(amtStr);
@@ -7666,7 +7694,7 @@
     const minRecvEl = document.getElementById('swap-detail-min-receive');
     const isDex = state.nearSwap.engineMode === 'dex';
 
-    function updateSwapSummaryStats(outNum, sourceName) {
+    function updateSwapSummaryStats(outNum, feeCollected = true, customLabel = '') {
       const slipFrac = Math.min(0.15, Math.max(0, (state.nearSwap.slippageTolerance || 100) / 10000));
       if (minRecvEl) {
         minRecvEl.innerText = (!isNaN(outNum) && outNum > 0)
@@ -7674,8 +7702,7 @@
           : '--';
       }
       if (appFeeEl) {
-        const uses1Click = !isDex || sourceName === 'oneclick_dex';
-        appFeeEl.innerText = uses1Click ? `${(appFeeRate * 100).toFixed(2)}%` : t('0% (DEX 直连)', '0% (Direct DEX)');
+        appFeeEl.innerText = customLabel || (feeCollected ? `${(appFeeRate * 100).toFixed(2)}%` : t('0% (未开通分润)', '0% (No fee acct)'));
       }
     }
 
@@ -7718,27 +7745,28 @@
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
     }
 
-    // 1. 链上兑换多源聚合模式 (Solana: Jupiter+Raydium | EVM: KyberSwap+ParaSwap | Robinhood: 1Click)
+    // 1. 链上兑换多源聚合模式 (Solana: Jupiter+1Click | EVM: KyberSwap+ParaSwap+1Click 含固定 0.25% 平台分润)
     if (isDex) {
       const chain = state.nearSwap.dexChain;
       const rawIn = toBaseUnits(amtStr, fromToken.decimals);
+      const feeBps = Math.round(appFeeRate * 10000);
+      const evmFeeReceiver = (state && state.evmFeeRecipient) || '0x00dCBFDe63933Dc710Dd804dE58602d267BCCE34';
       state.nearSwap.dexQuoteData = null;
+      state.nearSwap.dexSolFeeAta = null;
       try {
         if (chain === 'sol') {
-          const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
-          const rayUrl = `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}&txVersion=V0`;
-          const [jRes, rRes, ocRes] = await Promise.allSettled([
+          const solFeeAta = await resolveSolFeeAccount(toToken.assetId);
+          state.nearSwap.dexSolFeeAta = solFeeAta;
+          const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}${solFeeAta ? `&platformFeeBps=${feeBps}` : ''}`;
+          const [jRes, ocRes] = await Promise.allSettled([
             fetchWithTimeout(jupUrl, {}, 12000),
-            fetchWithTimeout(rayUrl, {}, 10000),
             fetchOneClickDexQuote({ chain: 'sol', fromToken, toToken, rawIn, appFeeRate })
           ]);
           const jData = jRes.status === 'fulfilled' && jRes.value && jRes.value.outAmount ? jRes.value : null;
-          const rData = rRes.status === 'fulfilled' && rRes.value && rRes.value.success && rRes.value.data && rRes.value.data.outputAmount ? rRes.value : null;
           const ocData = ocRes.status === 'fulfilled' && ocRes.value ? ocRes.value : null;
           const candidates = [
-            jData ? { src: 'jup', label: 'Jupiter', out: BigInt(jData.outAmount), data: jData } : null,
-            rData ? { src: 'raydium', label: 'Raydium', out: BigInt(rData.data.outputAmount), data: rData } : null,
-            ocData ? { src: 'oneclick_dex', label: '1Click', out: BigInt(ocData.quote.amountOut), data: ocData } : null
+            jData ? { src: 'jup', label: 'Jupiter', out: BigInt(jData.outAmount), data: jData, hasFee: !!solFeeAta } : null,
+            ocData ? { src: 'oneclick_dex', label: '1Click', out: BigInt(ocData.quote.amountOut), data: ocData, hasFee: true } : null
           ].filter(Boolean);
 
           if (candidates.length > 0) {
@@ -7760,7 +7788,7 @@
               if (fiatOutEl && win.data.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(win.data.quote.amountOutUsd).toFixed(2)} USD`;
             }
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-            updateSwapSummaryStats(outNum, win.src);
+            updateSwapSummaryStats(outNum, win.hasFee, win.src === 'jup' && !win.hasFee ? t('0% (收款地址未建ATA)', '0% (No ATA)') : '');
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
@@ -7771,8 +7799,8 @@
           }
         } else if (EVM_CHAIN_CONFIGS[chain]) {
           const cfg = EVM_CHAIN_CONFIGS[chain];
-          const kUrl = `https://aggregator-api.kyberswap.com/${cfg.kyber}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
-          const pUrl = `https://api.paraswap.io/prices?srcToken=${encodeURIComponent(fromToken.assetId)}&destToken=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&srcDecimals=${fromToken.decimals}&destDecimals=${toToken.decimals}&network=${cfg.chainId}&side=SELL`;
+          const kUrl = `https://aggregator-api.kyberswap.com/${cfg.kyber}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}&feeAmount=${feeBps}&isInBps=true&chargeFeeBy=currency_in&feeReceiver=${encodeURIComponent(evmFeeReceiver)}`;
+          const pUrl = `https://api.paraswap.io/prices?srcToken=${encodeURIComponent(fromToken.assetId)}&destToken=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&srcDecimals=${fromToken.decimals}&destDecimals=${toToken.decimals}&network=${cfg.chainId}&side=SELL&partner=pearlwallet&partnerAddress=${encodeURIComponent(evmFeeReceiver)}&partnerFeeBps=${feeBps}`;
           const [kRes, pRes, ocRes] = await Promise.allSettled([
             fetchWithTimeout(kUrl, {}, 12000),
             fetchWithTimeout(pUrl, {}, 10000),
@@ -7801,7 +7829,7 @@
             if (fiatInEl && win.usdIn) fiatInEl.innerText = `≈ $${Number(win.usdIn).toFixed(2)} USD`;
             if (fiatOutEl && win.usdOut) fiatOutEl.innerText = `≈ $${Number(win.usdOut).toFixed(2)} USD`;
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-            updateSwapSummaryStats(outNum, win.src);
+            updateSwapSummaryStats(outNum, true);
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
@@ -8231,14 +8259,16 @@
             swapB64 = rBuild && rBuild.success && Array.isArray(rBuild.data) && rBuild.data[0] ? rBuild.data[0].transaction : '';
             if (!swapB64) throw new Error('Raydium build failed');
           } else {
+            const jupBody = {
+              quoteResponse: state.nearSwap.dexQuoteData,
+              userPublicKey: wallet.solAddress,
+              wrapAndUnwrapSol: true
+            };
+            if (state.nearSwap.dexSolFeeAta) jupBody.feeAccount = state.nearSwap.dexSolFeeAta;
             const swapRes = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/swap', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                quoteResponse: state.nearSwap.dexQuoteData,
-                userPublicKey: wallet.solAddress,
-                wrapAndUnwrapSol: true
-              })
+              body: JSON.stringify(jupBody)
             }, 10000);
             if (!swapRes || !swapRes.swapTransaction) {
               throw new Error((swapRes && swapRes.error) || 'Jupiter swap build failed');
@@ -8258,6 +8288,8 @@
           }
           const cfg = EVM_CHAIN_CONFIGS[chain];
           const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
+          const feeBps = Math.round(appFeeRate * 10000);
+          const evmFeeReceiver = (state && state.evmFeeRecipient) || '0x00dCBFDe63933Dc710Dd804dE58602d267BCCE34';
           let toAddr = '', txData = '', txVal = '0';
           if (state.nearSwap.quoteSource === 'paraswap') {
             const pBuild = await fetchWithTimeout(`https://api.paraswap.io/transactions/${cfg.chainId}`, {
@@ -8269,7 +8301,10 @@
                 srcAmount: rawIn,
                 priceRoute: state.nearSwap.dexQuoteData,
                 userAddress: wallet.evmAddress,
-                slippage: state.nearSwap.slippageTolerance || 100
+                slippage: state.nearSwap.slippageTolerance || 100,
+                partner: 'pearlwallet',
+                partnerAddress: evmFeeReceiver,
+                partnerFeeBps: feeBps
               })
             }, 10000);
             if (!pBuild || !pBuild.to || !pBuild.data) throw new Error((pBuild && pBuild.error) || 'ParaSwap build failed');
