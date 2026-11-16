@@ -1650,7 +1650,8 @@
         if (totalWorkers > 0) state.chainInfo.workers = totalWorkers;
         if (totalMiners > 0) state.chainInfo.miners = totalMiners;
         if (totalHashrateHps > 0) {
-          state.chainInfo.hashrateEH = (totalHashrateHps / 1e18).toFixed(2);
+          // prlscan/pools 仅包含部分上报矿池（未含离线/未上报矿池），不可覆盖全网总算力
+          state.chainInfo.reportedPoolsHashrateEH = (totalHashrateHps / 1e18).toFixed(2);
         }
         state.poolsList = data.items.filter(Boolean);
         updateChainDomElements();
@@ -1662,43 +1663,80 @@
     }
   }
 
+  async function fetchOfficialBlockMetrics() {
+    try {
+      const baseUrl = getRpcGatewayUrl();
+      const data = await fetchWithTimeout(`${baseUrl}/blocks?limit=20`, {}, 6000);
+      const items = data && Array.isArray(data.items) ? data.items.filter(Boolean) : [];
+      if (items.length === 0) return;
+
+      const latest = items[0];
+      if (typeof latest.height === 'number') state.chainInfo.height = latest.height;
+      if (typeof latest.difficulty === 'number' && latest.difficulty > 0) {
+        state.chainInfo.difficultyM = (latest.difficulty / 1e6).toFixed(2);
+        state.chainInfo.difficultyP = state.chainInfo.difficultyM;
+      }
+      if (typeof latest.reward_grains === 'number' && latest.reward_grains > 0) {
+        state.chainInfo.blockReward = (latest.reward_grains / 1e8).toFixed(2);
+      }
+      if (items.length >= 2 && latest.time && items[items.length - 1].time) {
+        const newestMs = new Date(latest.time).getTime();
+        const oldestMs = new Date(items[items.length - 1].time).getTime();
+        const avgSec = (newestMs - oldestMs) / 1000 / (items.length - 1);
+        if (!isNaN(avgSec) && avgSec > 1 && avgSec < 3600) {
+          state.chainInfo.avgBlockTimeSec = Math.round(avgSec);
+        }
+      }
+      state.chainInfo.recentBlocks = items.slice().reverse();
+    } catch (err) {
+      console.warn('[Network] 官方区块难度数据获取失败:', err);
+    }
+  }
+
   /**
-   * 综合链上数据抓取：优先官方 prlscan，辅以 HeroMiners 与 Kryptex 补充单块奖励与全网难度
+   * 综合链上数据抓取：官方 prlscan (status/blocks/pools) + HeroMiners / Kryptex 全网 PoW 算力
    */
   window.fetchRealChainData = async function () {
-    // 1. 并发抓取官方链上状态与矿池聚合数据
+    // 1. 并发抓取官方链上状态、最近 20 个官方区块（真实难度/出块时间/单块奖励）与矿池分布
     try {
       await Promise.allSettled([
         fetchChainStatus(),
+        fetchOfficialBlockMetrics(),
         fetchMiningPools()
       ]);
     } catch (e) {}
 
-    // 2. 从开放 CORS 的 HeroMiners 获取实时单块奖励和全网难度
+    // 2. 获取全网真实 PoW 算力（HeroMiners / Kryptex 均上报完整全网算力 ~101 EH/s）
+    let gotFullNetHash = false;
     try {
       const hData = await fetchWithTimeout('https://pearl.herominers.com/api/stats', {}, 5000);
-      if (hData) {
-        if (hData.network) {
-          if (!state.chainInfo.height && hData.network.height) state.chainInfo.height = hData.network.height;
-          if (hData.network.difficulty) state.chainInfo.difficultyP = (hData.network.difficulty / 1e12).toFixed(2);
-          if (!state.chainInfo.hashrateEH || state.chainInfo.hashrateEH === '--') {
-            if (hData.network.networkHashps) state.chainInfo.hashrateEH = (hData.network.networkHashps / 1e18).toFixed(2);
-          }
+      if (hData && hData.network) {
+        if (!state.chainInfo.height && hData.network.height) state.chainInfo.height = hData.network.height;
+        if (hData.network.networkHashps) {
+          state.chainInfo.hashrateEH = (hData.network.networkHashps / 1e18).toFixed(2);
+          gotFullNetHash = true;
         }
-        if (hData.pool && hData.pool.averageReward) {
+        if (!state.chainInfo.difficultyM && hData.network.difficulty) {
+          // HeroMiners difficulty 为 2^16 倍缩放值，换算为与 prlscan 一致的 M 单位
+          state.chainInfo.difficultyM = (hData.network.difficulty / 65536 / 1e6).toFixed(2);
+          state.chainInfo.difficultyP = state.chainInfo.difficultyM;
+        }
+        if (!state.chainInfo.blockReward && hData.pool && hData.pool.averageReward) {
           state.chainInfo.blockReward = (hData.pool.averageReward / 1e8).toFixed(2);
         }
         if (!state.chainInfo.workers && hData.pool && hData.pool.workers) {
           state.chainInfo.workers = hData.pool.workers;
         }
       }
-    } catch (e) {
-      // 备选 Kryptex 矿池数据
+    } catch (e) {}
+
+    if (!gotFullNetHash) {
       try {
         const kData = await fetchWithTimeout('https://pool.kryptex.com/prl/api/v1/pool/info', {}, 5000);
         if (kData) {
           if (!state.chainInfo.height && kData.height) state.chainInfo.height = kData.height;
-          if (kData.block_reward) state.chainInfo.blockReward = Number(kData.block_reward).toFixed(2);
+          if (kData.net_hashrate) state.chainInfo.hashrateEH = (Number(kData.net_hashrate) / 1e18).toFixed(2);
+          if (!state.chainInfo.blockReward && kData.block_reward) state.chainInfo.blockReward = Number(kData.block_reward).toFixed(2);
           if (kData.miners && !state.chainInfo.miners) state.chainInfo.miners = kData.miners;
           if (kData.workers && !state.chainInfo.workers) state.chainInfo.workers = kData.workers;
         }
@@ -1874,18 +1912,23 @@
       const boardHashEl = document.getElementById('miner-hashrate');
       const boardWorkersEl = document.getElementById('pool-active-workers');
 
-      if (priceEl && state.livePriceUSD) priceEl.innerText = `${state.livePriceUSD.toFixed(2)}`;
+      if (priceEl && state.livePriceUSD) priceEl.innerText = `$${state.livePriceUSD.toFixed(2)}`;
       if (hashEl) hashEl.innerText = netHashStr;
       if (unitEl) unitEl.innerText = unitDaily;
-      if (diffEl) diffEl.innerText = poolInfo.difficulty?.default ? (poolInfo.difficulty.default / 1e6).toFixed(2) + "M" : "59.14M";
+      // 注意：Kryptex pool/info 的 difficulty.default 是矿池端口份额难度 (2097152)，不可当作主网难度
+      if (diffEl) diffEl.innerText = state.chainInfo.difficultyM ? `${state.chainInfo.difficultyM}M` : "59.14M";
       if (boardHashEl) boardHashEl.innerText = netHashStr;
       if (boardWorkersEl) boardWorkersEl.innerText = `${workers.toLocaleString()} 矿机在线`;
 
       state.chainInfo.hashrateEH = (netHash / 1e18).toFixed(2);
-      state.chainInfo.difficultyP = poolInfo.difficulty?.default ? (poolInfo.difficulty.default / 1e6).toFixed(2) : "59.14";
-      if (poolInfo.block_reward) {
+      if (!state.chainInfo.difficultyP || state.chainInfo.difficultyP === '--') {
+        state.chainInfo.difficultyP = state.chainInfo.difficultyM || "59.14";
+      }
+      if (poolInfo.block_reward && !state.chainInfo.blockReward) {
         state.chainInfo.blockReward = Number(poolInfo.block_reward).toFixed(2);
       }
+      syncNetworkMetricsWithLiveChainData();
+      if (typeof renderInteractiveChart === 'function') renderInteractiveChart();
     } catch (e) {}
   }
   window.fetchKryptexPoolOverview = fetchKryptexPoolOverview;
@@ -2151,7 +2194,7 @@
       '30d': { change: '--', min: '--', avg: '--', max: '--', points: [] }
     },
     diff: {
-      unit: 'P',
+      unit: 'M',
       name: '全网难度',
       '24h': { change: '--', min: '--', avg: '--', max: '--', points: [] },
       '7d': { change: '--', min: '--', avg: '--', max: '--', points: [] },
@@ -2189,7 +2232,26 @@
       });
     }
 
-    if (isNaN(liveDiff) || liveDiff <= 0) {
+    const recentBlocks = Array.isArray(state.chainInfo.recentBlocks) ? state.chainInfo.recentBlocks : [];
+    const diffPts = recentBlocks
+      .filter(b => typeof b.difficulty === 'number' && b.difficulty > 0)
+      .map(b => ({ time: `#${b.height}`, val: Number((b.difficulty / 1e6).toFixed(2)), note: '官方区块' }));
+
+    if (diffPts.length >= 2) {
+      const vals = diffPts.map(p => p.val);
+      const minD = Math.min(...vals).toFixed(2);
+      const maxD = Math.max(...vals).toFixed(2);
+      const avgD = (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+      ['24h', '7d', '30d'].forEach(r => {
+        networkMetricsData.diff[r] = {
+          change: 'prlscan 官方区块',
+          min: `${minD}M`,
+          avg: `${avgD}M`,
+          max: `${maxD}M`,
+          points: diffPts
+        };
+      });
+    } else if (isNaN(liveDiff) || liveDiff <= 0) {
       ['24h', '7d', '30d'].forEach(r => {
         networkMetricsData.diff[r] = { change: '实时连接中', min: '--', avg: '--', max: '--', points: [] };
       });
@@ -2198,9 +2260,9 @@
       ['24h', '7d', '30d'].forEach(r => {
         networkMetricsData.diff[r] = {
           change: '实时数据已连接',
-          min: `${liveDiff.toFixed(2)} P`,
-          avg: `${liveDiff.toFixed(2)} P`,
-          max: `${liveDiff.toFixed(2)} P`,
+          min: `${liveDiff.toFixed(2)}M`,
+          avg: `${liveDiff.toFixed(2)}M`,
+          max: `${liveDiff.toFixed(2)}M`,
           points: livePoint
         };
       });
@@ -3297,6 +3359,22 @@
     if (fiatEl) fiatEl.innerText = (rewardNum && state.livePriceUSD) ? `≈ $${dailyUSDWan} 万 USD/天` : '--';
     if (poolWorkersEl) poolWorkersEl.innerText = state.chainInfo.workers ? `${Number(state.chainInfo.workers).toLocaleString()} 矿机在线` : '-- 矿机在线';
     if (hashrateEl) hashrateEl.innerText = state.chainInfo.hashrateEH && state.chainInfo.hashrateEH !== '--' ? `${state.chainInfo.hashrateEH} EH/s` : '-- EH/s';
+    const ovHashEl = document.getElementById('overview-metric-hashrate');
+    const ovDiffEl = document.getElementById('overview-metric-diff');
+    const ovBlockTimeEl = document.getElementById('overview-metric-blocktime');
+    const ovPriceEl = document.getElementById('overview-metric-price');
+    if (ovHashEl && state.chainInfo.hashrateEH && state.chainInfo.hashrateEH !== '--') {
+      ovHashEl.innerText = `${state.chainInfo.hashrateEH} EH/s`;
+    }
+    if (ovDiffEl && state.chainInfo.difficultyM) {
+      ovDiffEl.innerText = `${state.chainInfo.difficultyM}M`;
+    }
+    if (ovBlockTimeEl && state.chainInfo.avgBlockTimeSec) {
+      ovBlockTimeEl.innerText = `~${state.chainInfo.avgBlockTimeSec}秒 / 块`;
+    }
+    if (ovPriceEl && state.livePriceUSD) {
+      ovPriceEl.innerText = `$${state.livePriceUSD.toFixed(2)}`;
+    }
 
     if (totalSupplyEl) totalSupplyEl.innerText = heightNum ? `~${totalCirculatingYi} 亿 PRL` : '-- 亿 PRL';
     if (supplyPctEl) supplyPctEl.innerText = heightNum ? `占总硬顶 ${supplyPct}%` : '--';
