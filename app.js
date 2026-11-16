@@ -338,6 +338,9 @@
       'nearDomain.bindBtn': '绑定已有',
       'nearDomain.unbindBtn': '解绑',
       'nearDomain.hint': '选好可用域名后，向下方 NEAR 地址转入 ≥ 0.15 NEAR 即可自动链上注册激活；已有 .near 账户可直接绑定。',
+      'receive.addrSlot': '地址序号',
+      'receive.nextAddr': '换一个地址 ↻',
+      'receive.copyBtn': '复制收款地址',
       'stake.receiveLabel': '预计获得',
       'stake.ctaBtn': '立即质押'
     },
@@ -416,6 +419,9 @@
       'nearDomain.bindBtn': 'Bind Existing',
       'nearDomain.unbindBtn': 'Unbind',
       'nearDomain.hint': 'Pick an available name and fund ≥ 0.15 NEAR to the NEAR address below to auto-register on-chain, or bind an existing .near account.',
+      'receive.addrSlot': 'Address Index',
+      'receive.nextAddr': 'Next ↻',
+      'receive.copyBtn': 'Copy Address',
     }
   };
 
@@ -5354,11 +5360,11 @@
         domainBox.classList.remove('hidden');
         if (wallet.nearNamedAccount) {
           if (domainStatus) domainStatus.innerText = t(`已绑定：${wallet.nearNamedAccount}`, `Bound: ${wallet.nearNamedAccount}`);
-          if (domainInput && !domainInput.value) domainInput.value = wallet.nearNamedAccount;
+          if (domainInput && !domainInput.value) domainInput.value = wallet.nearNamedAccount.replace(/\.near$/i, '');
           if (unbindBtn) unbindBtn.classList.remove('hidden');
         } else if (wallet.pendingNearNamedAccount) {
           if (domainStatus) domainStatus.innerText = t(`⏳ 待激活：${wallet.pendingNearNamedAccount} (需 ≥ 0.15 NEAR)`, `⏳ Pending: ${wallet.pendingNearNamedAccount} (need ≥ 0.15 NEAR)`);
-          if (domainInput && !domainInput.value) domainInput.value = wallet.pendingNearNamedAccount;
+          if (domainInput && !domainInput.value) domainInput.value = wallet.pendingNearNamedAccount.replace(/\.near$/i, '');
           if (unbindBtn) unbindBtn.classList.add('hidden');
         } else {
           if (domainStatus) domainStatus.innerText = t('当前：64位隐式账户', 'Current: 64-hex implicit');
@@ -5699,13 +5705,19 @@
     state.receiveNetwork = net;
     const wallet = getActiveWallet();
 
-    ['prl', 'near', 'sol', 'eth', 'bsc', 'base', 'arb', 'hype'].forEach(k => {
+    ['prl', 'near', 'sol', 'eth', 'bsc', 'base', 'arb', 'hood', 'hype'].forEach(k => {
       const btn = document.getElementById(`btn-recv-net-${k}`);
       if (!btn) return;
       btn.className = k === net
-        ? 'py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active'
-        : 'py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active';
+        ? 'px-3 py-1.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/35 transition-all btn-active whitespace-nowrap flex-shrink-0'
+        : 'px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0';
     });
+
+    const centerBadgeEl = document.getElementById('receive-qr-center-badge');
+    const symMap = { prl: 'PRL', near: 'NEAR', sol: 'SOL', eth: 'ETH', base: 'BASE', bsc: 'BNB', arb: 'ARB', hood: 'HOOD', hype: 'HYPE' };
+    if (centerBadgeEl) {
+      centerBadgeEl.innerHTML = `<span class="w-8 h-8 rounded-full bg-[#10121B] text-cyan-300 text-[9px] font-extrabold flex items-center justify-center border-2 border-white shadow-md">${symMap[net] || 'PRL'}</span>`;
+    }
 
     const titleEl = document.getElementById('receive-sheet-title');
     const subEl = document.getElementById('receive-sheet-subtitle');
@@ -5761,8 +5773,9 @@
           eth:  { title: '接收 Ethereum (ERC-20) 资产', sub: '仅限 Ethereum 主网转入 ETH / ERC-20 代币', label: 'Ethereum 主网收款地址 (ERC-20)' },
           bsc:  { title: '接收 BNB Smart Chain (BEP-20) 资产', sub: '仅限币安智能链 BSC 转入 BNB / BEP-20 代币', label: 'BSC 币安智能链收款地址 (BEP-20)' },
           base: { title: '接收 Base 网络资产', sub: '仅限 Base 网络转入 ETH / Base USDC', label: 'Base 主网收款地址 (Base Mainnet)' },
-          arb:  { title: '接收 Arbitrum One 资产', sub: '仅限 Arbitrum 网络转入 ETH / ARB USDC', label: 'Arbitrum One 主网收款地址' },
-          hype: { title: '接收 Hyperliquid (HyperEVM) 资产', sub: '仅限 HyperEVM 网络转入 HYPE 及生态资产', label: 'HyperEVM 主网收款地址' }
+          arb:  { title: t('接收 Arbitrum One 资产', 'Receive Arbitrum One'), sub: t('仅限 Arbitrum 网络转入 ETH / USDC', 'Arbitrum One network only'), label: t('Arbitrum One 收款地址', 'Arbitrum One Address') },
+          hood: { title: t('接收 Robinhood Chain 资产', 'Receive Robinhood Chain'), sub: t('仅限 Robinhood Chain (4663) 转入 ETH / PONS 等', 'Robinhood Chain (4663) only'), label: t('Robinhood Chain 收款地址', 'Robinhood Chain Address') },
+          hype: { title: t('接收 Hyperliquid (HyperEVM) 资产', 'Receive HyperEVM'), sub: t('仅限 HyperEVM 网络转入 HYPE 及生态资产', 'HyperEVM network only'), label: t('HyperEVM 主网收款地址', 'HyperEVM Address') }
         }[net] || { title: '接收 Ethereum 资产', sub: 'Ethereum 主网', label: 'Ethereum 主网地址' };
         if (titleEl) titleEl.innerText = evmMeta.title;
         if (subEl) subEl.innerText = evmMeta.sub;

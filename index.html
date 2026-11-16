@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=9.0">
+  <link rel="stylesheet" href="style.css?v=9.2">
   <script>
     tailwind.config = {
       theme: {
@@ -961,44 +961,62 @@
       <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
     </div>
     <div class="text-center mb-3">
-      <h3 id="receive-sheet-title" class="text-base font-bold text-white">接收 Pearl 珍珠币</h3>
-      <p id="receive-sheet-subtitle" class="text-xs text-white/40 mt-0.5">选择网络查看对应真实收款地址与二维码</p>
+      <h3 id="receive-sheet-title" class="text-base font-bold text-white">接收 Pearl (PRL)</h3>
+      <p id="receive-sheet-subtitle" class="text-[11px] text-white/45 mt-0.5">仅接收对应网络资产</p>
     </div>
 
-    <!-- 全链收款网络切换栏 (明确指定具体网络) -->
-    <div id="receive-network-tabs" class="grid grid-cols-4 gap-1.5 p-1.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-4">
-      <button type="button" onclick="selectReceiveNetwork('prl')" id="btn-recv-net-prl" class="py-1.5 rounded-xl text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 transition-all btn-active">PRL</button>
-      <button type="button" onclick="selectReceiveNetwork('near')" id="btn-recv-net-near" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">NEAR</button>
-      <button type="button" onclick="selectReceiveNetwork('sol')" id="btn-recv-net-sol" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">SOL</button>
-      <button type="button" onclick="selectReceiveNetwork('eth')" id="btn-recv-net-eth" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ETH</button>
-      <button type="button" onclick="selectReceiveNetwork('bsc')" id="btn-recv-net-bsc" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">BSC</button>
-      <button type="button" onclick="selectReceiveNetwork('base')" id="btn-recv-net-base" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">Base</button>
-      <button type="button" onclick="selectReceiveNetwork('arb')" id="btn-recv-net-arb" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">ARB</button>
-      <button type="button" onclick="selectReceiveNetwork('hype')" id="btn-recv-net-hype" class="py-1.5 rounded-xl text-[11px] font-medium text-white/55 hover:text-white border border-transparent transition-all btn-active">HYPE</button>
+    <!-- 全链收款网络切换栏 (横向胶囊滑条) -->
+    <div id="receive-network-tabs" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-4">
+      <button type="button" onclick="selectReceiveNetwork('prl')" id="btn-recv-net-prl" class="px-3 py-1.5 rounded-full text-[11px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-400/35 transition-all btn-active whitespace-nowrap flex-shrink-0">Pearl</button>
+      <button type="button" onclick="selectReceiveNetwork('near')" id="btn-recv-net-near" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">NEAR</button>
+      <button type="button" onclick="selectReceiveNetwork('sol')" id="btn-recv-net-sol" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">Solana</button>
+      <button type="button" onclick="selectReceiveNetwork('eth')" id="btn-recv-net-eth" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">Ethereum</button>
+      <button type="button" onclick="selectReceiveNetwork('base')" id="btn-recv-net-base" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">Base</button>
+      <button type="button" onclick="selectReceiveNetwork('bsc')" id="btn-recv-net-bsc" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">BSC</button>
+      <button type="button" onclick="selectReceiveNetwork('arb')" id="btn-recv-net-arb" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">Arbitrum</button>
+      <button type="button" onclick="selectReceiveNetwork('hood')" id="btn-recv-net-hood" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">Robinhood</button>
+      <button type="button" onclick="selectReceiveNetwork('hype')" id="btn-recv-net-hype" class="px-3 py-1.5 rounded-full text-[11px] font-medium bg-white/[0.04] text-white/60 hover:text-white border border-white/[0.08] transition-all btn-active whitespace-nowrap flex-shrink-0">HyperEVM</button>
     </div>
 
-    <div class="flex justify-center mb-4">
-      <div id="qrcode-canvas-container" class="p-3 bg-white rounded-3xl shadow-2xl shadow-cyan-500/20 flex items-center justify-center overflow-hidden"></div>
+    <!-- 统一质感玻璃态收款卡片 -->
+    <div class="rounded-3xl bg-gradient-to-b from-white/[0.06] to-white/[0.02] border border-white/[0.1] p-4 mb-4 shadow-2xl">
+      <div class="flex items-center justify-center mb-3">
+        <span id="receive-network-pill" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/25 text-[11px] font-bold text-cyan-200">
+          <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+          <span id="receive-addr-network-label">Pearl 主网收款地址</span>
+        </span>
+      </div>
+
+      <div class="flex justify-center mb-4">
+        <div class="relative p-3 bg-white rounded-2xl shadow-lg shadow-cyan-500/10 flex items-center justify-center">
+          <div id="qrcode-canvas-container" class="flex items-center justify-center overflow-hidden"></div>
+          <div id="receive-qr-center-badge" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span class="w-8 h-8 rounded-full bg-[#10121B] text-cyan-300 text-[10px] font-extrabold flex items-center justify-center border-2 border-white shadow-md">PRL</span>
+          </div>
+        </div>
+      </div>
+
+      <div onclick="copyAddress()" class="p-3 rounded-2xl bg-black/35 hover:bg-black/45 border border-white/[0.07] cursor-pointer transition-all flex items-center justify-between gap-2.5">
+        <div id="receive-full-address" class="text-[11px] font-mono text-white/90 break-all select-all leading-relaxed flex-1"></div>
+        <span class="w-7 h-7 rounded-xl bg-white/[0.07] text-cyan-300 flex items-center justify-center flex-shrink-0">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        </span>
+      </div>
     </div>
 
-    <div id="receive-address-index-bar" class="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.08] mb-3">
+    <div id="receive-address-index-bar" class="flex items-center justify-between p-2.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] mb-3">
       <div class="text-[11px] text-white/60">
-        派生路径: <span id="receive-addr-index-label" class="font-mono text-cyan-300 font-bold">m/86'/808276'/0'/0/0</span>
+        <span data-i18n="receive.addrSlot">地址序号</span>: <span id="receive-addr-index-label" class="font-mono text-cyan-300 font-bold">#0</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <button type="button" onclick="switchPearlAddressIndex(-1)" class="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/70 btn-active">上一个</button>
-        <button type="button" onclick="switchPearlAddressIndex(1)" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-[11px] text-cyan-300 font-bold btn-active">换一个地址 ↻</button>
+        <button type="button" onclick="switchPearlAddressIndex(-1)" class="px-2 py-1 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/70 btn-active">←</button>
+        <button type="button" onclick="switchPearlAddressIndex(1)" data-i18n="receive.nextAddr" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-[11px] text-cyan-300 font-bold btn-active">换一个地址 ↻</button>
       </div>
-    </div>
-
-    <div class="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] mb-5">
-      <div id="receive-addr-network-label" class="text-[10px] text-white/40 mb-1">Pearl Taproot 主网地址 (Bech32m 标准)</div>
-      <div id="receive-full-address" class="text-xs font-mono text-cyan-200 break-all select-all leading-relaxed"></div>
     </div>
 
     <button onclick="copyAddress()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-sm shadow-lg shadow-cyan-500/20 btn-active flex items-center justify-center gap-2">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
-      复制地址
+      <span data-i18n="receive.copyBtn">复制收款地址</span>
     </button>
   </div>
 
@@ -1716,7 +1734,10 @@
         <span id="multichain-near-domain-status" class="text-[10px] text-white/45 text-right truncate">当前：64位隐式账户</span>
       </div>
       <div class="flex items-center gap-1.5">
-        <input id="multichain-near-domain-input" type="text" oninput="checkNearDomainAvailabilityDebounced(this.value)" placeholder="输入想要的用户名 (如 alice.near)" class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-white/30 focus:outline-none focus:border-emerald-400/50 font-mono">
+        <div class="flex-1 min-w-0 flex items-center rounded-xl bg-black/40 border border-white/10 focus-within:border-emerald-400/50 overflow-hidden">
+          <input id="multichain-near-domain-input" type="text" oninput="checkNearDomainAvailabilityDebounced(this.value)" placeholder="输入用户名 (如 alice)" class="flex-1 min-w-0 px-3 py-1.5 bg-transparent text-xs text-white placeholder-white/30 focus:outline-none font-mono">
+          <span class="px-2.5 py-1.5 text-xs font-mono text-emerald-300/80 bg-white/[0.04] border-l border-white/10 select-none">.near</span>
+        </div>
         <button type="button" onclick="registerNearNamedAccount()" id="btn-register-near-domain" data-i18n="nearDomain.registerBtn" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold border border-cyan-400/30 btn-active whitespace-nowrap">
           注册激活
         </button>
@@ -1758,12 +1779,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=9.0"></script>
+  <script src="bip39-wordlist.js?v=9.2"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=9.0"></script>
+  <script src="qrcode.min.js?v=9.2"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=9.0"></script>
+  <script src="ethers.umd.min.js?v=9.2"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=9.0"></script>
+  <script src="app.js?v=9.2"></script>
 </body>
 </html>
