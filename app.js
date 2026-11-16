@@ -270,7 +270,7 @@
       'nav.settings': '设置',
       'wallet.send': '转账',
       'wallet.receive': '收款',
-      'wallet.swap': '跨链闪兑',
+      'wallet.swap': '闪兑',
       'wallet.wallets': '多钱包',
       'wallet.mnemonic': '助记词',
       'swap.bannerTitle': 'NEAR 链抽象跨链闪兑',

@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=7.7">
+  <link rel="stylesheet" href="style.css?v=7.8">
   <script>
     tailwind.config = {
       theme: {
@@ -145,7 +145,7 @@
             <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-400/20 to-indigo-500/20 text-cyan-300 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
             </div>
-            <span class="text-[10px] font-bold text-cyan-300" data-i18n="wallet.swap">跨链闪兑</span>
+            <span class="text-[10px] font-bold text-cyan-300" data-i18n="wallet.swap">闪兑</span>
           </button>
 
           <!-- 钱包管理 -->
@@ -1602,7 +1602,7 @@
     <div class="grid grid-cols-3 gap-2 mb-4 flex-shrink-0">
       <button type="button" onclick="openTokenDetailAction('receive')" class="py-2.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 text-xs font-bold border border-purple-400/30 btn-active">收款</button>
       <button type="button" onclick="openTokenDetailAction('send')" class="py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-xs font-bold border border-cyan-400/30 btn-active">发送</button>
-      <button type="button" onclick="openTokenDetailAction('swap')" class="py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active">跨链闪兑</button>
+      <button type="button" onclick="openTokenDetailAction('swap')" data-i18n="wallet.swap" class="py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold border border-emerald-400/30 btn-active">闪兑</button>
     </div>
 
     <!-- 活动明细与链上操作 -->
@@ -1677,10 +1677,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=7.7"></script>
+  <script src="bip39-wordlist.js?v=7.8"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=7.7"></script>
+  <script src="qrcode.min.js?v=7.8"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=7.7"></script>
+  <script src="app.js?v=7.8"></script>
 </body>
 </html>
