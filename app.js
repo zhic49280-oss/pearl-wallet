@@ -6511,15 +6511,22 @@
   }
 
   function autoFillSwapWalletAddress(wallet, targetToken) {
-    if (!wallet || !targetToken) return;
-    const chainAddr = getWalletChainAddress(wallet, targetToken.blockchain);
+    if (!wallet) return;
+    const fromToken = getSwapFromToken();
+    const toToken = getSwapToToken();
+    const isBuyingPrl = toToken && toToken.assetId === PEARL_DEFUSE_TOKEN.assetId;
+    const addrChain = isBuyingPrl ? fromToken.blockchain : (toToken ? toToken.blockchain : (targetToken ? targetToken.blockchain : ''));
+    const chainAddr = getWalletChainAddress(wallet, addrChain);
     const knownOwnAddrs = [
-      wallet.nearNamedAccount, wallet.nearAddress, wallet.evmAddress, wallet.solAddress, state.nearSwap._lastAutoAddr
+      wallet.address, wallet.nearNamedAccount, wallet.nearAddress, wallet.evmAddress, wallet.solAddress, state.nearSwap._lastAutoAddr
     ].filter(Boolean);
     const cur = (state.nearSwap.recipientAddress || '').trim();
     if (chainAddr && (!cur || knownOwnAddrs.includes(cur))) {
       state.nearSwap.recipientAddress = chainAddr;
       state.nearSwap._lastAutoAddr = chainAddr;
+    } else if (!chainAddr && knownOwnAddrs.includes(cur)) {
+      state.nearSwap.recipientAddress = '';
+      state.nearSwap._lastAutoAddr = '';
     }
   }
 
@@ -6758,8 +6765,13 @@
     // 注：Ref Finance 池子仅支持已在 NEAR 链上的映射代币 prl.omft.near，不适用于 Pearl 主网 (prl1p...) 原生跨链，故不再伪装为可直接兑换报价
     try {
       const wallet = getActiveWallet();
-      const refundAddr = getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain);
-      const destAddr = (state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain) || getFallbackChainAddr(toToken.blockchain);
+      const isBuyingPrl = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId;
+      const refundAddr = isBuyingPrl
+        ? ((state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain))
+        : (getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain));
+      const destAddr = isBuyingPrl
+        ? (wallet?.address || getFallbackChainAddr('prl'))
+        : ((state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain) || getFallbackChainAddr(toToken.blockchain));
 
       const quoteReqBody = {
         dry: true,
@@ -6919,21 +6931,36 @@
     if (paySlot) paySlot.innerHTML = buildSwapTokenButtonHTML(fromToken, 'from', isBuy ? hiddenSelectHTML : '');
     if (receiveSlot) receiveSlot.innerHTML = buildSwapTokenButtonHTML(toToken, 'to', !isBuy ? hiddenSelectHTML : '');
 
-    // 3. 目标链收款地址区域动态适配
+    // 3. 收款 / 付款退款地址区域动态适配
     const recipientLabel = document.getElementById('swap-recipient-label');
     const recipientHint = document.getElementById('swap-recipient-chain-hint');
     const recipientInput = document.getElementById('swap-recipient-input');
     const recipientFeedback = document.getElementById('swap-recipient-feedback');
+    const isBuyingPrl = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId;
 
-    if (recipientLabel) recipientLabel.innerText = `目标收款钱包地址 (${toToken.symbol} - ${toToken.networkName})`;
-    if (recipientHint) recipientHint.innerText = `${toToken.blockchain.toUpperCase()} 链`;
-    if (recipientInput) {
-      recipientInput.disabled = false;
-      recipientInput.placeholder = `输入接收 ${toToken.symbol} 的 ${toToken.blockchain.toUpperCase()} 钱包地址`;
-      recipientInput.value = state.nearSwap.recipientAddress;
-    }
-    if (recipientFeedback) {
-      recipientFeedback.innerHTML = `做市商将在交割后直接打款至该 <strong>${toToken.networkName}</strong> 地址（已优先自动填入本钱包同源地址）。`;
+    if (isBuyingPrl) {
+      if (recipientLabel) recipientLabel.innerText = `外链付款 / 退款地址 (可选，${fromToken.symbol} - ${fromToken.networkName})`;
+      if (recipientHint) recipientHint.innerText = `${fromToken.blockchain.toUpperCase()} 链`;
+      if (recipientInput) {
+        recipientInput.disabled = false;
+        recipientInput.placeholder = `默认当前同源 ${fromToken.blockchain.toUpperCase()} 地址，也可修改为其他付款地址`;
+        recipientInput.value = state.nearSwap.recipientAddress;
+      }
+      if (recipientFeedback) {
+        const shortPrl = wallet && wallet.address ? `${wallet.address.slice(0, 10)}...${wallet.address.slice(-6)}` : '当前钱包';
+        recipientFeedback.innerHTML = `买入的 <strong>PRL</strong> 默认直达当前钱包 <span class="font-mono text-cyan-300">${shortPrl}</span>；此栏仅用于核对您的付款或超时原路退款（可不填或修改）。`;
+      }
+    } else {
+      if (recipientLabel) recipientLabel.innerText = `目标收款钱包地址 (${toToken.symbol} - ${toToken.networkName})`;
+      if (recipientHint) recipientHint.innerText = `${toToken.blockchain.toUpperCase()} 链`;
+      if (recipientInput) {
+        recipientInput.disabled = false;
+        recipientInput.placeholder = `输入接收 ${toToken.symbol} 的 ${toToken.blockchain.toUpperCase()} 钱包地址`;
+        recipientInput.value = state.nearSwap.recipientAddress;
+      }
+      if (recipientFeedback) {
+        recipientFeedback.innerHTML = `做市商将在交割后直接打款至该 <strong>${toToken.networkName}</strong> 地址（已优先自动填入本钱包同源地址）。`;
+      }
     }
 
     // 4. 汇率更新
@@ -7011,19 +7038,14 @@
       }
     }
 
-    const recipient = (state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain);
+    const isBuyingPrl = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId;
+    const recipient = isBuyingPrl
+      ? wallet.address
+      : ((state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, toToken.blockchain));
     if (!recipient) {
       showToast('请输入目标链收款地址');
       const input = document.getElementById('swap-recipient-input');
       if (input) input.focus();
-      return;
-    }
-
-    if (state.nearSwap.quoteSource === 'ref') {
-      const refIn = getRefContractId(fromToken);
-      const refOut = getRefContractId(toToken);
-      triggerHaptic('light');
-      showToast(`已获取 Ref Finance 链上池实时报价，请在 Ref 链上池 (${refIn} ⇄ ${refOut}) 或 near.com 完成 NEAR 链上签名交易`);
       return;
     }
 
@@ -7036,7 +7058,9 @@
       const originAsset = fromToken.assetId;
       const destinationAsset = toToken.assetId;
       const originDecimals = fromToken.decimals;
-      const refundTo = getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain);
+      const refundTo = isBuyingPrl
+        ? ((state.nearSwap.recipientAddress || '').trim() || getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain))
+        : (getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain));
 
       const quoteReqBody = {
         dry: false,
