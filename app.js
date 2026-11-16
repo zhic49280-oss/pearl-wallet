@@ -7727,8 +7727,6 @@
       clearInterval(swapAutoRefreshInterval);
       swapAutoRefreshInterval = null;
     }
-    const badge = document.getElementById('swap-auto-refresh-badge');
-    if (badge) badge.classList.add('hidden');
   }
 
   function startSwapAutoRefreshTimer() {
@@ -7738,11 +7736,6 @@
     if (!amt || isNaN(amt) || amt <= 0 || !sheet || sheet.classList.contains('translate-y-full')) return;
 
     swapAutoRefreshCountdown = 10;
-    const badge = document.getElementById('swap-auto-refresh-badge');
-    if (badge) {
-      badge.classList.remove('hidden');
-      badge.innerText = '🔄 10s';
-    }
     swapAutoRefreshInterval = setInterval(() => {
       const sh = document.getElementById('sheet-near-swap');
       const curAmt = Number(state.nearSwap.amountIn);
@@ -7755,8 +7748,6 @@
         swapAutoRefreshCountdown = 10;
         calculateSwapQuote();
       }
-      const b = document.getElementById('swap-auto-refresh-badge');
-      if (b) b.innerText = `🔄 ${swapAutoRefreshCountdown}s`;
     }, 1000);
   }
 
@@ -7897,7 +7888,7 @@
     const minRecvEl = document.getElementById('swap-detail-min-receive');
     const isDex = state.nearSwap.engineMode === 'dex';
 
-    function updateSwapSummaryStats(outNum, feeCollected = true, customLabel = '') {
+    function updateSwapSummaryStats(outNum, feeCollected = true) {
       const slipFrac = Math.min(0.15, Math.max(0, (state.nearSwap.slippageTolerance || 100) / 10000));
       if (minRecvEl) {
         minRecvEl.innerText = (!isNaN(outNum) && outNum > 0)
@@ -7905,7 +7896,7 @@
           : '--';
       }
       if (appFeeEl) {
-        appFeeEl.innerText = customLabel || (feeCollected ? `${(appFeeRate * 100).toFixed(2)}%` : t('0% (未开通分润)', '0% (No fee acct)'));
+        appFeeEl.innerText = feeCollected ? `${(appFeeRate * 100).toFixed(2)}%` : '0%';
       }
     }
 
@@ -7991,7 +7982,7 @@
               if (fiatOutEl && win.data.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(win.data.quote.amountOutUsd).toFixed(2)} USD`;
             }
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-            updateSwapSummaryStats(outNum, win.hasFee, win.src === 'jup' && !win.hasFee ? t('0% (收款地址未建ATA)', '0% (No ATA)') : '');
+            updateSwapSummaryStats(outNum, win.hasFee);
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
