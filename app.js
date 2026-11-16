@@ -6194,10 +6194,10 @@
       symbol: 'BNB',
       name: 'BNB Smart Chain',
       blockchain: 'bsc',
-      assetId: 'nep141:bsc.omft.near',
+      assetId: 'nep141:bnb.omdep.near',
       decimals: 18,
       icon: '🟡',
-      price: 610.0,
+      price: 593.66,
       networkName: 'BNB Smart Chain (BSC)'
     },
     {
