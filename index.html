@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=8.5">
+  <link rel="stylesheet" href="style.css?v=8.6">
   <script>
     tailwind.config = {
       theme: {
@@ -1273,6 +1273,7 @@
         <button type="button" onclick="setDexSwapChain('eth')" id="btn-dex-chain-eth" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Ethereum</button>
         <button type="button" onclick="setDexSwapChain('bsc')" id="btn-dex-chain-bsc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">BSC</button>
         <button type="button" onclick="setDexSwapChain('arb')" id="btn-dex-chain-arb" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Arbitrum</button>
+        <button type="button" onclick="setDexSwapChain('hood')" id="btn-dex-chain-hood" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Robinhood</button>
       </div>
 
       <!-- 跨链模式快捷方向 Tab -->
@@ -1595,6 +1596,7 @@
         <button type="button" onclick="setSwapNetworkFilter('bsc')" data-swap-net="bsc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">BSC</button>
         <button type="button" onclick="setSwapNetworkFilter('base')" data-swap-net="base" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Base</button>
         <button type="button" onclick="setSwapNetworkFilter('arb')" data-swap-net="arb" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Arbitrum</button>
+        <button type="button" onclick="setSwapNetworkFilter('hood')" data-swap-net="hood" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Robinhood</button>
         <button type="button" onclick="setSwapNetworkFilter('sol')" data-swap-net="sol" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Solana</button>
         <button type="button" onclick="setSwapNetworkFilter('btc')" data-swap-net="btc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Bitcoin</button>
       </div>
@@ -1742,12 +1744,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=8.5"></script>
+  <script src="bip39-wordlist.js?v=8.6"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=8.5"></script>
+  <script src="qrcode.min.js?v=8.6"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=8.5"></script>
+  <script src="ethers.umd.min.js?v=8.6"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=8.5"></script>
+  <script src="app.js?v=8.6"></script>
 </body>
 </html>

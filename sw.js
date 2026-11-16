@@ -1,14 +1,14 @@
 // Pearl 珍珠币移动钱包 Service Worker - 实现 iOS 离线持久化与脱机秒开
 // 采用 Network-First (网络优先) 机制，杜绝旧版本死锁，联网时秒级同步最新代码
-const CACHE_NAME = 'pearl-wallet-cache-v45';
+const CACHE_NAME = 'pearl-wallet-cache-v46';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
-  './style.css?v=8.5',
-  './bip39-wordlist.js?v=8.5',
-  './qrcode.min.js?v=8.5',
-  './ethers.umd.min.js?v=8.5',
-  './app.js?v=8.5',
+  './style.css?v=8.6',
+  './bip39-wordlist.js?v=8.6',
+  './qrcode.min.js?v=8.6',
+  './ethers.umd.min.js?v=8.6',
+  './app.js?v=8.6',
   './manifest.json',
   'https://cdn.tailwindcss.com'
 ];

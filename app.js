@@ -1445,7 +1445,8 @@
     base: { chainId: 8453, rpc: 'https://mainnet.base.org', kyber: 'base', name: 'Base', explorer: 'https://basescan.org/tx/' },
     eth: { chainId: 1, rpc: 'https://ethereum-rpc.publicnode.com', kyber: 'ethereum', name: 'Ethereum', explorer: 'https://etherscan.io/tx/' },
     bsc: { chainId: 56, rpc: 'https://bsc-dataseed.bnbchain.org', kyber: 'bsc', name: 'BSC', explorer: 'https://bscscan.com/tx/' },
-    arb: { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', kyber: 'arbitrum', name: 'Arbitrum', explorer: 'https://arbiscan.io/tx/' }
+    arb: { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', kyber: 'arbitrum', name: 'Arbitrum', explorer: 'https://arbiscan.io/tx/' },
+    hood: { chainId: 4663, rpc: 'https://rpc.mainnet.chain.robinhood.com', kyber: '', name: 'Robinhood', explorer: 'https://robinhoodchain.blockscout.com/tx/' }
   };
 
   async function executeEvmContractTx({ chainKey, to, data, value = '0', privateKey, approvalToken, spender, amountRaw }) {
@@ -6665,6 +6666,36 @@
       icon: '₿',
       price: 80000.0,
       networkName: 'Bitcoin Native'
+    },
+    {
+      symbol: 'PONS',
+      name: 'Pons',
+      blockchain: 'hood',
+      assetId: 'nep141:hood-0x39dbed3a2bd333467115de45665cc57f813c4571.omft.near',
+      decimals: 18,
+      icon: '🟢',
+      price: 0.12,
+      networkName: 'Robinhood Chain'
+    },
+    {
+      symbol: 'USDG',
+      name: 'Global Dollar',
+      blockchain: 'hood',
+      assetId: 'nep141:hood-0x5fc5360d0400a0fd4f2af552add042d716f1d168.omft.near',
+      decimals: 6,
+      icon: '💵',
+      price: 1.0,
+      networkName: 'Robinhood Chain'
+    },
+    {
+      symbol: 'ETH',
+      name: 'ETH (Robinhood)',
+      blockchain: 'hood',
+      assetId: 'nep141:hood.omft.near',
+      decimals: 18,
+      icon: '🔷',
+      price: 1820.0,
+      networkName: 'Robinhood Chain'
     }
   ];
 
@@ -6714,6 +6745,14 @@
       { symbol: 'USDC', name: 'USD Coin', blockchain: 'arb', assetId: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, price: 1.0, networkName: 'Arbitrum' },
       { symbol: 'USDT', name: 'Tether USD', blockchain: 'arb', assetId: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, price: 1.0, networkName: 'Arbitrum' },
       { symbol: 'ARB', name: 'Arbitrum', blockchain: 'arb', assetId: '0x912CE59144191C1204E64559FE8253a0e49E6548', decimals: 18, price: 0.7, networkName: 'Arbitrum' }
+    ],
+    hood: [
+      { symbol: 'ETH', name: 'ETH (Robinhood)', blockchain: 'hood', assetId: 'nep141:hood.omft.near', contractAddr: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'PONS', name: 'Pons', blockchain: 'hood', assetId: 'nep141:hood-0x39dbed3a2bd333467115de45665cc57f813c4571.omft.near', contractAddr: '0x39dBED3a2bd333467115dE45665cC57F813C4571', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'USDG', name: 'Global Dollar', blockchain: 'hood', assetId: 'nep141:hood-0x5fc5360d0400a0fd4f2af552add042d716f1d168.omft.near', contractAddr: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', decimals: 6, networkName: 'Robinhood Chain' },
+      { symbol: 'WETH', name: 'Wrapped Ether', blockchain: 'hood', assetId: 'nep141:hood-0x0bd7d308f8e1639fab988df18a8011f41eacad73.omft.near', contractAddr: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'USDe', name: 'Ethena USDe', blockchain: 'hood', assetId: 'nep141:hood-0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34.omft.near', contractAddr: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'CASHCAT', name: 'CashCat', blockchain: 'hood', assetId: 'nep141:hood-0x020bfc650a365f8bb26819deaabf3e21291018b4.omft.near', contractAddr: '0x020bfc650a365f8bb26819deaabf3e21291018b4', decimals: 18, networkName: 'Robinhood Chain' }
     ]
   };
 
@@ -7115,7 +7154,7 @@
     if (chain === 'prl') return wallet.address || '';
     if (chain === 'near') return wallet.nearNamedAccount || wallet.nearAddress || '';
     if (chain === 'sol') return wallet.solAddress || '';
-    if (['eth', 'bsc', 'base', 'arb', 'hype'].includes(chain)) return wallet.evmAddress || '';
+    if (['eth', 'bsc', 'base', 'arb', 'hype', 'hood'].includes(chain)) return wallet.evmAddress || '';
     return '';
   }
 
@@ -7223,18 +7262,31 @@
         state.nearSwap.dexFromBalance = sum;
       } else if (EVM_CHAIN_CONFIGS[chain] && wallet.evmAddress) {
         const cfg = EVM_CHAIN_CONFIGS[chain];
-        const paddedAddr = wallet.evmAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0');
-        const callRes = await fetchWithTimeout(cfg.rpc, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0', id: 1, method: 'eth_call',
-            params: [{ to: fromToken.assetId, data: '0x70a08231' + paddedAddr }, 'latest']
-          })
-        }, 6000);
-        if (callRes && typeof callRes.result === 'string' && callRes.result.startsWith('0x')) {
-          const rawBig = BigInt(callRes.result === '0x' ? '0x0' : callRes.result);
-          state.nearSwap.dexFromBalance = Number(fromBaseUnits(rawBig.toString(), fromToken.decimals));
+        const queryAddr = fromToken.contractAddr || fromToken.assetId;
+        if (!queryAddr || queryAddr.toLowerCase().startsWith('nep141:') || queryAddr.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+          const balRes = await fetchWithTimeout(cfg.rpc, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [wallet.evmAddress, 'latest'] })
+          }, 6000);
+          if (balRes && typeof balRes.result === 'string' && balRes.result.startsWith('0x')) {
+            const rawBig = BigInt(balRes.result === '0x' ? '0x0' : balRes.result);
+            state.nearSwap.dexFromBalance = Number(fromBaseUnits(rawBig.toString(), 18));
+          }
+        } else {
+          const paddedAddr = wallet.evmAddress.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+          const callRes = await fetchWithTimeout(cfg.rpc, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1, method: 'eth_call',
+              params: [{ to: queryAddr, data: '0x70a08231' + paddedAddr }, 'latest']
+            })
+          }, 6000);
+          if (callRes && typeof callRes.result === 'string' && callRes.result.startsWith('0x')) {
+            const rawBig = BigInt(callRes.result === '0x' ? '0x0' : callRes.result);
+            state.nearSwap.dexFromBalance = Number(fromBaseUnits(rawBig.toString(), fromToken.decimals));
+          }
         }
       }
     } catch (e) {}
@@ -7545,81 +7597,122 @@
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
     }
 
-    // 1. 链上兑换模式 (Solana Jupiter / Raydium, EVM KyberSwap)
+    // 1. 链上兑换多源聚合模式 (Solana: Jupiter+Raydium | EVM: KyberSwap+ParaSwap | Robinhood: 1Click)
     if (isDex) {
       const chain = state.nearSwap.dexChain;
       const rawIn = toBaseUnits(amtStr, fromToken.decimals);
       state.nearSwap.dexQuoteData = null;
       try {
         if (chain === 'sol') {
-          let gotSolQuote = false;
-          try {
-            const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
-            const jData = await fetchWithTimeout(jupUrl, {}, 12000);
-            if (jData && jData.outAmount) {
-              const outFormatted = fromBaseUnits(jData.outAmount, toToken.decimals);
-              const outNum = parseFloat(outFormatted);
-              const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
-              state.nearSwap.amountOut = displayOut;
-              state.nearSwap.quoteStatus = 'success';
-              state.nearSwap.quoteSource = 'jup';
-              state.nearSwap.dexQuoteData = jData;
-              if (outEl) outEl.innerText = displayOut;
-              if (fiatOutEl) fiatOutEl.innerText = jData.swapUsdValue ? `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD` : '--';
-              if (fiatInEl) fiatInEl.innerText = jData.swapUsdValue ? `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD` : '--';
-              if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-              if (statusLabel) {
-                statusLabel.innerText = t('⚡ Jupiter 实时报价', '⚡ Jupiter Live Quote');
-                statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
-              }
-              gotSolQuote = true;
-            }
-          } catch (jErr) {}
+          const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
+          const rayUrl = `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}&txVersion=V0`;
+          const [jRes, rRes] = await Promise.allSettled([
+            fetchWithTimeout(jupUrl, {}, 12000),
+            fetchWithTimeout(rayUrl, {}, 10000)
+          ]);
+          const jData = jRes.status === 'fulfilled' && jRes.value && jRes.value.outAmount ? jRes.value : null;
+          const rData = rRes.status === 'fulfilled' && rRes.value && rRes.value.success && rRes.value.data && rRes.value.data.outputAmount ? rRes.value : null;
+          const jOut = jData ? BigInt(jData.outAmount) : 0n;
+          const rOut = rData ? BigInt(rData.data.outputAmount) : 0n;
 
-          if (!gotSolQuote) {
-            const rayUrl = `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}&txVersion=V0`;
-            const rData = await fetchWithTimeout(rayUrl, {}, 10000);
-            const rOut = rData && rData.success && rData.data ? rData.data.outputAmount : null;
-            if (rOut) {
-              const outFormatted = fromBaseUnits(rOut, toToken.decimals);
-              const outNum = parseFloat(outFormatted);
-              const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
-              state.nearSwap.amountOut = displayOut;
-              state.nearSwap.quoteStatus = 'success';
-              state.nearSwap.quoteSource = 'raydium';
-              state.nearSwap.dexQuoteData = rData;
-              if (outEl) outEl.innerText = displayOut;
-              if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-              if (statusLabel) {
-                statusLabel.innerText = t('⚡ Raydium 实时报价', '⚡ Raydium Live Quote');
-                statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
-              }
-              gotSolQuote = true;
-            }
-          }
-          if (gotSolQuote) {
-            syncSwapButtonBalanceState();
-            return;
-          }
-        } else if (EVM_CHAIN_CONFIGS[chain]) {
-          const kyberSlug = EVM_CHAIN_CONFIGS[chain].kyber;
-          const kUrl = `https://aggregator-api.kyberswap.com/${kyberSlug}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
-          const kData = await fetchWithTimeout(kUrl, {}, 12000);
-          const routeSummary = kData && kData.code === 0 && kData.data && kData.data.routeSummary ? kData.data.routeSummary : null;
-          if (routeSummary && routeSummary.amountOut) {
-            const outFormatted = fromBaseUnits(routeSummary.amountOut, toToken.decimals);
+          if (jOut > 0n || rOut > 0n) {
+            const useJup = jOut >= rOut;
+            const winOutStr = useJup ? jData.outAmount : rData.data.outputAmount;
+            const outFormatted = fromBaseUnits(winOutStr, toToken.decimals);
             const outNum = parseFloat(outFormatted);
             const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
             state.nearSwap.amountOut = displayOut;
             state.nearSwap.quoteStatus = 'success';
-            state.nearSwap.quoteSource = 'kyber';
-            state.nearSwap.dexQuoteData = routeSummary;
+            state.nearSwap.quoteSource = useJup ? 'jup' : 'raydium';
+            state.nearSwap.dexQuoteData = useJup ? jData : rData;
             if (outEl) outEl.innerText = displayOut;
-            if (fiatInEl && routeSummary.amountInUsd) fiatInEl.innerText = `≈ $${Number(routeSummary.amountInUsd).toFixed(2)} USD`;
-            if (fiatOutEl && routeSummary.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(routeSummary.amountOutUsd).toFixed(2)} USD`;
+            if (useJup && jData.swapUsdValue) {
+              if (fiatInEl) fiatInEl.innerText = `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD`;
+              if (fiatOutEl) fiatOutEl.innerText = `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD`;
+            }
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
             if (statusLabel) {
-              statusLabel.innerText = t(`⚡ ${EVM_CHAIN_CONFIGS[chain].name} 实时报价`, `⚡ ${EVM_CHAIN_CONFIGS[chain].name} Live Quote`);
+              statusLabel.innerText = useJup ? t('⚡ 最优路由: Jupiter', '⚡ Best: Jupiter') : t('⚡ 最优路由: Raydium', '⚡ Best: Raydium');
+              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+            }
+            syncSwapButtonBalanceState();
+            return;
+          }
+        } else if (chain === 'hood') {
+          const wallet = getActiveWallet();
+          const evmAddr = (wallet && wallet.evmAddress) || '0x0000000000000000000000000000000000000001';
+          const qBody = {
+            dry: true,
+            swapType: 'EXACT_INPUT',
+            slippageTolerance: state.nearSwap.slippageTolerance || 100,
+            originAsset: fromToken.assetId,
+            depositType: 'ORIGIN_CHAIN',
+            destinationAsset: toToken.assetId,
+            amount: rawIn,
+            refundTo: evmAddr,
+            refundType: 'ORIGIN_CHAIN',
+            recipient: evmAddr,
+            recipientType: 'DESTINATION_CHAIN',
+            deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+            referral: state.nearReferralAccount || 'zhic49280.near',
+            appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
+          };
+          const res = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify(qBody)
+          }, 12000);
+          if (res && res.quote && res.quote.amountOut) {
+            const outFormatted = res.quote.amountOutFormatted || fromBaseUnits(res.quote.amountOut, toToken.decimals);
+            const outNum = parseFloat(outFormatted);
+            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+            state.nearSwap.amountOut = displayOut;
+            state.nearSwap.quoteStatus = 'success';
+            state.nearSwap.quoteSource = 'hood_1click';
+            state.nearSwap.dexQuoteData = res.quote;
+            if (outEl) outEl.innerText = displayOut;
+            if (fiatInEl && res.quote.amountInUsd) fiatInEl.innerText = `≈ $${Number(res.quote.amountInUsd).toFixed(2)} USD`;
+            if (fiatOutEl && res.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(res.quote.amountOutUsd).toFixed(2)} USD`;
+            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            if (statusLabel) {
+              statusLabel.innerText = t(`⚡ Robinhood 实时报价 (${res.quote.timeEstimate || 20}s)`, `⚡ Robinhood Live (${res.quote.timeEstimate || 20}s)`);
+              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+            }
+            syncSwapButtonBalanceState();
+            return;
+          }
+        } else if (EVM_CHAIN_CONFIGS[chain]) {
+          const cfg = EVM_CHAIN_CONFIGS[chain];
+          const kUrl = `https://aggregator-api.kyberswap.com/${cfg.kyber}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
+          const pUrl = `https://api.paraswap.io/prices?srcToken=${encodeURIComponent(fromToken.assetId)}&destToken=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&srcDecimals=${fromToken.decimals}&destDecimals=${toToken.decimals}&network=${cfg.chainId}&side=SELL`;
+          const [kRes, pRes] = await Promise.allSettled([
+            fetchWithTimeout(kUrl, {}, 12000),
+            fetchWithTimeout(pUrl, {}, 10000)
+          ]);
+          const kRoute = kRes.status === 'fulfilled' && kRes.value && kRes.value.code === 0 && kRes.value.data && kRes.value.data.routeSummary ? kRes.value.data.routeSummary : null;
+          const pRoute = pRes.status === 'fulfilled' && pRes.value && pRes.value.priceRoute && pRes.value.priceRoute.destAmount ? pRes.value.priceRoute : null;
+          const kOut = kRoute && kRoute.amountOut ? BigInt(kRoute.amountOut) : 0n;
+          const pOut = pRoute && pRoute.destAmount ? BigInt(pRoute.destAmount) : 0n;
+
+          if (kOut > 0n || pOut > 0n) {
+            const useKyber = kOut >= pOut;
+            const winOutStr = useKyber ? kRoute.amountOut : pRoute.destAmount;
+            const outFormatted = fromBaseUnits(winOutStr, toToken.decimals);
+            const outNum = parseFloat(outFormatted);
+            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+            state.nearSwap.amountOut = displayOut;
+            state.nearSwap.quoteStatus = 'success';
+            state.nearSwap.quoteSource = useKyber ? 'kyber' : 'paraswap';
+            state.nearSwap.dexQuoteData = useKyber ? kRoute : pRoute;
+            if (outEl) outEl.innerText = displayOut;
+            const usdIn = useKyber ? kRoute.amountInUsd : pRoute.srcUSD;
+            const usdOut = useKyber ? kRoute.amountOutUsd : pRoute.destUSD;
+            if (fiatInEl && usdIn) fiatInEl.innerText = `≈ $${Number(usdIn).toFixed(2)} USD`;
+            if (fiatOutEl && usdOut) fiatOutEl.innerText = `≈ $${Number(usdOut).toFixed(2)} USD`;
+            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            if (statusLabel) {
+              const srcName = useKyber ? 'KyberSwap' : 'ParaSwap';
+              statusLabel.innerText = t(`⚡ 最优路由: ${srcName}`, `⚡ Best: ${srcName}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
             syncSwapButtonBalanceState();
@@ -7781,7 +7874,7 @@
     if (recipientCard) recipientCard.classList.toggle('hidden', isDex);
 
     if (isDex) {
-      ['sol', 'base', 'eth', 'bsc', 'arb'].forEach(c => {
+      ['sol', 'base', 'eth', 'bsc', 'arb', 'hood'].forEach(c => {
         const cb = document.getElementById(`btn-dex-chain-${c}`);
         if (!cb) return;
         cb.className = c === state.nearSwap.dexChain
@@ -7987,24 +8080,81 @@
             throw new Error(t('当前钱包未派生 Solana 私钥', 'Solana private key unavailable'));
           }
           if (!state.nearSwap.dexQuoteData) {
-            throw new Error(t('请先等待 Jupiter 报价完成', 'Wait for Jupiter quote first'));
+            throw new Error(t('请先等待报价完成', 'Wait for quote first'));
           }
-          const swapRes = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/swap', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              quoteResponse: state.nearSwap.dexQuoteData,
-              userPublicKey: wallet.solAddress,
-              wrapAndUnwrapSol: true
-            })
-          }, 10000);
-          if (!swapRes || !swapRes.swapTransaction) {
-            throw new Error((swapRes && swapRes.error) || 'Jupiter swap build failed');
+          let swapB64 = '';
+          if (state.nearSwap.quoteSource === 'raydium') {
+            const rBuild = await fetchWithTimeout('https://transaction-v1.raydium.io/transaction/swap-base-in', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                computeUnitPriceMicroLamports: '100000',
+                swapResponse: state.nearSwap.dexQuoteData,
+                txVersion: 'V0',
+                wallet: wallet.solAddress,
+                wrapSol: fromToken.symbol === 'SOL',
+                unwrapSol: toToken.symbol === 'SOL'
+              })
+            }, 10000);
+            swapB64 = rBuild && rBuild.success && Array.isArray(rBuild.data) && rBuild.data[0] ? rBuild.data[0].transaction : '';
+            if (!swapB64) throw new Error('Raydium build failed');
+          } else {
+            const swapRes = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/swap', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                quoteResponse: state.nearSwap.dexQuoteData,
+                userPublicKey: wallet.solAddress,
+                wrapAndUnwrapSol: true
+              })
+            }, 10000);
+            if (!swapRes || !swapRes.swapTransaction) {
+              throw new Error((swapRes && swapRes.error) || 'Jupiter swap build failed');
+            }
+            swapB64 = swapRes.swapTransaction;
           }
-          const txHash = await signAndSendSolanaTransaction(swapRes.swapTransaction, wallet.solPrivateSeedHex);
+          const txHash = await signAndSendSolanaTransaction(swapB64, wallet.solPrivateSeedHex);
           triggerHaptic('success');
           showToast(t(`已广播 Solana 交易: ${txHash.slice(0, 10)}...`, `Solana Tx Sent: ${txHash.slice(0, 10)}...`));
           if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
+        } else if (chain === 'hood') {
+          if (!wallet.evmAddress) throw new Error(t('EVM 地址不可用', 'EVM address unavailable'));
+          const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
+          const hoodRes = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+              dry: false,
+              swapType: 'EXACT_INPUT',
+              slippageTolerance: state.nearSwap.slippageTolerance || 100,
+              originAsset: fromToken.assetId,
+              depositType: 'ORIGIN_CHAIN',
+              destinationAsset: toToken.assetId,
+              amount: rawIn,
+              refundTo: wallet.evmAddress,
+              refundType: 'ORIGIN_CHAIN',
+              recipient: wallet.evmAddress,
+              recipientType: 'DESTINATION_CHAIN',
+              deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              referral: state.nearReferralAccount || 'zhic49280.near',
+              appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
+            })
+          }, 12000);
+          const depAddr = hoodRes && (hoodRes.depositAddress || (hoodRes.quote && hoodRes.quote.depositAddress));
+          if (!depAddr) throw new Error((hoodRes && (hoodRes.message || hoodRes.error)) || 'Robinhood quote unavailable');
+          triggerHaptic('success');
+          renderActiveSwapOrder({
+            depositAddress: depAddr,
+            memo: hoodRes.memo || (hoodRes.quote && hoodRes.quote.depositMemo) || '',
+            amountIn: state.nearSwap.amountIn,
+            amountOut: (hoodRes.quote && hoodRes.quote.amountOutFormatted) || state.nearSwap.amountOut,
+            originSymbol: fromToken.symbol,
+            destSymbol: toToken.symbol,
+            originChain: 'Robinhood Chain',
+            destChain: 'Robinhood Chain',
+            deadline: (hoodRes.quote && hoodRes.quote.deadline) || new Date(Date.now() + 15 * 60 * 1000).toISOString()
+          });
+          showToast(t('Robinhood 兑换订单已生成', 'Robinhood order created'));
         } else if (EVM_CHAIN_CONFIGS[chain]) {
           if (!wallet.evmAddress || !wallet.evmPrivateKey) {
             throw new Error(t('当前钱包未派生 EVM 私钥', 'EVM private key unavailable'));
@@ -8012,30 +8162,50 @@
           if (!state.nearSwap.dexQuoteData) {
             throw new Error(t('请先等待链上路由报价', 'Wait for route quote first'));
           }
-          const kyberSlug = EVM_CHAIN_CONFIGS[chain].kyber;
-          const buildRes = await fetchWithTimeout(`https://aggregator-api.kyberswap.com/${kyberSlug}/api/v1/route/build`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              routeSummary: state.nearSwap.dexQuoteData,
-              sender: wallet.evmAddress,
-              recipient: wallet.evmAddress,
-              slippageTolerance: state.nearSwap.slippageTolerance || 100
-            })
-          }, 10000);
-          const buildData = buildRes && buildRes.code === 0 ? buildRes.data : null;
-          if (!buildData || !buildData.routerAddress || !buildData.data) {
-            throw new Error((buildRes && buildRes.message) || 'KyberSwap build failed');
-          }
+          const cfg = EVM_CHAIN_CONFIGS[chain];
           const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
+          let toAddr = '', txData = '', txVal = '0';
+          if (state.nearSwap.quoteSource === 'paraswap') {
+            const pBuild = await fetchWithTimeout(`https://api.paraswap.io/transactions/${cfg.chainId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                srcToken: fromToken.assetId,
+                destToken: toToken.assetId,
+                srcAmount: rawIn,
+                priceRoute: state.nearSwap.dexQuoteData,
+                userAddress: wallet.evmAddress,
+                slippage: state.nearSwap.slippageTolerance || 100
+              })
+            }, 10000);
+            if (!pBuild || !pBuild.to || !pBuild.data) throw new Error((pBuild && pBuild.error) || 'ParaSwap build failed');
+            toAddr = pBuild.to; txData = pBuild.data; txVal = pBuild.value || '0';
+          } else {
+            const buildRes = await fetchWithTimeout(`https://aggregator-api.kyberswap.com/${cfg.kyber}/api/v1/route/build`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                routeSummary: state.nearSwap.dexQuoteData,
+                sender: wallet.evmAddress,
+                recipient: wallet.evmAddress,
+                slippageTolerance: state.nearSwap.slippageTolerance || 100
+              })
+            }, 10000);
+            const buildData = buildRes && buildRes.code === 0 ? buildRes.data : null;
+            if (!buildData || !buildData.routerAddress || !buildData.data) {
+              throw new Error((buildRes && buildRes.message) || 'KyberSwap build failed');
+            }
+            toAddr = buildData.routerAddress; txData = buildData.data;
+            txVal = fromToken.assetId.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ? rawIn : '0';
+          }
           const txRes = await executeEvmContractTx({
             chainKey: chain,
-            to: buildData.routerAddress,
-            data: buildData.data,
-            value: fromToken.assetId.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ? rawIn : '0',
+            to: toAddr,
+            data: txData,
+            value: txVal,
             privateKey: wallet.evmPrivateKey,
             approvalToken: fromToken.assetId,
-            spender: buildData.routerAddress,
+            spender: toAddr,
             amountRaw: rawIn
           });
           triggerHaptic('success');
