@@ -1727,6 +1727,22 @@
         if (!state.chainInfo.workers && hData.pool && hData.pool.workers) {
           state.chainInfo.workers = hData.pool.workers;
         }
+        if (hData.charts && Array.isArray(hData.charts.network_hashrate) && hData.charts.network_hashrate.length >= 2) {
+          const rawArr = hData.charts.network_hashrate;
+          const step = Math.max(1, Math.floor(rawArr.length / 24));
+          const pts = [];
+          for (let i = 0; i < rawArr.length; i += step) {
+            const pt = rawArr[i];
+            if (Array.isArray(pt) && pt.length >= 2 && pt[1] > 0) {
+              const d = new Date(Number(pt[0]) * 1000);
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mm = String(d.getMinutes()).padStart(2, '0');
+              const eh = Number(((Number(pt[1]) * 4294967296) / 1e18).toFixed(2));
+              pts.push({ time: `${hh}:${mm}`, val: eh, note: 'HeroMiners 历史' });
+            }
+          }
+          if (pts.length >= 2) state.chainInfo.hashrateHistory = pts;
+        }
       }
     } catch (e) {}
 
@@ -2215,7 +2231,22 @@
     const liveDiff = parseFloat(state.chainInfo.difficultyP);
     const liveReward = parseFloat(state.chainInfo.blockReward);
 
-    if (isNaN(liveH) || liveH <= 0) {
+    const hashHist = Array.isArray(state.chainInfo.hashrateHistory) ? state.chainInfo.hashrateHistory : [];
+    if (hashHist.length >= 2) {
+      const hVals = hashHist.map(p => p.val);
+      const minH = Math.min(...hVals).toFixed(2);
+      const maxH = Math.max(...hVals).toFixed(2);
+      const avgH = (hVals.reduce((a, b) => a + b, 0) / hVals.length).toFixed(2);
+      ['24h', '7d', '30d'].forEach(r => {
+        networkMetricsData.hashrate[r] = {
+          change: '主网 24h 真实曲线',
+          min: `${minH} EH/s`,
+          avg: `${avgH} EH/s`,
+          max: `${maxH} EH/s`,
+          points: hashHist
+        };
+      });
+    } else if (isNaN(liveH) || liveH <= 0) {
       ['24h', '7d', '30d'].forEach(r => {
         networkMetricsData.hashrate[r] = { change: '实时连接中', min: '--', avg: '--', max: '--', points: [] };
       });
