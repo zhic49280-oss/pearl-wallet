@@ -2268,7 +2268,25 @@
       });
     }
 
-    if (isNaN(liveReward) || liveReward <= 0) {
+    const rewardPts = recentBlocks
+      .filter(b => typeof b.reward_grains === 'number' && b.reward_grains > 0)
+      .map(b => ({ time: `#${b.height}`, val: Number((b.reward_grains / 1e8).toFixed(2)), note: '官方区块' }));
+
+    if (rewardPts.length >= 2) {
+      const rVals = rewardPts.map(p => p.val);
+      const minR = Math.min(...rVals).toFixed(2);
+      const maxR = Math.max(...rVals).toFixed(2);
+      const avgR = (rVals.reduce((a, b) => a + b, 0) / rVals.length).toFixed(2);
+      ['24h', '7d', '30d'].forEach(r => {
+        networkMetricsData.reward[r] = {
+          change: 'prlscan 官方区块',
+          min: `${minR} PRL`,
+          avg: `${avgR} PRL`,
+          max: `${maxR} PRL`,
+          points: rewardPts
+        };
+      });
+    } else if (isNaN(liveReward) || liveReward <= 0) {
       ['24h', '7d', '30d'].forEach(r => {
         networkMetricsData.reward[r] = { change: '实时连接中', min: '--', avg: '--', max: '--', points: [] };
       });
