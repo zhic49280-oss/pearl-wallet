@@ -347,6 +347,8 @@
       'settings.changePinDesc': '自定义 6 位数字解锁密码',
       'settings.savePinBtn': '保存新密码',
       'import.pinLabel': '安全密码 (6 位数字，可选)',
+      'contacts.nameLabel': '备注名称',
+      'contacts.addrLabel': '收款地址',
       'receive.addrSlot': '地址序号',
       'receive.nextAddr': '换一个地址 ↻',
       'receive.copyBtn': '复制收款地址',
@@ -437,6 +439,8 @@
       'settings.changePinDesc': 'Set custom 6-digit unlock PIN',
       'settings.savePinBtn': 'Save New PIN',
       'import.pinLabel': 'Security PIN (6 digits, optional)',
+      'contacts.nameLabel': 'Contact Name',
+      'contacts.addrLabel': 'Wallet Address',
       'receive.addrSlot': 'Address Index',
       'receive.nextAddr': 'Next ↻',
       'receive.copyBtn': 'Copy Address',
@@ -6727,17 +6731,21 @@
     const nameInput = document.getElementById('contact-name-input');
     const addrInput = document.getElementById('contact-address-input');
     const name = nameInput?.value.trim();
-    const addr = addrInput?.value.trim();
+    let addr = addrInput?.value.trim();
     let network = netSel ? netSel.value : 'prl';
+
+    if (!addr && name && (/\.near$/i.test(name) || /^0x[0-9a-fA-F]{40}$/.test(name) || /^prl1/i.test(name))) {
+      addr = name;
+    }
 
     if (!name) {
       triggerHaptic('error');
-      showToast("请输入联系人备注名称");
+      showToast(t("请输入联系人备注名称", "Enter contact name"));
       return;
     }
     if (!addr) {
       triggerHaptic('error');
-      showToast("请输入联系人钱包地址");
+      showToast(t("请输入联系人钱包地址", "Enter wallet address"));
       return;
     }
 

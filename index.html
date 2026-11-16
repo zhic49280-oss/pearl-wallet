@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=9.7">
+  <link rel="stylesheet" href="style.css?v=9.8">
   <script>
     tailwind.config = {
       theme: {
@@ -1181,10 +1181,16 @@
         <option value="tron">TRON 波场 (TRC20 · T...)</option>
         <option value="btc">Bitcoin (BTC · bc1...)</option>
       </select>
-      <input id="contact-name-input" type="text" placeholder="备注名称 (例如: 我的 NEAR 账户 / 交易所)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
-      <div class="relative">
+      <div>
+        <label class="block text-[10px] text-white/50 mb-1" data-i18n="contacts.nameLabel">备注名称</label>
+        <input id="contact-name-input" type="text" placeholder="备注名称 (例如: 我的 NEAR 账户 / 交易所)" class="w-full p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-white focus:outline-none focus:border-cyan-400">
+      </div>
+      <div>
+        <label class="block text-[10px] text-white/50 mb-1" data-i18n="contacts.addrLabel">收款地址</label>
+        <div class="relative">
         <input id="contact-address-input" type="text" oninput="autoDetectContactNetwork(this.value)" placeholder="输入对应网络钱包地址" class="w-full p-2.5 pr-14 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white focus:outline-none focus:border-cyan-400">
         <button type="button" onclick="pasteToContactAddress()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-cyan-400 font-medium">粘贴</button>
+        </div>
       </div>
       <div class="flex gap-2 pt-1">
         <button type="button" onclick="saveNewContact()" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black font-bold text-xs btn-active">
@@ -1778,12 +1784,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=9.7"></script>
+  <script src="bip39-wordlist.js?v=9.8"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=9.7"></script>
+  <script src="qrcode.min.js?v=9.8"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=9.7"></script>
+  <script src="ethers.umd.min.js?v=9.8"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=9.7"></script>
+  <script src="app.js?v=9.8"></script>
 </body>
 </html>
