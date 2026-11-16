@@ -1309,20 +1309,136 @@
     for (let i = 0; i < txBytes.length; i++) signedBin += String.fromCharCode(txBytes[i]);
     const signedBase64 = btoa(signedBin);
 
-    const rpcRes = await fetchWithTimeout('https://api.mainnet-beta.solana.com', {
+    const rpcEndpoints = ['https://solana-rpc.publicnode.com', 'https://api.mainnet-beta.solana.com'];
+    let rpcRes = null;
+    let lastErr = null;
+    for (const rpcUrl of rpcEndpoints) {
+      try {
+        rpcRes = await fetchWithTimeout(rpcUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'sendTransaction',
+            params: [signedBase64, { encoding: 'base64', skipPreflight: false, maxRetries: 3 }]
+          })
+        }, 15000);
+        if (rpcRes && !rpcRes.error && rpcRes.result) return rpcRes.result;
+        if (rpcRes && rpcRes.error) lastErr = new Error(rpcRes.error.message || 'Solana RPC error');
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw (lastErr || new Error('Solana RPC broadcast failed'));
+  }
+
+  async function sha256BytesAsync(data) {
+    const buf = data instanceof Uint8Array ? data : new Uint8Array(data);
+    if (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) {
+      return new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', buf));
+    }
+    if (nodeCryptoInstance && nodeCryptoInstance.createHash) {
+      return new Uint8Array(nodeCryptoInstance.createHash('sha256').update(buf).digest());
+    }
+    throw new Error('SHA-256 unavailable');
+  }
+
+  function encodeBorshString(str) {
+    const b = new TextEncoder().encode(String(str));
+    const out = new Uint8Array(4 + b.length);
+    new DataView(out.buffer).setUint32(0, b.length, true);
+    out.set(b, 4);
+    return out;
+  }
+
+  function encodeU64LE(n) {
+    const out = new Uint8Array(8);
+    let v = BigInt(n);
+    for (let i = 0; i < 8; i++) { out[i] = Number(v & 0xffn); v >>= 8n; }
+    return out;
+  }
+
+  function encodeU128LE(n) {
+    const out = new Uint8Array(16);
+    let v = BigInt(n);
+    for (let i = 0; i < 16; i++) { out[i] = Number(v & 0xffn); v >>= 8n; }
+    return out;
+  }
+
+  function concatUint8Arrays(arrs) {
+    const total = arrs.reduce((s, a) => s + a.length, 0);
+    const out = new Uint8Array(total);
+    let off = 0;
+    for (const a of arrs) { out.set(a, off); off += a.length; }
+    return out;
+  }
+
+  async function signAndSendNearFunctionCall({ accountId, publicKeyStr, privateKeyStr, receiverId, methodName, argsJson = '{}', gas = '50000000000000', depositYocto = '0' }) {
+    const rpcUrl = 'https://rpc.mainnet.near.org';
+    const akRes = await fetchWithTimeout(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         jsonrpc: '2.0',
-        id: 1,
-        method: 'sendTransaction',
-        params: [signedBase64, { encoding: 'base64', skipPreflight: false, maxRetries: 3 }]
+        id: 'ak',
+        method: 'query',
+        params: { request_type: 'view_access_key', finality: 'final', account_id: accountId, public_key: publicKeyStr }
       })
-    }, 15000);
-    if (rpcRes && rpcRes.error) {
-      throw new Error(rpcRes.error.message || 'Solana RPC error');
+    }, 8000);
+    if (!akRes || akRes.error || !akRes.result || typeof akRes.result.nonce !== 'number') {
+      throw new Error((akRes && akRes.error && (akRes.error.data || akRes.error.message)) || 'NEAR 账户未激活或 AccessKey 不存在');
     }
-    return rpcRes && rpcRes.result ? rpcRes.result : '';
+
+    const nonce = BigInt(akRes.result.nonce) + 1n;
+    const blockHashBytes = base58Decode(akRes.result.block_hash);
+    const pubBytes = base58Decode(String(publicKeyStr).replace(/^ed25519:/, ''));
+    const secretBytes = base58Decode(String(privateKeyStr).replace(/^ed25519:/, ''));
+    const seedHex = Array.from(secretBytes.slice(0, 32)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    const argsBytes = new TextEncoder().encode(argsJson);
+    const argsLen = new Uint8Array(4);
+    new DataView(argsLen.buffer).setUint32(0, argsBytes.length, true);
+    const actionCount = new Uint8Array(4);
+    new DataView(actionCount.buffer).setUint32(0, 1, true);
+
+    const txBytes = concatUint8Arrays([
+      encodeBorshString(accountId),
+      new Uint8Array([0]),
+      pubBytes,
+      encodeU64LE(nonce),
+      encodeBorshString(receiverId),
+      blockHashBytes,
+      actionCount,
+      new Uint8Array([2]), // FunctionCall
+      encodeBorshString(methodName),
+      argsLen,
+      argsBytes,
+      encodeU64LE(gas),
+      encodeU128LE(depositYocto)
+    ]);
+
+    const txHash = await sha256BytesAsync(txBytes);
+    const sig = await ed25519SignAsync(txHash, seedHex);
+    const signedTxBytes = concatUint8Arrays([txBytes, new Uint8Array([0]), sig]);
+
+    let bin = '';
+    for (let i = 0; i < signedTxBytes.length; i++) bin += String.fromCharCode(signedTxBytes[i]);
+    const signedB64 = btoa(bin);
+
+    const txRes = await fetchWithTimeout(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 'tx', method: 'broadcast_tx_commit', params: [signedB64] })
+    }, 15000);
+    if (!txRes || txRes.error) {
+      throw new Error((txRes && txRes.error && (txRes.error.data || txRes.error.message)) || 'NEAR 交易广播失败');
+    }
+    const status = txRes.result && txRes.result.status;
+    if (status && status.Failure) {
+      throw new Error(JSON.stringify(status.Failure));
+    }
+    return txRes.result && txRes.result.transaction ? txRes.result.transaction.hash : '';
   }
 
   const EVM_CHAIN_CONFIGS = {
@@ -5268,10 +5384,31 @@
   }
 
   // ======================== 多链通用工具：官方币种 SVG 图标 & 全链地址校验 ========================
+  const TRUSTWALLET_LOGOS = {
+    JUP: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/assets/JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN/logo.png',
+    JITOSOL: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/assets/J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn/logo.png',
+    BONK: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/assets/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263/logo.png',
+    WIF: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/assets/EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm/logo.png',
+    STETH: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84/logo.png',
+    UNI: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984/logo.png',
+    CAKE: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82/logo.png',
+    ARB: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/assets/0x912CE59144191C1204E64559FE8253a0e49E6548/logo.png',
+    AERO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0x940181a94A35A4569E4529A3CDfB74e38FD98631/logo.png'
+  };
+
   function getTokenIconHtml(symbol, blockchain = '', sizePx = 28) {
     const sym = String(symbol || '').toUpperCase();
     const chain = String(blockchain || '').toLowerCase();
     const s = sizePx;
+
+    if (sym === 'WETH') return getTokenIconHtml('ETH', chain, s);
+    if (sym === 'CBBTC') return getTokenIconHtml('BTC', chain, s);
+
+    if (TRUSTWALLET_LOGOS[sym]) {
+      const bgMap = { base: '#0052FF', eth: '#627EEA', arb: '#12AAFF', sol: '#9945FF', near: '#00EC97', bsc: '#F3BA2F' };
+      const bg = bgMap[chain] || '#334155';
+      return `<img src="${TRUSTWALLET_LOGOS[sym]}" alt="${sym}" width="${s}" height="${s}" style="width:${s}px;height:${s}px" class="rounded-full object-cover flex-shrink-0" onerror="this.style.display='none';if(this.nextElementSibling)this.nextElementSibling.style.display='inline-flex'"/><svg style="display:none" width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="${bg}"/><text x="16" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="800" font-family="system-ui,sans-serif">${sym.slice(0, 3)}</text></svg>`;
+    }
 
     if (sym === 'USDT') {
       return `<svg width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117" fill="#fff"/></svg>`;
@@ -6683,6 +6820,11 @@
     state.nearSwap.pickerSlot = (slot === 'from') ? 'from' : 'to';
     const modal = document.getElementById('modal-swap-token-picker');
     const input = document.getElementById('swap-token-search-input');
+    const netBar = document.getElementById('swap-network-filter-bar');
+    const quickBar = document.getElementById('swap-quick-pills-bar');
+    const isDex = state.nearSwap.engineMode === 'dex';
+    if (netBar) netBar.classList.toggle('hidden', isDex);
+    if (quickBar) quickBar.classList.toggle('hidden', isDex);
     if (input) input.value = '';
     renderSwapTokenPickerList('');
     if (modal) {
@@ -6826,8 +6968,11 @@
           </div>
           <div class="text-right flex items-center gap-2">
             <div>
-              <div class="text-[11px] font-mono font-bold text-cyan-300">1 PRL ≈ ${rate.toFixed(4)}</div>
-              <div class="text-[9px] text-white/40 font-mono">$${targetPrice.toLocaleString()} USD</div>
+              ${state.nearSwap.engineMode === 'dex'
+                ? `<div class="text-[11px] font-medium text-white/60">${t.name}</div>`
+                : `<div class="text-[11px] font-mono font-bold text-cyan-300">1 PRL ≈ ${rate.toFixed(4)}</div>
+                   <div class="text-[9px] text-white/40 font-mono">$${targetPrice.toLocaleString()} USD</div>`
+              }
             </div>
             ${isSelected ? `
               <div class="w-5 h-5 rounded-full bg-cyan-400 text-black flex items-center justify-center font-bold text-xs ml-1 shadow-sm">
@@ -6946,6 +7091,15 @@
       if (evm && evm.evmAddress) {
         wallet.evmAddress = evm.evmAddress;
         wallet.evmPrivateKey = evm.evmPrivateKey;
+        changed = true;
+      }
+    }
+    if (!wallet.nearAddress || !wallet.nearPublicKey || !wallet.nearPrivateKey) {
+      const near = await deriveNearFromSeedAsync(wallet.mnemonic, 0);
+      if (near && near.nearAddress) {
+        wallet.nearAddress = near.nearAddress;
+        wallet.nearPublicKey = near.nearPublicKey;
+        wallet.nearPrivateKey = near.nearPrivateKey;
         changed = true;
       }
     }
@@ -7570,6 +7724,15 @@
     // 链上 DEX 直接签名兑换 (Solana Jupiter / EVM KyberSwap)
     if (state.nearSwap.engineMode === 'dex') {
       const chain = state.nearSwap.dexChain;
+      const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH' };
+      if (fromToken.symbol === nativeSymbols[chain]) {
+        const balInfo = getWalletChainBalanceInfo(wallet, chain);
+        const avail = balInfo ? balInfo.bal : 0;
+        if (amt > avail) {
+          showToast(t(`${fromToken.symbol} 余额不足 (当前可用: ${avail.toFixed(4)} ${fromToken.symbol})`, `Insufficient ${fromToken.symbol} (Available: ${avail.toFixed(4)} ${fromToken.symbol})`));
+          return;
+        }
+      }
       const btn = document.getElementById('btn-execute-swap');
       const btnText = document.getElementById('btn-swap-text');
       if (btn) btn.disabled = true;
@@ -8058,7 +8221,7 @@
     if (orderCard) orderCard.classList.add('hidden');
   };
 
-  // ======================== Feature: 链上质押池 (Lido / Jito 真实合约执行) ========================
+  // ======================== Feature: 链上质押池 (Lido / Jito / Meta Pool 真实合约执行) ========================
   const STAKING_POOLS = [
     {
       id: 'lido',
@@ -8081,6 +8244,17 @@
       apy: null,
       rate: null,
       mintOut: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'
+    },
+    {
+      id: 'near',
+      name: 'Meta Pool',
+      chain: 'near',
+      chainLabel: 'NEAR',
+      inSymbol: 'NEAR',
+      outSymbol: 'stNEAR',
+      apy: null,
+      rate: null,
+      contract: 'meta-pool.near'
     }
   ];
   state.staking = { selectedId: 'lido' };
@@ -8106,6 +8280,15 @@
       if (qJito && qJito.outAmount) {
         const r = Number(fromBaseUnits(qJito.outAmount, 9));
         if (!isNaN(r) && r > 0) STAKING_POOLS[1].rate = r;
+      }
+    } catch (e) {}
+    try {
+      const nearMetrics = await fetchWithTimeout('https://validators.narwallets.com/metrics_json', {}, 5000);
+      if (nearMetrics) {
+        const apy = Number(nearMetrics.st_near_30_day_apy || nearMetrics.st_near_7_day_apy);
+        const price = Number(nearMetrics.st_near_price);
+        if (!isNaN(apy) && apy > 0) STAKING_POOLS[2].apy = Number(apy.toFixed(2));
+        if (!isNaN(price) && price > 0) STAKING_POOLS[2].rate = 1 / price;
       }
     } catch (e) {}
     renderStakingSheet();
@@ -8210,6 +8393,13 @@
       return;
     }
 
+    const balInfo = getWalletChainBalanceInfo(wallet, sel.chain);
+    const availBal = balInfo ? balInfo.bal : 0;
+    if (amt > availBal) {
+      showToast(t(`${sel.inSymbol} 余额不足 (当前可用: ${availBal.toFixed(4)} ${sel.inSymbol})`, `Insufficient ${sel.inSymbol} (Available: ${availBal.toFixed(4)} ${sel.inSymbol})`));
+      return;
+    }
+
     const btn = document.getElementById('btn-execute-stake');
     const btnText = document.getElementById('btn-stake-text');
     if (btn) btn.disabled = true;
@@ -8248,7 +8438,23 @@
         triggerHaptic('success');
         showToast(t(`Jito 质押已广播: ${txHash.slice(0, 10)}...`, `Jito Stake Sent: ${txHash.slice(0, 10)}...`));
       } else {
-        showToast(t(`NEAR 质押池: ${sel.validator} (APY ${sel.apy}%)`, `NEAR Pool: ${sel.validator} (APY ${sel.apy}%)`));
+        const accountId = wallet.nearNamedAccount || wallet.nearAddress;
+        if (!accountId || !wallet.nearPublicKey || !wallet.nearPrivateKey) {
+          throw new Error(t('NEAR 私钥不可用', 'NEAR key unavailable'));
+        }
+        const yocto = toBaseUnits(String(amt), 24);
+        const txHash = await signAndSendNearFunctionCall({
+          accountId,
+          publicKeyStr: wallet.nearPublicKey,
+          privateKeyStr: wallet.nearPrivateKey,
+          receiverId: sel.contract,
+          methodName: 'deposit_and_stake',
+          argsJson: '{}',
+          gas: '50000000000000',
+          depositYocto: yocto
+        });
+        triggerHaptic('success');
+        showToast(t(`Meta Pool 质押已广播: ${txHash.slice(0, 10)}...`, `Meta Pool Stake Sent: ${txHash.slice(0, 10)}...`));
       }
       if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
     } catch (err) {
