@@ -338,6 +338,8 @@
       'nearDomain.bindBtn': '绑定已有',
       'nearDomain.unbindBtn': '解绑',
       'nearDomain.hint': '选好可用域名后，向下方 NEAR 地址转入 ≥ 0.15 NEAR 即可自动链上注册激活；已有 .near 账户可直接绑定。',
+      'settings.multichainTitle': '全链地址与私钥管理',
+      'settings.multichainDesc': '查看/导出 PRL、NEAR、SOL、ETH、BSC、Base、ARB、Robinhood 私钥',
       'receive.addrSlot': '地址序号',
       'receive.nextAddr': '换一个地址 ↻',
       'receive.copyBtn': '复制收款地址',
@@ -419,6 +421,8 @@
       'nearDomain.bindBtn': 'Bind Existing',
       'nearDomain.unbindBtn': 'Unbind',
       'nearDomain.hint': 'Pick an available name and fund ≥ 0.15 NEAR to the NEAR address below to auto-register on-chain, or bind an existing .near account.',
+      'settings.multichainTitle': 'Multi-Chain Addresses & Private Keys',
+      'settings.multichainDesc': 'View / export PRL, NEAR, SOL, ETH, BSC, Base, ARB, Robinhood keys',
       'receive.addrSlot': 'Address Index',
       'receive.nextAddr': 'Next ↻',
       'receive.copyBtn': 'Copy Address',
@@ -3861,18 +3865,18 @@
       }
     } catch (e) {}
 
-    let authText = '本地 6 位 PIN 密码保护';
-    let descText = '需验证本地 6 位安全密码';
+    let authText = t('本地 6 位 PIN 密码保护', 'Local 6-Digit PIN Protection');
+    let descText = t('需验证本地 6 位安全密码', 'Requires local 6-digit PIN');
     if (hasPlatformBio) {
       if (isIOS) {
-        authText = 'Face ID / Touch ID + 本地 PIN';
-        descText = '需验证 Face ID 或本地安全密码';
+        authText = t('Face ID / Touch ID + 本地 PIN', 'Face ID / Touch ID + PIN');
+        descText = t('需验证 Face ID 或本地安全密码', 'Requires Face ID or local PIN');
       } else if (isAndroid) {
-        authText = '指纹 / 人脸识别 + 本地 PIN';
-        descText = '需验证设备指纹/人脸或本地密码';
+        authText = t('指纹 / 人脸识别 + 本地 PIN', 'Biometrics + Local PIN');
+        descText = t('需验证设备指纹/人脸或本地密码', 'Requires biometrics or local PIN');
       } else {
-        authText = '设备生物识别 (Windows Hello / Touch ID) + PIN';
-        descText = '需验证设备系统认证或本地 PIN 密码';
+        authText = t('设备生物识别 (Windows Hello / Touch ID) + PIN', 'Biometrics (Windows Hello / Touch ID) + PIN');
+        descText = t('需验证设备系统认证或本地 PIN 密码', 'Requires system biometrics or local PIN');
       }
     }
     if (authEl) authEl.innerText = authText;
@@ -4730,6 +4734,7 @@
   // ======================== 助记词安全查看防线 ========================
   window.startSecureMnemonicFlow = function () {
     triggerHaptic('medium');
+    state.pinVerifyPurpose = 'mnemonic';
     const wallet = getActiveWallet();
     if (!wallet) {
       showToast("当前设备无钱包，请先创建或导入");
@@ -4868,7 +4873,15 @@
           triggerHaptic('success');
           state.enteredPin = "";
           updateVerifyPinDots();
-          revealMnemonicDisplaySheet();
+          if (state.pinVerifyPurpose === 'multichain') {
+            state.pinVerifyPurpose = 'mnemonic';
+            state.multichainSecretsUnlocked = true;
+            openSheet('sheet-multichain-addresses');
+            renderMultichainAddressesList();
+            showToast(t('已验证身份，各链私钥已显露', 'Verified, private keys unlocked'));
+          } else {
+            revealMnemonicDisplaySheet();
+          }
         } else {
           triggerHaptic('error');
           showToast("密码不正确，请重新输入");
@@ -5079,19 +5092,26 @@
   };
   globalThis.copyMultichainValue = window.copyMultichainValue;
 
-  window.unlockMultichainSecrets = function () {
+  window.unlockMultichainSecrets = async function () {
     triggerHaptic('medium');
     if (state.multichainSecretsUnlocked) {
       state.multichainSecretsUnlocked = false;
       renderMultichainAddressesList();
-      showToast('已重新隐藏各链私钥');
+      showToast(t('已重新隐藏各链私钥', 'Private keys hidden'));
       return;
     }
-    requestBiometricAuth(() => {
-      state.multichainSecretsUnlocked = true;
-      renderMultichainAddressesList();
-      showToast('已验证身份，各链公钥与私钥已显露');
-    });
+    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (isNative) {
+      const passed = await requestBiometricAuth(t('请验证身份以解锁私钥', 'Verify identity to unlock private keys'));
+      if (passed) {
+        state.multichainSecretsUnlocked = true;
+        renderMultichainAddressesList();
+        showToast(t('已验证身份，各链私钥已显露', 'Verified, private keys unlocked'));
+        return;
+      }
+    }
+    state.pinVerifyPurpose = 'multichain';
+    showBackupPinStep();
   };
   globalThis.unlockMultichainSecrets = window.unlockMultichainSecrets;
 

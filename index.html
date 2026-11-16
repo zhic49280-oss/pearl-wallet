@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=9.5">
+  <link rel="stylesheet" href="style.css?v=9.6">
   <script>
     tailwind.config = {
       theme: {
@@ -636,8 +636,8 @@
 
         <button onclick="openMultichainAddressesSheet()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-indigo-500/25 flex items-center justify-between btn-active text-left">
           <div>
-            <div class="text-sm font-bold text-indigo-300">全链地址与私钥管理</div>
-            <div class="text-xs text-white/40">查看/导出 PRL、NEAR、SOL、ETH、BSC(BNB)、Base、ARB、HYPE 私钥</div>
+            <div class="text-sm font-bold text-indigo-300" data-i18n="settings.multichainTitle">全链地址与私钥管理</div>
+            <div class="text-xs text-white/40" data-i18n="settings.multichainDesc">查看/导出 PRL、NEAR、SOL、ETH、BSC、Base、ARB、Robinhood 私钥</div>
           </div>
           <svg class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
         </button>
@@ -1752,12 +1752,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=9.5"></script>
+  <script src="bip39-wordlist.js?v=9.6"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=9.5"></script>
+  <script src="qrcode.min.js?v=9.6"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=9.5"></script>
+  <script src="ethers.umd.min.js?v=9.6"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=9.5"></script>
+  <script src="app.js?v=9.6"></script>
 </body>
 </html>
