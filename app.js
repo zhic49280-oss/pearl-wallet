@@ -7131,6 +7131,7 @@
     try {
       const res = await fetchWithTimeout('https://1click.chaindefuser.com/v0/tokens', {}, 6000);
       if (Array.isArray(res) && res.length > 0) {
+        state.nearSwap.oneClickAllTokens = res;
         const prl = res.find(t => t.symbol === 'PRL');
         if (prl && prl.price && !isNaN(prl.price)) {
           state.nearSwap.prlPrice = Number(prl.price);
@@ -7535,6 +7536,53 @@
     return '0x0000000000000000000000000000000000000001';
   }
 
+  function findOneClickAssetId(chain, token) {
+    if (!token) return null;
+    if (String(token.assetId || '').startsWith('nep141:') || String(token.assetId || '').startsWith('1cs_')) return token.assetId;
+    const all = Array.isArray(state.nearSwap.oneClickAllTokens) ? state.nearSwap.oneClickAllTokens : [];
+    const ocChain = String(chain || '').toLowerCase();
+    const addr = String(token.assetId || '').toLowerCase();
+    const sym = String(token.symbol || '').toUpperCase();
+    if (addr === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' || addr === 'so11111111111111111111111111111111111111112') {
+      const nat = all.find(t => t.blockchain === ocChain && String(t.symbol || '').toUpperCase() === sym && !t.contractAddress);
+      return nat ? nat.assetId : null;
+    }
+    const match = all.find(t => t.blockchain === ocChain && t.contractAddress && t.contractAddress.toLowerCase() === addr);
+    return match ? match.assetId : null;
+  }
+
+  async function fetchOneClickDexQuote({ chain, fromToken, toToken, rawIn, appFeeRate }) {
+    const originAsset = findOneClickAssetId(chain, fromToken);
+    const destinationAsset = findOneClickAssetId(chain, toToken);
+    if (!originAsset || !destinationAsset || originAsset === destinationAsset) return null;
+    const wallet = getActiveWallet();
+    const userAddr = getWalletChainAddress(wallet, chain) || getFallbackChainAddr(chain);
+    const res = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        dry: true,
+        swapType: 'EXACT_INPUT',
+        slippageTolerance: state.nearSwap.slippageTolerance || 100,
+        originAsset,
+        depositType: 'ORIGIN_CHAIN',
+        destinationAsset,
+        amount: rawIn,
+        refundTo: userAddr,
+        refundType: 'ORIGIN_CHAIN',
+        recipient: userAddr,
+        recipientType: 'DESTINATION_CHAIN',
+        deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+        referral: state.nearReferralAccount || 'zhic49280.near',
+        appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
+      })
+    }, 8000);
+    if (res && res.quote && res.quote.amountOut) {
+      return { originAsset, destinationAsset, quote: res.quote };
+    }
+    return null;
+  }
+
   async function calculateSwapQuote() {
     const amtStr = state.nearSwap.amountIn;
     const amt = Number(amtStr);
@@ -7606,33 +7654,41 @@
         if (chain === 'sol') {
           const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
           const rayUrl = `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}&txVersion=V0`;
-          const [jRes, rRes] = await Promise.allSettled([
+          const [jRes, rRes, ocRes] = await Promise.allSettled([
             fetchWithTimeout(jupUrl, {}, 12000),
-            fetchWithTimeout(rayUrl, {}, 10000)
+            fetchWithTimeout(rayUrl, {}, 10000),
+            fetchOneClickDexQuote({ chain: 'sol', fromToken, toToken, rawIn, appFeeRate })
           ]);
           const jData = jRes.status === 'fulfilled' && jRes.value && jRes.value.outAmount ? jRes.value : null;
           const rData = rRes.status === 'fulfilled' && rRes.value && rRes.value.success && rRes.value.data && rRes.value.data.outputAmount ? rRes.value : null;
-          const jOut = jData ? BigInt(jData.outAmount) : 0n;
-          const rOut = rData ? BigInt(rData.data.outputAmount) : 0n;
+          const ocData = ocRes.status === 'fulfilled' && ocRes.value ? ocRes.value : null;
+          const candidates = [
+            jData ? { src: 'jup', label: 'Jupiter', out: BigInt(jData.outAmount), data: jData } : null,
+            rData ? { src: 'raydium', label: 'Raydium', out: BigInt(rData.data.outputAmount), data: rData } : null,
+            ocData ? { src: 'oneclick_dex', label: '1Click', out: BigInt(ocData.quote.amountOut), data: ocData } : null
+          ].filter(Boolean);
 
-          if (jOut > 0n || rOut > 0n) {
-            const useJup = jOut >= rOut;
-            const winOutStr = useJup ? jData.outAmount : rData.data.outputAmount;
-            const outFormatted = fromBaseUnits(winOutStr, toToken.decimals);
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => (b.out > a.out ? 1 : b.out < a.out ? -1 : 0));
+            const win = candidates[0];
+            const outFormatted = fromBaseUnits(win.out.toString(), toToken.decimals);
             const outNum = parseFloat(outFormatted);
             const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
             state.nearSwap.amountOut = displayOut;
             state.nearSwap.quoteStatus = 'success';
-            state.nearSwap.quoteSource = useJup ? 'jup' : 'raydium';
-            state.nearSwap.dexQuoteData = useJup ? jData : rData;
+            state.nearSwap.quoteSource = win.src;
+            state.nearSwap.dexQuoteData = win.data;
             if (outEl) outEl.innerText = displayOut;
-            if (useJup && jData.swapUsdValue) {
-              if (fiatInEl) fiatInEl.innerText = `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD`;
-              if (fiatOutEl) fiatOutEl.innerText = `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD`;
+            if (win.src === 'jup' && win.data.swapUsdValue) {
+              if (fiatInEl) fiatInEl.innerText = `≈ $${Number(win.data.swapUsdValue).toFixed(2)} USD`;
+              if (fiatOutEl) fiatOutEl.innerText = `≈ $${Number(win.data.swapUsdValue).toFixed(2)} USD`;
+            } else if (win.src === 'oneclick_dex' && win.data.quote) {
+              if (fiatInEl && win.data.quote.amountInUsd) fiatInEl.innerText = `≈ $${Number(win.data.quote.amountInUsd).toFixed(2)} USD`;
+              if (fiatOutEl && win.data.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(win.data.quote.amountOutUsd).toFixed(2)} USD`;
             }
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
             if (statusLabel) {
-              statusLabel.innerText = useJup ? t('⚡ 最优路由: Jupiter', '⚡ Best: Jupiter') : t('⚡ 最优路由: Raydium', '⚡ Best: Raydium');
+              statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
             syncSwapButtonBalanceState();
@@ -7685,34 +7741,36 @@
           const cfg = EVM_CHAIN_CONFIGS[chain];
           const kUrl = `https://aggregator-api.kyberswap.com/${cfg.kyber}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
           const pUrl = `https://api.paraswap.io/prices?srcToken=${encodeURIComponent(fromToken.assetId)}&destToken=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&srcDecimals=${fromToken.decimals}&destDecimals=${toToken.decimals}&network=${cfg.chainId}&side=SELL`;
-          const [kRes, pRes] = await Promise.allSettled([
+          const [kRes, pRes, ocRes] = await Promise.allSettled([
             fetchWithTimeout(kUrl, {}, 12000),
-            fetchWithTimeout(pUrl, {}, 10000)
+            fetchWithTimeout(pUrl, {}, 10000),
+            fetchOneClickDexQuote({ chain, fromToken, toToken, rawIn, appFeeRate })
           ]);
           const kRoute = kRes.status === 'fulfilled' && kRes.value && kRes.value.code === 0 && kRes.value.data && kRes.value.data.routeSummary ? kRes.value.data.routeSummary : null;
           const pRoute = pRes.status === 'fulfilled' && pRes.value && pRes.value.priceRoute && pRes.value.priceRoute.destAmount ? pRes.value.priceRoute : null;
-          const kOut = kRoute && kRoute.amountOut ? BigInt(kRoute.amountOut) : 0n;
-          const pOut = pRoute && pRoute.destAmount ? BigInt(pRoute.destAmount) : 0n;
+          const ocData = ocRes.status === 'fulfilled' && ocRes.value ? ocRes.value : null;
+          const candidates = [
+            kRoute && kRoute.amountOut ? { src: 'kyber', label: 'KyberSwap', out: BigInt(kRoute.amountOut), data: kRoute, usdIn: kRoute.amountInUsd, usdOut: kRoute.amountOutUsd } : null,
+            pRoute && pRoute.destAmount ? { src: 'paraswap', label: 'ParaSwap', out: BigInt(pRoute.destAmount), data: pRoute, usdIn: pRoute.srcUSD, usdOut: pRoute.destUSD } : null,
+            ocData ? { src: 'oneclick_dex', label: '1Click', out: BigInt(ocData.quote.amountOut), data: ocData, usdIn: ocData.quote.amountInUsd, usdOut: ocData.quote.amountOutUsd } : null
+          ].filter(Boolean);
 
-          if (kOut > 0n || pOut > 0n) {
-            const useKyber = kOut >= pOut;
-            const winOutStr = useKyber ? kRoute.amountOut : pRoute.destAmount;
-            const outFormatted = fromBaseUnits(winOutStr, toToken.decimals);
+          if (candidates.length > 0) {
+            candidates.sort((a, b) => (b.out > a.out ? 1 : b.out < a.out ? -1 : 0));
+            const win = candidates[0];
+            const outFormatted = fromBaseUnits(win.out.toString(), toToken.decimals);
             const outNum = parseFloat(outFormatted);
             const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
             state.nearSwap.amountOut = displayOut;
             state.nearSwap.quoteStatus = 'success';
-            state.nearSwap.quoteSource = useKyber ? 'kyber' : 'paraswap';
-            state.nearSwap.dexQuoteData = useKyber ? kRoute : pRoute;
+            state.nearSwap.quoteSource = win.src;
+            state.nearSwap.dexQuoteData = win.data;
             if (outEl) outEl.innerText = displayOut;
-            const usdIn = useKyber ? kRoute.amountInUsd : pRoute.srcUSD;
-            const usdOut = useKyber ? kRoute.amountOutUsd : pRoute.destUSD;
-            if (fiatInEl && usdIn) fiatInEl.innerText = `≈ $${Number(usdIn).toFixed(2)} USD`;
-            if (fiatOutEl && usdOut) fiatOutEl.innerText = `≈ $${Number(usdOut).toFixed(2)} USD`;
+            if (fiatInEl && win.usdIn) fiatInEl.innerText = `≈ $${Number(win.usdIn).toFixed(2)} USD`;
+            if (fiatOutEl && win.usdOut) fiatOutEl.innerText = `≈ $${Number(win.usdOut).toFixed(2)} USD`;
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
             if (statusLabel) {
-              const srcName = useKyber ? 'KyberSwap' : 'ParaSwap';
-              statusLabel.innerText = t(`⚡ 最优路由: ${srcName}`, `⚡ Best: ${srcName}`);
+              statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
             syncSwapButtonBalanceState();
@@ -8075,7 +8133,47 @@
       if (btnText) btnText.innerText = t('正在签名广播...', 'Signing & Broadcasting...');
       try {
         await ensureWalletSigningKeysAsync(wallet);
-        if (chain === 'sol') {
+        if (state.nearSwap.quoteSource === 'oneclick_dex' && state.nearSwap.dexQuoteData) {
+          const oc = state.nearSwap.dexQuoteData;
+          const userAddr = getWalletChainAddress(wallet, chain);
+          if (!userAddr) throw new Error(t('钱包地址不可用', 'Wallet address unavailable'));
+          const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
+          const ocRes = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+              dry: false,
+              swapType: 'EXACT_INPUT',
+              slippageTolerance: state.nearSwap.slippageTolerance || 100,
+              originAsset: oc.originAsset,
+              depositType: 'ORIGIN_CHAIN',
+              destinationAsset: oc.destinationAsset,
+              amount: rawIn,
+              refundTo: userAddr,
+              refundType: 'ORIGIN_CHAIN',
+              recipient: userAddr,
+              recipientType: 'DESTINATION_CHAIN',
+              deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+              referral: state.nearReferralAccount || 'zhic49280.near',
+              appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
+            })
+          }, 12000);
+          const depAddr = ocRes && (ocRes.depositAddress || (ocRes.quote && ocRes.quote.depositAddress));
+          if (!depAddr) throw new Error((ocRes && (ocRes.message || ocRes.error)) || '1Click quote unavailable');
+          triggerHaptic('success');
+          renderActiveSwapOrder({
+            depositAddress: depAddr,
+            memo: ocRes.memo || (ocRes.quote && ocRes.quote.depositMemo) || '',
+            amountIn: state.nearSwap.amountIn,
+            amountOut: (ocRes.quote && ocRes.quote.amountOutFormatted) || state.nearSwap.amountOut,
+            originSymbol: fromToken.symbol,
+            destSymbol: toToken.symbol,
+            originChain: fromToken.networkName,
+            destChain: toToken.networkName,
+            deadline: (ocRes.quote && ocRes.quote.deadline) || new Date(Date.now() + 15 * 60 * 1000).toISOString()
+          });
+          showToast(t('1Click 最优路由订单已生成', '1Click best-route order created'));
+        } else if (chain === 'sol') {
           if (!wallet.solAddress || !wallet.solPrivateSeedHex) {
             throw new Error(t('当前钱包未派生 Solana 私钥', 'Solana private key unavailable'));
           }
