@@ -6753,38 +6753,9 @@
     }
 
     const involvesPrl = (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId || toToken.assetId === PEARL_DEFUSE_TOKEN.assetId);
-    const refIn = getRefContractId(fromToken);
-    const refOut = getRefContractId(toToken);
-
-    // 若为 NEAR 链上代币 <-> PRL，优先查询 Ref Finance 开源链上池真实报价
-    if (involvesPrl && refIn && refOut && refIn !== refOut) {
-      try {
-        const slippageFrac = Math.max(0.001, (state.nearSwap.slippageTolerance || 100) / 10000);
-        const rawAmt = toBaseUnits(amtStr, fromToken.decimals);
-        const refUrl = `https://smartrouter.ref.finance/findPath?tokenIn=${encodeURIComponent(refIn)}&tokenOut=${encodeURIComponent(refOut)}&amountIn=${encodeURIComponent(rawAmt)}&pathDeep=3&slippage=${slippageFrac}`;
-        const refData = await fetchWithTimeout(refUrl, {}, 6000);
-        const route = refData && refData.result_code === 0 && refData.result_data && Array.isArray(refData.result_data.routes) ? refData.result_data.routes[0] : null;
-        const rawOut = route && (route.min_amount_out && route.min_amount_out !== '0' ? route.min_amount_out : route.amount_out);
-        if (rawOut && rawOut !== '0') {
-          const outNum = parseFloat(fromBaseUnits(rawOut, toToken.decimals));
-          const netOut = (!isNaN(outNum) && outNum > 0) ? (outNum * (1 - appFeeRate)).toFixed(4) : '0.0000';
-          state.nearSwap.amountOut = netOut;
-          state.nearSwap.quoteStatus = 'success';
-          state.nearSwap.quoteSource = 'ref';
-          if (outEl) outEl.innerText = netOut;
-          if (fiatOutEl) fiatOutEl.innerText = `≈ $${(parseFloat(netOut) * toPrice).toFixed(2)} USD`;
-          if (statusLabel) {
-            statusLabel.innerText = '⚡ Ref Finance 链上实时池报价';
-            statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
-          }
-          return;
-        }
-      } catch (e) {
-        // Ref 路由异常时继续尝试 1Click
-      }
-    }
 
     // 向 NEAR Intents 1Click API 发起真实 Dry 报价探测
+    // 注：Ref Finance 池子仅支持已在 NEAR 链上的映射代币 prl.omft.near，不适用于 Pearl 主网 (prl1p...) 原生跨链，故不再伪装为可直接兑换报价
     try {
       const wallet = getActiveWallet();
       const refundAddr = getWalletChainAddress(wallet, fromToken.blockchain) || getFallbackChainAddr(fromToken.blockchain);
@@ -6833,18 +6804,22 @@
           statusLabel.innerText = `⚡ Solvers 实时可执行报价 (${json.quote.timeEstimate || 20}s)`;
           statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
         }
+        const execBtnText = document.getElementById('btn-swap-text');
+        if (execBtnText) execBtnText.innerText = '⚡ 发起意图跨链兑换';
       } else {
         state.nearSwap.quoteStatus = 'no_liquidity';
         state.nearSwap.quoteSource = 'none';
         const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '暂未匹配到做市商';
         if (statusLabel) {
           if (involvesPrl) {
-            statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 报价 · 可先跨至 USDC(NEAR) 或 <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`;
+            statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 跨链报价 · 请前往 <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`;
           } else {
             statusLabel.innerText = `⚠️ 仅市价参考 · 做市商未报价 (${reason.slice(0, 28)})`;
           }
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
+        const execBtnText = document.getElementById('btn-swap-text');
+        if (execBtnText) execBtnText.innerText = involvesPrl ? '当前无 PRL 公网跨链报价 (请前往 near.com)' : '当前币对暂无做市商报价';
       }
     } catch (e) {
       state.nearSwap.quoteStatus = 'error';
