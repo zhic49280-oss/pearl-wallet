@@ -24,6 +24,7 @@ const CORE_ASSETS = [
   'style.css',
   'bip39-wordlist.js',
   'qrcode.min.js',
+  'ethers.umd.min.js',
   'manifest.json',
   'sw.js'
 ];

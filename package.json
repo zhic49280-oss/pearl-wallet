@@ -29,6 +29,7 @@
     "@capacitor/ios": "^8.6.0"
   },
   "dependencies": {
-    "@capacitor/android": "^8.6.0"
+    "@capacitor/android": "^8.6.0",
+    "ethers": "^6.17.0"
   }
 }

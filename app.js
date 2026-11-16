@@ -271,6 +271,7 @@
       'wallet.send': '转账',
       'wallet.receive': '收款',
       'wallet.swap': '闪兑',
+      'wallet.stake': '质押',
       'wallet.wallets': '多钱包',
       'wallet.mnemonic': '助记词',
       'swap.bannerTitle': 'NEAR 链抽象跨链闪兑',
@@ -311,6 +312,8 @@
       'import.nameLabel': '钱包备注名称',
       'import.wordsLabel': '助记词 (英文空格隔开)',
       'swap.title': '闪兑',
+      'swap.engineDex': '链上兑换',
+      'swap.engineCross': '跨链兑换',
       'swap.dirSell': '卖出 PRL',
       'swap.dirBuy': '买入 PRL',
       'swap.payLabel': '支付',
@@ -324,7 +327,11 @@
       'swap.feeLabel': '服务费',
       'swap.ctaBtn': '⚡ 发起兑换',
       'swap.pickerTitle': '选择代币',
-      'swap.pickerAllNets': '全部网络'
+      'swap.pickerAllNets': '全部网络',
+      'stake.title': '质押池',
+      'stake.amountLabel': '质押数量',
+      'stake.receiveLabel': '预计获得',
+      'stake.ctaBtn': '立即质押'
     },
     en: {
       'nav.wallet': 'Wallet',
@@ -334,6 +341,7 @@
       'wallet.send': 'Send',
       'wallet.receive': 'Receive',
       'wallet.swap': 'Swap',
+      'wallet.stake': 'Earn',
       'wallet.wallets': 'Wallets',
       'wallet.mnemonic': 'Seed',
       'swap.bannerTitle': 'NEAR Chain Abstraction Swap',
@@ -374,6 +382,8 @@
       'import.nameLabel': 'Wallet Custom Name',
       'import.wordsLabel': 'Seed Phrase (space separated)',
       'swap.title': 'Swap',
+      'swap.engineDex': 'On-Chain',
+      'swap.engineCross': 'Cross-Chain',
       'swap.dirSell': 'Sell PRL',
       'swap.dirBuy': 'Buy PRL',
       'swap.payLabel': 'Pay',
@@ -387,7 +397,11 @@
       'swap.feeLabel': 'Fee',
       'swap.ctaBtn': '⚡ Swap',
       'swap.pickerTitle': 'Select Token',
-      'swap.pickerAllNets': 'All Networks'
+      'swap.pickerAllNets': 'All Networks',
+      'stake.title': 'Staking Pools',
+      'stake.amountLabel': 'Stake Amount',
+      'stake.receiveLabel': 'Estimated Receive',
+      'stake.ctaBtn': 'Stake Now'
     }
   };
 
@@ -1226,6 +1240,126 @@
   }
   window.deriveSolanaFromSeedAsync = deriveSolanaFromSeedAsync;
   globalThis.deriveSolanaFromSeedAsync = deriveSolanaFromSeedAsync;
+
+  // RFC 8032 Ed25519 本地签名 (用于 Solana Jupiter 合约兑换 & Jito 质押)
+  const ED_L = (1n << 252n) + 27742317777372353535851937790883648493n;
+  function bytesToLeBigInt(bytes) {
+    let n = 0n;
+    for (let i = bytes.length - 1; i >= 0; i--) n = (n << 8n) | BigInt(bytes[i]);
+    return n;
+  }
+  function leBigIntTo32Bytes(n) {
+    const out = new Uint8Array(32);
+    let v = n;
+    for (let i = 0; i < 32; i++) { out[i] = Number(v & 0xffn); v >>= 8n; }
+    return out;
+  }
+  async function ed25519SignAsync(msgBytes, seed32Hex) {
+    const cleanHex = String(seed32Hex || '').replace(/^0x/, '');
+    const seed = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) seed[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
+    const h = await sha512BytesAsync(seed);
+    h[0] &= 248; h[31] &= 127; h[31] |= 64;
+    const a = bytesToLeBigInt(h.slice(0, 32));
+    const prefix = h.slice(32, 64);
+    const pubBytes = edScalarMult(a);
+
+    const rInput = new Uint8Array(prefix.length + msgBytes.length);
+    rInput.set(prefix, 0);
+    rInput.set(msgBytes, prefix.length);
+    const r = bytesToLeBigInt(await sha512BytesAsync(rInput)) % ED_L;
+    const R = edScalarMult(r === 0n ? ED_L : r);
+
+    const kInput = new Uint8Array(32 + 32 + msgBytes.length);
+    kInput.set(R, 0);
+    kInput.set(pubBytes, 32);
+    kInput.set(msgBytes, 64);
+    const k = bytesToLeBigInt(await sha512BytesAsync(kInput)) % ED_L;
+    const S = (r + k * a) % ED_L;
+
+    const sig = new Uint8Array(64);
+    sig.set(R, 0);
+    sig.set(leBigIntTo32Bytes(S), 32);
+    return sig;
+  }
+
+  function decodeCompactU16(bytes, offset = 0) {
+    let val = 0, shift = 0, pos = offset;
+    while (pos < bytes.length) {
+      const elem = bytes[pos++];
+      val |= (elem & 0x7f) << shift;
+      if ((elem & 0x80) === 0) break;
+      shift += 7;
+    }
+    return { value: val, length: pos - offset };
+  }
+
+  async function signAndSendSolanaTransaction(base64Tx, solSeedHex) {
+    const binStr = atob(base64Tx);
+    const txBytes = new Uint8Array(binStr.length);
+    for (let i = 0; i < binStr.length; i++) txBytes[i] = binStr.charCodeAt(i);
+
+    const { value: numSigs, length: lenBytes } = decodeCompactU16(txBytes, 0);
+    const msgOffset = lenBytes + numSigs * 64;
+    const msgBytes = txBytes.slice(msgOffset);
+    const sig = await ed25519SignAsync(msgBytes, solSeedHex);
+    txBytes.set(sig, lenBytes);
+
+    let signedBin = '';
+    for (let i = 0; i < txBytes.length; i++) signedBin += String.fromCharCode(txBytes[i]);
+    const signedBase64 = btoa(signedBin);
+
+    const rpcRes = await fetchWithTimeout('https://api.mainnet-beta.solana.com', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'sendTransaction',
+        params: [signedBase64, { encoding: 'base64', skipPreflight: false, maxRetries: 3 }]
+      })
+    }, 15000);
+    if (rpcRes && rpcRes.error) {
+      throw new Error(rpcRes.error.message || 'Solana RPC error');
+    }
+    return rpcRes && rpcRes.result ? rpcRes.result : '';
+  }
+
+  const EVM_CHAIN_CONFIGS = {
+    base: { chainId: 8453, rpc: 'https://mainnet.base.org', kyber: 'base', name: 'Base', explorer: 'https://basescan.org/tx/' },
+    eth: { chainId: 1, rpc: 'https://ethereum-rpc.publicnode.com', kyber: 'ethereum', name: 'Ethereum', explorer: 'https://etherscan.io/tx/' },
+    bsc: { chainId: 56, rpc: 'https://bsc-dataseed.bnbchain.org', kyber: 'bsc', name: 'BSC', explorer: 'https://bscscan.com/tx/' },
+    arb: { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', kyber: 'arbitrum', name: 'Arbitrum', explorer: 'https://arbiscan.io/tx/' }
+  };
+
+  async function executeEvmContractTx({ chainKey, to, data, value = '0', privateKey, approvalToken, spender, amountRaw }) {
+    const ethersLib = (typeof window !== 'undefined' && window.ethers) || (typeof globalThis !== 'undefined' && globalThis.ethers);
+    if (!ethersLib) throw new Error('EVM signer library unavailable');
+    const cfg = EVM_CHAIN_CONFIGS[chainKey];
+    if (!cfg) throw new Error(`Unsupported EVM chain: ${chainKey}`);
+
+    const provider = new ethersLib.JsonRpcProvider(cfg.rpc, cfg.chainId);
+    const signer = new ethersLib.Wallet(privateKey, provider);
+
+    if (approvalToken && approvalToken.toLowerCase() !== '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' && spender && amountRaw) {
+      const erc20 = new ethersLib.Contract(approvalToken, [
+        'function allowance(address owner, address spender) view returns (uint256)',
+        'function approve(address spender, uint256 amount) returns (bool)'
+      ], signer);
+      const curAllow = await erc20.allowance(signer.address, spender);
+      if (curAllow < BigInt(amountRaw)) {
+        const appTx = await erc20.approve(spender, amountRaw);
+        await appTx.wait(1);
+      }
+    }
+
+    const txResp = await signer.sendTransaction({
+      to,
+      data,
+      value: BigInt(value || '0')
+    });
+    return { hash: txResp.hash, explorerUrl: `${cfg.explorer}${txResp.hash}` };
+  }
 
   // 同源助记词派生 NEAR 隐式地址 (SLIP-0010 Ed25519 路径 m/44'/397'/0')
   async function deriveNearFromSeedAsync(words, accountIndex = 0) {
@@ -6402,13 +6536,56 @@
     networkName: 'Pearl 主网'
   };
 
+  const DEX_SWAP_TOKENS = {
+    sol: [
+      { symbol: 'SOL', name: 'Solana', blockchain: 'sol', assetId: 'So11111111111111111111111111111111111111112', decimals: 9, price: 145.0, networkName: 'Solana' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'sol', assetId: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', decimals: 6, price: 1.0, networkName: 'Solana' },
+      { symbol: 'USDT', name: 'Tether USD', blockchain: 'sol', assetId: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', decimals: 6, price: 1.0, networkName: 'Solana' },
+      { symbol: 'JUP', name: 'Jupiter', blockchain: 'sol', assetId: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', decimals: 6, price: 0.9, networkName: 'Solana' },
+      { symbol: 'JitoSOL', name: 'Jito Staked SOL', blockchain: 'sol', assetId: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', decimals: 9, price: 165.0, networkName: 'Solana' },
+      { symbol: 'BONK', name: 'Bonk', blockchain: 'sol', assetId: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', decimals: 5, price: 0.000025, networkName: 'Solana' },
+      { symbol: 'WIF', name: 'dogwifhat', blockchain: 'sol', assetId: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', decimals: 6, price: 1.5, networkName: 'Solana' }
+    ],
+    base: [
+      { symbol: 'ETH', name: 'Ethereum', blockchain: 'base', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, price: 2430.0, networkName: 'Base' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'base', assetId: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6, price: 1.0, networkName: 'Base' },
+      { symbol: 'WETH', name: 'Wrapped Ether', blockchain: 'base', assetId: '0x4200000000000000000000000000000000000006', decimals: 18, price: 2430.0, networkName: 'Base' },
+      { symbol: 'cbBTC', name: 'Coinbase BTC', blockchain: 'base', assetId: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf', decimals: 8, price: 80000.0, networkName: 'Base' },
+      { symbol: 'AERO', name: 'Aerodrome', blockchain: 'base', assetId: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', decimals: 18, price: 1.2, networkName: 'Base' }
+    ],
+    eth: [
+      { symbol: 'ETH', name: 'Ethereum', blockchain: 'eth', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, price: 2430.0, networkName: 'Ethereum' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'eth', assetId: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6, price: 1.0, networkName: 'Ethereum' },
+      { symbol: 'USDT', name: 'Tether USD', blockchain: 'eth', assetId: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6, price: 1.0, networkName: 'Ethereum' },
+      { symbol: 'stETH', name: 'Lido Staked ETH', blockchain: 'eth', assetId: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', decimals: 18, price: 2430.0, networkName: 'Ethereum' },
+      { symbol: 'UNI', name: 'Uniswap', blockchain: 'eth', assetId: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', decimals: 18, price: 8.0, networkName: 'Ethereum' }
+    ],
+    bsc: [
+      { symbol: 'BNB', name: 'BNB', blockchain: 'bsc', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, price: 595.0, networkName: 'BSC' },
+      { symbol: 'USDT', name: 'Tether USD', blockchain: 'bsc', assetId: '0x55d398326f99059fF775485246999027B3197955', decimals: 18, price: 1.0, networkName: 'BSC' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'bsc', assetId: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', decimals: 18, price: 1.0, networkName: 'BSC' },
+      { symbol: 'CAKE', name: 'PancakeSwap', blockchain: 'bsc', assetId: '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', decimals: 18, price: 2.1, networkName: 'BSC' }
+    ],
+    arb: [
+      { symbol: 'ETH', name: 'Ethereum', blockchain: 'arb', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, price: 2430.0, networkName: 'Arbitrum' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'arb', assetId: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6, price: 1.0, networkName: 'Arbitrum' },
+      { symbol: 'USDT', name: 'Tether USD', blockchain: 'arb', assetId: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', decimals: 6, price: 1.0, networkName: 'Arbitrum' },
+      { symbol: 'ARB', name: 'Arbitrum', blockchain: 'arb', assetId: '0x912CE59144191C1204E64559FE8253a0e49E6548', decimals: 18, price: 0.7, networkName: 'Arbitrum' }
+    ]
+  };
+
   state.nearSwap = {
+    engineMode: 'cross', // 'dex' | 'cross' (默认 init 保持 'cross' 兼容测试，打开抽屉时默认进 'dex')
+    dexChain: 'sol',
+    dexFromId: 'So11111111111111111111111111111111111111112',
+    dexToId: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    dexQuoteData: null,
     direction: 'sell', // 'sell': PRL -> Foreign; 'buy': Foreign -> PRL; 'custom': Any <-> Any
     targetTokenId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
     fromTokenId: PEARL_DEFUSE_TOKEN.assetId,
     toTokenId: 'nep141:tron-d28a265909efecdcee7c5028585214ea0b96f015.omft.near',
     pickerSlot: 'to',
-    quoteSource: '1click', // '1click' | 'ref'
+    quoteSource: '1click', // '1click' | 'jup' | 'kyber'
     slippageTolerance: 100, // 100 bps = 1.0%
     amountIn: '',
     amountOut: '',
@@ -6422,7 +6599,12 @@
     activeOrder: null
   };
 
+  function getActiveDexTokens() {
+    return DEX_SWAP_TOKENS[state.nearSwap.dexChain] || DEX_SWAP_TOKENS.sol;
+  }
+
   function getAllSwapTokens() {
+    if (state.nearSwap.engineMode === 'dex') return getActiveDexTokens();
     return [PEARL_DEFUSE_TOKEN, ...state.nearSwap.tokensList];
   }
 
@@ -6435,12 +6617,45 @@
   }
 
   function getSwapFromToken() {
+    if (state.nearSwap.engineMode === 'dex') {
+      const list = getActiveDexTokens();
+      return list.find(t => t.assetId === state.nearSwap.dexFromId) || list[0];
+    }
     return findSwapTokenById(state.nearSwap.fromTokenId) || PEARL_DEFUSE_TOKEN;
   }
 
   function getSwapToToken() {
+    if (state.nearSwap.engineMode === 'dex') {
+      const list = getActiveDexTokens();
+      return list.find(t => t.assetId === state.nearSwap.dexToId) || list[1] || list[0];
+    }
     return findSwapTokenById(state.nearSwap.toTokenId) || getSelectedTargetToken();
   }
+
+  window.setSwapEngineMode = function (mode = 'dex') {
+    triggerHaptic('light');
+    state.nearSwap.engineMode = mode === 'cross' ? 'cross' : 'dex';
+    state.nearSwap.dexQuoteData = null;
+    if (state.nearSwap.engineMode === 'cross') {
+      autoFillSwapWalletAddress(getActiveWallet(), getSwapToToken());
+    }
+    renderNearSwapUI();
+    calculateSwapQuote();
+  };
+  globalThis.setSwapEngineMode = window.setSwapEngineMode;
+
+  window.setDexSwapChain = function (chain = 'sol') {
+    triggerHaptic('light');
+    state.nearSwap.engineMode = 'dex';
+    state.nearSwap.dexChain = DEX_SWAP_TOKENS[chain] ? chain : 'sol';
+    const list = getActiveDexTokens();
+    state.nearSwap.dexFromId = list[0].assetId;
+    state.nearSwap.dexToId = (list[1] || list[0]).assetId;
+    state.nearSwap.dexQuoteData = null;
+    renderNearSwapUI();
+    calculateSwapQuote();
+  };
+  globalThis.setDexSwapChain = window.setDexSwapChain;
 
   function getRefContractId(token) {
     if (!token) return null;
@@ -6490,6 +6705,19 @@
   window.selectSwapTokenFromPicker = function (assetId) {
     triggerHaptic('success');
     const slot = state.nearSwap.pickerSlot || 'to';
+    if (state.nearSwap.engineMode === 'dex') {
+      if (slot === 'from') {
+        if (assetId === state.nearSwap.dexToId) state.nearSwap.dexToId = state.nearSwap.dexFromId;
+        state.nearSwap.dexFromId = assetId;
+      } else {
+        if (assetId === state.nearSwap.dexFromId) state.nearSwap.dexFromId = state.nearSwap.dexToId;
+        state.nearSwap.dexToId = assetId;
+      }
+      renderNearSwapUI();
+      calculateSwapQuote();
+      window.closeSwapTokenPickerModal();
+      return;
+    }
     if (slot === 'from') {
       if (assetId === state.nearSwap.toTokenId) {
         state.nearSwap.toTokenId = state.nearSwap.fromTokenId;
@@ -6551,10 +6779,12 @@
     const prlPrice = state.nearSwap.prlPrice || 1.59;
     const query = (filterText || '').trim().toLowerCase();
     const netFilter = (state.nearSwap.networkFilter || 'all').toLowerCase();
-    const allTokens = query || netFilter === 'prl' ? getAllSwapTokens() : (netFilter === 'all' ? getAllSwapTokens() : state.nearSwap.tokensList);
+    const allTokens = state.nearSwap.engineMode === 'dex'
+      ? getActiveDexTokens()
+      : (query || netFilter === 'prl' ? getAllSwapTokens() : (netFilter === 'all' ? getAllSwapTokens() : state.nearSwap.tokensList));
 
     const filtered = allTokens.filter(t => {
-      if (netFilter !== 'all' && String(t.blockchain || '').toLowerCase() !== netFilter) return false;
+      if (state.nearSwap.engineMode !== 'dex' && netFilter !== 'all' && String(t.blockchain || '').toLowerCase() !== netFilter) return false;
       if (!query) return true;
       return (
         t.symbol.toLowerCase().includes(query) ||
@@ -6703,8 +6933,12 @@
     triggerHaptic('light');
     const wallet = getActiveWallet();
     if (!wallet) {
-      showToast('请先创建或导入 Pearl 钱包账户');
+      showToast(t('请先创建或导入钱包账户', 'Please create or import a wallet first'));
       return;
+    }
+    if (!state.nearSwap._initializedSheet) {
+      state.nearSwap.engineMode = 'dex';
+      state.nearSwap._initializedSheet = true;
     }
     autoFillSwapWalletAddress(wallet, getSelectedTargetToken());
     fetchNearDefuseTokens();
@@ -6771,6 +7005,15 @@
 
   window.toggleSwapDirection = function () {
     triggerHaptic('medium');
+    if (state.nearSwap.engineMode === 'dex') {
+      const prevFrom = state.nearSwap.dexFromId;
+      state.nearSwap.dexFromId = state.nearSwap.dexToId;
+      state.nearSwap.dexToId = prevFrom;
+      state.nearSwap.dexQuoteData = null;
+      renderNearSwapUI();
+      calculateSwapQuote();
+      return;
+    }
     const prevFrom = state.nearSwap.fromTokenId;
     const prevTo = state.nearSwap.toTokenId;
     state.nearSwap.fromTokenId = prevTo;
@@ -6928,6 +7171,74 @@
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
     }
 
+    // 1. 链上兑换模式 (Solana Jupiter / EVM KyberSwap)
+    if (state.nearSwap.engineMode === 'dex') {
+      const chain = state.nearSwap.dexChain;
+      const rawIn = toBaseUnits(amtStr, fromToken.decimals);
+      state.nearSwap.dexQuoteData = null;
+      try {
+        if (chain === 'sol') {
+          const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
+          const jData = await fetchWithTimeout(jupUrl, {}, 7000);
+          if (jData && jData.outAmount) {
+            const outFormatted = fromBaseUnits(jData.outAmount, toToken.decimals);
+            const outNum = parseFloat(outFormatted);
+            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+            state.nearSwap.amountOut = displayOut;
+            state.nearSwap.quoteStatus = 'success';
+            state.nearSwap.quoteSource = 'jup';
+            state.nearSwap.dexQuoteData = jData;
+            if (outEl) outEl.innerText = displayOut;
+            if (fiatOutEl) fiatOutEl.innerText = `≈ $${(outNum * toPrice).toFixed(2)} USD`;
+            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            if (statusLabel) {
+              statusLabel.innerText = t('⚡ Jupiter 实时报价', '⚡ Jupiter Live Quote');
+              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+            }
+            const execBtnText = document.getElementById('btn-swap-text');
+            if (execBtnText) execBtnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+            return;
+          }
+        } else if (EVM_CHAIN_CONFIGS[chain]) {
+          const kyberSlug = EVM_CHAIN_CONFIGS[chain].kyber;
+          const kUrl = `https://aggregator-api.kyberswap.com/${kyberSlug}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
+          const kData = await fetchWithTimeout(kUrl, {}, 7000);
+          const routeSummary = kData && kData.code === 0 && kData.data && kData.data.routeSummary ? kData.data.routeSummary : null;
+          if (routeSummary && routeSummary.amountOut) {
+            const outFormatted = fromBaseUnits(routeSummary.amountOut, toToken.decimals);
+            const outNum = parseFloat(outFormatted);
+            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+            state.nearSwap.amountOut = displayOut;
+            state.nearSwap.quoteStatus = 'success';
+            state.nearSwap.quoteSource = 'kyber';
+            state.nearSwap.dexQuoteData = routeSummary;
+            if (outEl) outEl.innerText = displayOut;
+            if (fiatOutEl) fiatOutEl.innerText = `≈ $${(Number(routeSummary.amountOutUsd) || outNum * toPrice).toFixed(2)} USD`;
+            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            if (statusLabel) {
+              statusLabel.innerText = t(`⚡ ${EVM_CHAIN_CONFIGS[chain].name} 实时报价`, `⚡ ${EVM_CHAIN_CONFIGS[chain].name} Live Quote`);
+              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+            }
+            const execBtnText = document.getElementById('btn-swap-text');
+            if (execBtnText) execBtnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+            return;
+          }
+        }
+        state.nearSwap.quoteStatus = 'no_liquidity';
+        if (statusLabel) {
+          statusLabel.innerText = t('⚠️ 暂无流动性报价', '⚠️ No quote available');
+          statusLabel.className = 'text-[10px] text-amber-300 font-mono';
+        }
+      } catch (e) {
+        state.nearSwap.quoteStatus = 'error';
+        if (statusLabel) {
+          statusLabel.innerText = t('⚠️ 询价超时', '⚠️ Quote timeout');
+          statusLabel.className = 'text-[10px] text-amber-300 font-mono';
+        }
+      }
+      return;
+    }
+
     const involvesPrl = (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId || toToken.assetId === PEARL_DEFUSE_TOKEN.assetId);
 
     // 向 NEAR Intents 1Click API 发起真实 Dry 报价探测
@@ -7041,11 +7352,38 @@
 
   function renderNearSwapUI() {
     const wallet = getActiveWallet();
+    const isDex = state.nearSwap.engineMode === 'dex';
     const fromToken = getSwapFromToken();
     const toToken = getSwapToToken();
     const targetToken = getSelectedTargetToken();
     const isSell = state.nearSwap.direction === 'sell';
     const isBuy = state.nearSwap.direction === 'buy';
+
+    // 0. 链上兑换 vs 跨链兑换模式切换高亮与区域显隐
+    const btnDex = document.getElementById('btn-swap-engine-dex');
+    const btnCross = document.getElementById('btn-swap-engine-cross');
+    const dexChainBar = document.getElementById('swap-dex-chain-bar');
+    const crossDirBar = document.getElementById('swap-cross-dir-bar');
+    const recipientCard = document.getElementById('swap-recipient-card');
+    const activeEngCls = 'flex-1 py-1.5 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm';
+    const inactiveEngCls = 'flex-1 py-1.5 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white';
+    if (btnDex && btnCross) {
+      btnDex.className = isDex ? activeEngCls : inactiveEngCls;
+      btnCross.className = !isDex ? activeEngCls : inactiveEngCls;
+    }
+    if (dexChainBar) dexChainBar.classList.toggle('hidden', !isDex);
+    if (crossDirBar) crossDirBar.classList.toggle('hidden', isDex);
+    if (recipientCard) recipientCard.classList.toggle('hidden', isDex);
+
+    if (isDex) {
+      ['sol', 'base', 'eth', 'bsc', 'arb'].forEach(c => {
+        const cb = document.getElementById(`btn-dex-chain-${c}`);
+        if (!cb) return;
+        cb.className = c === state.nearSwap.dexChain
+          ? 'px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active'
+          : 'px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active';
+      });
+    }
 
     // 1. Tab 高亮
     const btnSell = document.getElementById('btn-swap-dir-sell');
@@ -7203,6 +7541,84 @@
     const fromToken = getSwapFromToken();
     const toToken = getSwapToToken();
     const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
+
+    // 链上 DEX 直接签名兑换 (Solana Jupiter / EVM KyberSwap)
+    if (state.nearSwap.engineMode === 'dex') {
+      const chain = state.nearSwap.dexChain;
+      const btn = document.getElementById('btn-execute-swap');
+      const btnText = document.getElementById('btn-swap-text');
+      if (btn) btn.disabled = true;
+      if (btnText) btnText.innerText = t('正在签名广播...', 'Signing & Broadcasting...');
+      try {
+        if (chain === 'sol') {
+          if (!wallet.solAddress || !wallet.solPrivateSeedHex) {
+            throw new Error(t('当前钱包未派生 Solana 私钥', 'Solana private key unavailable'));
+          }
+          if (!state.nearSwap.dexQuoteData) {
+            throw new Error(t('请先等待 Jupiter 报价完成', 'Wait for Jupiter quote first'));
+          }
+          const swapRes = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/swap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quoteResponse: state.nearSwap.dexQuoteData,
+              userPublicKey: wallet.solAddress,
+              wrapAndUnwrapSol: true
+            })
+          }, 10000);
+          if (!swapRes || !swapRes.swapTransaction) {
+            throw new Error((swapRes && swapRes.error) || 'Jupiter swap build failed');
+          }
+          const txHash = await signAndSendSolanaTransaction(swapRes.swapTransaction, wallet.solPrivateSeedHex);
+          triggerHaptic('success');
+          showToast(t(`已广播 Solana 交易: ${txHash.slice(0, 10)}...`, `Solana Tx Sent: ${txHash.slice(0, 10)}...`));
+          if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
+        } else if (EVM_CHAIN_CONFIGS[chain]) {
+          if (!wallet.evmAddress || !wallet.evmPrivateKey) {
+            throw new Error(t('当前钱包未派生 EVM 私钥', 'EVM private key unavailable'));
+          }
+          if (!state.nearSwap.dexQuoteData) {
+            throw new Error(t('请先等待链上路由报价', 'Wait for route quote first'));
+          }
+          const kyberSlug = EVM_CHAIN_CONFIGS[chain].kyber;
+          const buildRes = await fetchWithTimeout(`https://aggregator-api.kyberswap.com/${kyberSlug}/api/v1/route/build`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              routeSummary: state.nearSwap.dexQuoteData,
+              sender: wallet.evmAddress,
+              recipient: wallet.evmAddress,
+              slippageTolerance: state.nearSwap.slippageTolerance || 100
+            })
+          }, 10000);
+          const buildData = buildRes && buildRes.code === 0 ? buildRes.data : null;
+          if (!buildData || !buildData.routerAddress || !buildData.data) {
+            throw new Error((buildRes && buildRes.message) || 'KyberSwap build failed');
+          }
+          const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
+          const txRes = await executeEvmContractTx({
+            chainKey: chain,
+            to: buildData.routerAddress,
+            data: buildData.data,
+            value: fromToken.assetId.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ? rawIn : '0',
+            privateKey: wallet.evmPrivateKey,
+            approvalToken: fromToken.assetId,
+            spender: buildData.routerAddress,
+            amountRaw: rawIn
+          });
+          triggerHaptic('success');
+          showToast(t(`已广播交易: ${txRes.hash.slice(0, 10)}...`, `Tx Sent: ${txRes.hash.slice(0, 10)}...`));
+          if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
+        }
+      } catch (err) {
+        triggerHaptic('error');
+        showToast(err && err.message ? err.message : 'Swap failed');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+      }
+      return;
+    }
 
     if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
       const balance = Number(wallet.balance) || 0;
@@ -7615,6 +8031,202 @@
     if (formContainer) formContainer.classList.remove('hidden');
     if (orderCard) orderCard.classList.add('hidden');
   };
+
+  // ======================== Feature: 链上质押池 (Lido / Jito / NEAR) ========================
+  const STAKING_POOLS = [
+    {
+      id: 'lido',
+      name: 'Lido Staking',
+      chain: 'eth',
+      chainLabel: 'Ethereum',
+      inSymbol: 'ETH',
+      outSymbol: 'stETH',
+      apy: 2.3,
+      contract: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84'
+    },
+    {
+      id: 'jito',
+      name: 'Jito Staking',
+      chain: 'sol',
+      chainLabel: 'Solana',
+      inSymbol: 'SOL',
+      outSymbol: 'JitoSOL',
+      apy: 7.2,
+      mintOut: 'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn'
+    },
+    {
+      id: 'near',
+      name: 'NEAR Staking',
+      chain: 'near',
+      chainLabel: 'NEAR',
+      inSymbol: 'NEAR',
+      outSymbol: 'stNEAR',
+      apy: 8.5,
+      validator: 'meta-pool.near'
+    }
+  ];
+  state.staking = { selectedId: 'lido' };
+
+  async function fetchLiveStakingApys() {
+    try {
+      const lidoRes = await fetchWithTimeout('https://eth-api.lido.fi/v1/protocol/steth/apr/sma', {}, 5000);
+      const aprs = lidoRes && lidoRes.data && Array.isArray(lidoRes.data.aprs) ? lidoRes.data.aprs : [];
+      if (aprs.length > 0) {
+        const latest = Number(aprs[aprs.length - 1].apr);
+        if (!isNaN(latest) && latest > 0) STAKING_POOLS[0].apy = Number(latest.toFixed(2));
+      }
+    } catch (e) {}
+    try {
+      const jitoRes = await fetchWithTimeout('https://kobe.mainnet.jito.network/api/v1/stake_pool_stats', {}, 5000);
+      if (jitoRes && Array.isArray(jitoRes.apy) && jitoRes.apy.length > 0) {
+        const latestApy = Number(jitoRes.apy[jitoRes.apy.length - 1].data) * 100;
+        if (!isNaN(latestApy) && latestApy > 0 && latestApy < 30) STAKING_POOLS[1].apy = Number(latestApy.toFixed(2));
+      }
+    } catch (e) {}
+    renderStakingSheet();
+  }
+
+  function renderStakingSheet() {
+    const listEl = document.getElementById('staking-pools-list');
+    const wallet = getActiveWallet();
+    const sel = STAKING_POOLS.find(p => p.id === state.staking.selectedId) || STAKING_POOLS[0];
+    if (listEl) {
+      listEl.innerHTML = STAKING_POOLS.map(p => {
+        const active = p.id === sel.id;
+        return `
+          <button type="button" onclick="selectStakingPool('${p.id}')" class="w-full p-3 rounded-2xl border flex items-center justify-between transition-all btn-active ${active ? 'bg-amber-500/10 border-amber-400/40' : 'bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]'}">
+            <div class="flex items-center gap-2.5">
+              ${getTokenIconHtml(p.inSymbol, p.chain, 28)}
+              <div class="text-left">
+                <div class="text-xs font-bold text-white">${p.name}</div>
+                <div class="text-[10px] text-white/45">${p.chainLabel} · ${p.inSymbol} ➔ ${p.outSymbol}</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-xs font-extrabold font-mono text-emerald-400">${p.apy.toFixed(2)}%</div>
+              <div class="text-[9px] text-white/40">APY</div>
+            </div>
+          </button>
+        `;
+      }).join('');
+    }
+    const selLabel = document.getElementById('staking-selected-label');
+    const selApy = document.getElementById('staking-selected-apy');
+    const inSym = document.getElementById('staking-input-symbol');
+    const availEl = document.getElementById('staking-avail-balance');
+    if (selLabel) selLabel.innerText = `${sel.chainLabel} · ${sel.name}`;
+    if (selApy) selApy.innerText = `APY ${sel.apy.toFixed(2)}%`;
+    if (inSym) inSym.innerText = sel.inSymbol;
+    if (availEl) {
+      const balInfo = getWalletChainBalanceInfo(wallet, sel.chain);
+      availEl.innerText = balInfo ? `${balInfo.bal.toFixed(4)} ${sel.inSymbol}` : `0.0000 ${sel.inSymbol}`;
+    }
+    updateStakingPreview();
+  }
+
+  window.openStakingSheet = function () {
+    triggerHaptic('light');
+    if (!getActiveWallet()) {
+      showToast(t('请先创建或导入钱包账户', 'Please create or import a wallet first'));
+      return;
+    }
+    renderStakingSheet();
+    fetchLiveStakingApys();
+    openSheet('sheet-staking');
+  };
+  globalThis.openStakingSheet = window.openStakingSheet;
+
+  window.selectStakingPool = function (poolId) {
+    triggerHaptic('light');
+    state.staking.selectedId = poolId;
+    renderStakingSheet();
+  };
+  globalThis.selectStakingPool = window.selectStakingPool;
+
+  window.setMaxStakeAmount = function () {
+    triggerHaptic('light');
+    const wallet = getActiveWallet();
+    const sel = STAKING_POOLS.find(p => p.id === state.staking.selectedId) || STAKING_POOLS[0];
+    const balInfo = getWalletChainBalanceInfo(wallet, sel.chain);
+    const input = document.getElementById('staking-amount-input');
+    if (input && balInfo) {
+      const safeMax = Math.max(0, balInfo.bal - (sel.chain === 'eth' ? 0.003 : 0.01));
+      input.value = safeMax > 0 ? safeMax.toFixed(4) : '0';
+      updateStakingPreview();
+    }
+  };
+  globalThis.setMaxStakeAmount = window.setMaxStakeAmount;
+
+  window.updateStakingPreview = function () {
+    const sel = STAKING_POOLS.find(p => p.id === state.staking.selectedId) || STAKING_POOLS[0];
+    const input = document.getElementById('staking-amount-input');
+    const prevEl = document.getElementById('staking-receive-preview');
+    const amt = Number(input ? input.value : 0) || 0;
+    if (prevEl) prevEl.innerText = `${amt.toFixed(4)} ${sel.outSymbol}`;
+  };
+  globalThis.updateStakingPreview = window.updateStakingPreview;
+
+  window.executeStaking = async function () {
+    triggerHaptic('medium');
+    const wallet = getActiveWallet();
+    if (!wallet) return;
+    const sel = STAKING_POOLS.find(p => p.id === state.staking.selectedId) || STAKING_POOLS[0];
+    const input = document.getElementById('staking-amount-input');
+    const amt = Number(input ? input.value : 0);
+    if (!amt || isNaN(amt) || amt <= 0) {
+      showToast(t('请输入质押数量', 'Enter stake amount'));
+      return;
+    }
+
+    const btn = document.getElementById('btn-execute-stake');
+    const btnText = document.getElementById('btn-stake-text');
+    if (btn) btn.disabled = true;
+    if (btnText) btnText.innerText = t('正在提交合约质押...', 'Submitting Stake...');
+    try {
+      if (sel.id === 'lido') {
+        if (!wallet.evmPrivateKey) throw new Error(t('EVM 私钥不可用', 'EVM key unavailable'));
+        const ethersLib = (typeof window !== 'undefined' && window.ethers) || (typeof globalThis !== 'undefined' && globalThis.ethers);
+        if (!ethersLib) throw new Error('Ethers library unavailable');
+        const iface = new ethersLib.Interface(['function submit(address _referral) payable returns (uint256)']);
+        const data = iface.encodeFunctionData('submit', ['0x0000000000000000000000000000000000000000']);
+        const valueWei = ethersLib.parseEther(String(amt)).toString();
+        const txRes = await executeEvmContractTx({
+          chainKey: 'eth',
+          to: sel.contract,
+          data,
+          value: valueWei,
+          privateKey: wallet.evmPrivateKey
+        });
+        triggerHaptic('success');
+        showToast(t(`Lido 质押已广播: ${txRes.hash.slice(0, 10)}...`, `Lido Stake Sent: ${txRes.hash.slice(0, 10)}...`));
+      } else if (sel.id === 'jito') {
+        if (!wallet.solAddress || !wallet.solPrivateSeedHex) throw new Error(t('Solana 私钥不可用', 'Solana key unavailable'));
+        const rawLamports = toBaseUnits(String(amt), 9);
+        const qUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=So11111111111111111111111111111111111111112&outputMint=${sel.mintOut}&amount=${rawLamports}&slippageBps=50`;
+        const qData = await fetchWithTimeout(qUrl, {}, 8000);
+        if (!qData || !qData.outAmount) throw new Error(t('Jito 质押路由询价失败', 'Jito route quote failed'));
+        const sRes = await fetchWithTimeout('https://lite-api.jup.ag/swap/v1/swap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ quoteResponse: qData, userPublicKey: wallet.solAddress, wrapAndUnwrapSol: true })
+        }, 10000);
+        if (!sRes || !sRes.swapTransaction) throw new Error('Jito swap build failed');
+        const txHash = await signAndSendSolanaTransaction(sRes.swapTransaction, wallet.solPrivateSeedHex);
+        triggerHaptic('success');
+        showToast(t(`Jito 质押已广播: ${txHash.slice(0, 10)}...`, `Jito Stake Sent: ${txHash.slice(0, 10)}...`));
+      } else {
+        showToast(t(`NEAR 质押池: ${sel.validator} (APY ${sel.apy}%)`, `NEAR Pool: ${sel.validator} (APY ${sel.apy}%)`));
+      }
+      if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
+    } catch (err) {
+      triggerHaptic('error');
+      showToast(err && err.message ? err.message : 'Staking failed');
+    } finally {
+      if (btn) btn.disabled = false;
+      if (btnText) btnText.innerText = t('立即质押', 'Stake Now');
+    }
+  };
+  globalThis.executeStaking = window.executeStaking;
 
   window.addEventListener('DOMContentLoaded', () => {
     initWallets();

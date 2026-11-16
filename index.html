@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=7.8">
+  <link rel="stylesheet" href="style.css?v=7.9">
   <script>
     tailwind.config = {
       theme: {
@@ -156,12 +156,12 @@
             <span class="text-[10px] font-medium text-white/80" data-i18n="wallet.wallets">多钱包</span>
           </button>
 
-          <!-- 全链地址与私钥 -->
-          <button onclick="openMultichainAddressesSheet()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 flex items-center justify-center shadow-lg shadow-indigo-500/10">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+          <!-- 质押池 (Lido / Jito / NEAR) -->
+          <button onclick="openStakingSheet()" class="flex flex-col items-center gap-1.5 p-1 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] btn-active">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/10">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
             </div>
-            <span class="text-[10px] font-medium text-white/80">多链地址</span>
+            <span class="text-[10px] font-medium text-white/80" data-i18n="wallet.stake">质押</span>
           </button>
         </div>
       </div>
@@ -1256,8 +1256,27 @@
 
     <!-- 极简闪兑主视图 -->
     <div id="swap-mode-intent-view">
-      <!-- 兑换方向切换 Tab (卖出 PRL / 存入外链买入 PRL) -->
-      <div class="flex items-center gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-2.5">
+      <!-- 闪兑模式切换：链上兑换 (Jupiter / KyberSwap) vs 跨链兑换 (1Click) -->
+      <div class="flex items-center gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-2">
+        <button type="button" id="btn-swap-engine-dex" onclick="setSwapEngineMode('dex')" data-i18n="swap.engineDex" class="flex-1 py-1.5 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm">
+          链上兑换
+        </button>
+        <button type="button" id="btn-swap-engine-cross" onclick="setSwapEngineMode('cross')" data-i18n="swap.engineCross" class="flex-1 py-1.5 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white">
+          跨链兑换
+        </button>
+      </div>
+
+      <!-- 链上兑换网络选择栏 (Solana / Base / ETH / BSC / ARB) -->
+      <div id="swap-dex-chain-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-2">
+        <button type="button" onclick="setDexSwapChain('sol')" id="btn-dex-chain-sol" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active">Solana</button>
+        <button type="button" onclick="setDexSwapChain('base')" id="btn-dex-chain-base" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Base</button>
+        <button type="button" onclick="setDexSwapChain('eth')" id="btn-dex-chain-eth" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Ethereum</button>
+        <button type="button" onclick="setDexSwapChain('bsc')" id="btn-dex-chain-bsc" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">BSC</button>
+        <button type="button" onclick="setDexSwapChain('arb')" id="btn-dex-chain-arb" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Arbitrum</button>
+      </div>
+
+      <!-- 跨链模式快捷方向 Tab -->
+      <div id="swap-cross-dir-bar" class="hidden flex items-center gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-2.5">
         <button type="button" id="btn-swap-dir-sell" onclick="setSwapDirection('sell')" data-i18n="swap.dirSell" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm">
           卖出 PRL
         </button>
@@ -1503,6 +1522,52 @@
     <div id="swap-mode-aggregator-view" class="hidden"></div>
   </div>
 
+  <!-- ======================== 抽屉 K：链上质押池 (#sheet-staking) ======================== -->
+  <div id="sheet-staking" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] px-5 pt-3 pb-6 max-w-md mx-auto sheet-safe-bottom max-h-[90vh] max-h-[90dvh] overflow-y-auto no-scrollbar">
+    <div class="sticky top-0 bg-[#10121B]/95 backdrop-blur z-20 py-2 flex items-center justify-between mb-2">
+      <div class="w-8"></div>
+      <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+      <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+    </div>
+
+    <div class="text-center mb-3">
+      <h3 data-i18n="stake.title" class="text-base font-bold text-white">质押池</h3>
+    </div>
+
+    <!-- 质押池列表 -->
+    <div id="staking-pools-list" class="space-y-2.5 mb-3">
+      <!-- 由 JS 渲染 Lido / Jito / NEAR 实时 APY 质押池 -->
+    </div>
+
+    <!-- 选中池子的质押操作面板 -->
+    <div id="staking-action-card" class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+      <div class="flex items-center justify-between text-xs">
+        <span id="staking-selected-label" class="font-bold text-white">Ethereum · Lido</span>
+        <span id="staking-selected-apy" class="font-mono text-emerald-400 font-bold">APY --%</span>
+      </div>
+      <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        <div class="flex items-center justify-between text-[11px] text-white/50 mb-1.5">
+          <span data-i18n="stake.amountLabel">质押数量</span>
+          <div class="flex items-center gap-1.5">
+            <span id="staking-avail-balance" class="font-mono text-cyan-300">0.0000</span>
+            <button type="button" onclick="setMaxStakeAmount()" data-i18n="swap.maxBtn" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-400/20">最大</button>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-2">
+          <input id="staking-amount-input" type="number" step="any" min="0" inputmode="decimal" placeholder="0.00" oninput="updateStakingPreview()" class="w-full bg-transparent text-xl font-extrabold text-white font-mono placeholder-white/20 focus:outline-none">
+          <span id="staking-input-symbol" class="text-xs font-bold text-white/80 px-2.5 py-1 rounded-lg bg-white/[0.06]">ETH</span>
+        </div>
+      </div>
+      <div class="flex items-center justify-between text-[11px] text-white/60 px-1">
+        <span data-i18n="stake.receiveLabel">预计获得</span>
+        <span id="staking-receive-preview" class="font-mono text-emerald-400 font-bold">0.0000 stETH</span>
+      </div>
+      <button type="button" id="btn-execute-stake" onclick="executeStaking()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500 text-black font-extrabold text-sm btn-active shadow-lg">
+        <span id="btn-stake-text" data-i18n="stake.ctaBtn">立即质押</span>
+      </button>
+    </div>
+  </div>
+
   <!-- ======================== 代币选择弹窗 (#modal-swap-token-picker) ======================== -->
   <div id="modal-swap-token-picker" class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex items-end sm:items-center justify-center p-0 sm:p-4">
     <div class="w-full max-w-md bg-[#121522] border border-white/[0.1] rounded-t-3xl sm:rounded-3xl p-5 space-y-3.5 max-h-[85vh] flex flex-col shadow-2xl">
@@ -1677,10 +1742,12 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=7.8"></script>
+  <script src="bip39-wordlist.js?v=7.9"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=7.8"></script>
+  <script src="qrcode.min.js?v=7.9"></script>
+  <!-- 引入标准 EVM 合约编码与本地签名库 -->
+  <script src="ethers.umd.min.js?v=7.9"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=7.8"></script>
+  <script src="app.js?v=7.9"></script>
 </body>
 </html>
