@@ -324,6 +324,7 @@
       'swap.saveAddrBtn': '⭐ 存为常用',
       'swap.slippageLabel': '滑点容差',
       'swap.rateLabel': '参考汇率',
+      'swap.minReceiveLabel': '最低收到',
       'swap.feeLabel': '服务费',
       'swap.ctaBtn': '⚡ 发起兑换',
       'swap.pickerTitle': '选择代币',
@@ -394,6 +395,7 @@
       'swap.saveAddrBtn': '⭐ Save',
       'swap.slippageLabel': 'Slippage',
       'swap.rateLabel': 'Rate',
+      'swap.minReceiveLabel': 'Min Received',
       'swap.feeLabel': 'Fee',
       'swap.ctaBtn': '⚡ Swap',
       'swap.pickerTitle': 'Select Token',
@@ -1446,7 +1448,7 @@
     eth: { chainId: 1, rpc: 'https://ethereum-rpc.publicnode.com', kyber: 'ethereum', name: 'Ethereum', explorer: 'https://etherscan.io/tx/' },
     bsc: { chainId: 56, rpc: 'https://bsc-dataseed.bnbchain.org', kyber: 'bsc', name: 'BSC', explorer: 'https://bscscan.com/tx/' },
     arb: { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', kyber: 'arbitrum', name: 'Arbitrum', explorer: 'https://arbiscan.io/tx/' },
-    hood: { chainId: 4663, rpc: 'https://rpc.mainnet.chain.robinhood.com', kyber: '', name: 'Robinhood', explorer: 'https://robinhoodchain.blockscout.com/tx/' }
+    hood: { chainId: 4663, rpc: 'https://rpc.mainnet.chain.robinhood.com', kyber: 'robinhood', name: 'Robinhood', explorer: 'https://robinhoodchain.blockscout.com/tx/' }
   };
 
   async function executeEvmContractTx({ chainKey, to, data, value = '0', privateKey, approvalToken, spender, amountRaw }) {
@@ -6747,12 +6749,12 @@
       { symbol: 'ARB', name: 'Arbitrum', blockchain: 'arb', assetId: '0x912CE59144191C1204E64559FE8253a0e49E6548', decimals: 18, price: 0.7, networkName: 'Arbitrum' }
     ],
     hood: [
-      { symbol: 'ETH', name: 'ETH (Robinhood)', blockchain: 'hood', assetId: 'nep141:hood.omft.near', contractAddr: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, networkName: 'Robinhood Chain' },
-      { symbol: 'PONS', name: 'Pons', blockchain: 'hood', assetId: 'nep141:hood-0x39dbed3a2bd333467115de45665cc57f813c4571.omft.near', contractAddr: '0x39dBED3a2bd333467115dE45665cC57F813C4571', decimals: 18, networkName: 'Robinhood Chain' },
-      { symbol: 'USDG', name: 'Global Dollar', blockchain: 'hood', assetId: 'nep141:hood-0x5fc5360d0400a0fd4f2af552add042d716f1d168.omft.near', contractAddr: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', decimals: 6, networkName: 'Robinhood Chain' },
-      { symbol: 'WETH', name: 'Wrapped Ether', blockchain: 'hood', assetId: 'nep141:hood-0x0bd7d308f8e1639fab988df18a8011f41eacad73.omft.near', contractAddr: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', decimals: 18, networkName: 'Robinhood Chain' },
-      { symbol: 'USDe', name: 'Ethena USDe', blockchain: 'hood', assetId: 'nep141:hood-0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34.omft.near', contractAddr: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34', decimals: 18, networkName: 'Robinhood Chain' },
-      { symbol: 'CASHCAT', name: 'CashCat', blockchain: 'hood', assetId: 'nep141:hood-0x020bfc650a365f8bb26819deaabf3e21291018b4.omft.near', contractAddr: '0x020bfc650a365f8bb26819deaabf3e21291018b4', decimals: 18, networkName: 'Robinhood Chain' }
+      { symbol: 'ETH', name: 'ETH (Robinhood)', blockchain: 'hood', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'PONS', name: 'Pons', blockchain: 'hood', assetId: '0x39dBED3a2bd333467115dE45665cC57F813C4571', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'USDG', name: 'Global Dollar', blockchain: 'hood', assetId: '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168', decimals: 6, networkName: 'Robinhood Chain' },
+      { symbol: 'WETH', name: 'Wrapped Ether', blockchain: 'hood', assetId: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'USDe', name: 'Ethena USDe', blockchain: 'hood', assetId: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34', decimals: 18, networkName: 'Robinhood Chain' },
+      { symbol: 'CASHCAT', name: 'CashCat', blockchain: 'hood', assetId: '0x020bfc650a365f8bb26819deaabf3e21291018b4', decimals: 18, networkName: 'Robinhood Chain' }
     ]
   };
 
@@ -7355,6 +7357,7 @@
   globalThis.openNearSwapWithSelf = window.openNearSwapWithSelf;
 
   window.closeNearSwapSheet = function () {
+    stopSwapAutoRefreshTimer();
     closeSheet();
   };
 
@@ -7431,7 +7434,7 @@
         const bal = Number(wallet.balance) || 0;
         if (amt > bal) insufficient = true;
       } else if (isDex) {
-        const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH' };
+        const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH', hood: 'ETH' };
         const chain = state.nearSwap.dexChain;
         if (fromToken.symbol === nativeSymbols[chain]) {
           const balInfo = getWalletChainBalanceInfo(wallet, chain);
@@ -7511,9 +7514,52 @@
     }).catch(() => showToast('请在系统弹窗中允许粘贴'));
   };
 
+  let swapAutoRefreshInterval = null;
+  let swapAutoRefreshCountdown = 10;
+
+  function stopSwapAutoRefreshTimer() {
+    if (swapAutoRefreshInterval) {
+      clearInterval(swapAutoRefreshInterval);
+      swapAutoRefreshInterval = null;
+    }
+    const badge = document.getElementById('swap-auto-refresh-badge');
+    if (badge) badge.classList.add('hidden');
+  }
+
+  function startSwapAutoRefreshTimer() {
+    stopSwapAutoRefreshTimer();
+    const amt = Number(state.nearSwap.amountIn);
+    const sheet = document.getElementById('sheet-near-swap');
+    if (!amt || isNaN(amt) || amt <= 0 || !sheet || sheet.classList.contains('translate-y-full')) return;
+
+    swapAutoRefreshCountdown = 10;
+    const badge = document.getElementById('swap-auto-refresh-badge');
+    if (badge) {
+      badge.classList.remove('hidden');
+      badge.innerText = '🔄 10s';
+    }
+    swapAutoRefreshInterval = setInterval(() => {
+      const sh = document.getElementById('sheet-near-swap');
+      const curAmt = Number(state.nearSwap.amountIn);
+      if (!sh || sh.classList.contains('translate-y-full') || !curAmt || isNaN(curAmt) || curAmt <= 0) {
+        stopSwapAutoRefreshTimer();
+        return;
+      }
+      swapAutoRefreshCountdown--;
+      if (swapAutoRefreshCountdown <= 0) {
+        swapAutoRefreshCountdown = 10;
+        calculateSwapQuote();
+      }
+      const b = document.getElementById('swap-auto-refresh-badge');
+      if (b) b.innerText = `🔄 ${swapAutoRefreshCountdown}s`;
+    }, 1000);
+  }
+
   window.setSwapSlippage = function (bps) {
     triggerHaptic('light');
     state.nearSwap.slippageTolerance = Number(bps);
+    const customInput = document.getElementById('swap-custom-slippage');
+    if (customInput) customInput.value = '';
     [50, 100, 200, 300].forEach(val => {
       const btn = document.getElementById(`btn-slippage-${val}`);
       if (!btn) return;
@@ -7525,6 +7571,19 @@
     });
     calculateSwapQuote();
   };
+
+  window.setCustomSwapSlippage = function (pctStr) {
+    const pct = parseFloat(pctStr);
+    if (isNaN(pct) || pct <= 0 || pct > 15) return;
+    state.nearSwap.slippageTolerance = Math.round(pct * 100);
+    [50, 100, 200, 300].forEach(val => {
+      const btn = document.getElementById(`btn-slippage-${val}`);
+      if (btn) btn.className = 'px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-white/[0.04] text-white/60 hover:text-white transition-all';
+    });
+    if (state.nearSwap.quoteDebounceTimer) clearTimeout(state.nearSwap.quoteDebounceTimer);
+    state.nearSwap.quoteDebounceTimer = setTimeout(() => { calculateSwapQuote(); }, 250);
+  };
+  globalThis.setCustomSwapSlippage = window.setCustomSwapSlippage;
 
   function getFallbackChainAddr(blockchain) {
     const c = String(blockchain || '').toLowerCase();
@@ -7604,7 +7663,21 @@
       appFeeEl.innerText = `${(appFeeRate * 100).toFixed(2)}%`;
     }
 
+    const minRecvEl = document.getElementById('swap-detail-min-receive');
     const isDex = state.nearSwap.engineMode === 'dex';
+
+    function updateSwapSummaryStats(outNum, sourceName) {
+      const slipFrac = Math.min(0.15, Math.max(0, (state.nearSwap.slippageTolerance || 100) / 10000));
+      if (minRecvEl) {
+        minRecvEl.innerText = (!isNaN(outNum) && outNum > 0)
+          ? `${(outNum * (1 - slipFrac)).toFixed(4)} ${toToken.symbol}`
+          : '--';
+      }
+      if (appFeeEl) {
+        const uses1Click = !isDex || sourceName === 'oneclick_dex';
+        appFeeEl.innerText = uses1Click ? `${(appFeeRate * 100).toFixed(2)}%` : t('0% (DEX 直连)', '0% (Direct DEX)');
+      }
+    }
 
     // 基础汇率显示 (仅跨链非 DEX 时展示参考汇率；DEX 必须等真实路由返回再显示，绝不预填假价格)
     const pairRate = toPrice > 0 ? (fromPrice / toPrice) : 1.0;
@@ -7687,54 +7760,13 @@
               if (fiatOutEl && win.data.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(win.data.quote.amountOutUsd).toFixed(2)} USD`;
             }
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            updateSwapSummaryStats(outNum, win.src);
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
             syncSwapButtonBalanceState();
-            return;
-          }
-        } else if (chain === 'hood') {
-          const wallet = getActiveWallet();
-          const evmAddr = (wallet && wallet.evmAddress) || '0x0000000000000000000000000000000000000001';
-          const qBody = {
-            dry: true,
-            swapType: 'EXACT_INPUT',
-            slippageTolerance: state.nearSwap.slippageTolerance || 100,
-            originAsset: fromToken.assetId,
-            depositType: 'ORIGIN_CHAIN',
-            destinationAsset: toToken.assetId,
-            amount: rawIn,
-            refundTo: evmAddr,
-            refundType: 'ORIGIN_CHAIN',
-            recipient: evmAddr,
-            recipientType: 'DESTINATION_CHAIN',
-            deadline: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            referral: state.nearReferralAccount || 'zhic49280.near',
-            appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
-          };
-          const res = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(qBody)
-          }, 12000);
-          if (res && res.quote && res.quote.amountOut) {
-            const outFormatted = res.quote.amountOutFormatted || fromBaseUnits(res.quote.amountOut, toToken.decimals);
-            const outNum = parseFloat(outFormatted);
-            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
-            state.nearSwap.amountOut = displayOut;
-            state.nearSwap.quoteStatus = 'success';
-            state.nearSwap.quoteSource = 'hood_1click';
-            state.nearSwap.dexQuoteData = res.quote;
-            if (outEl) outEl.innerText = displayOut;
-            if (fiatInEl && res.quote.amountInUsd) fiatInEl.innerText = `≈ $${Number(res.quote.amountInUsd).toFixed(2)} USD`;
-            if (fiatOutEl && res.quote.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(res.quote.amountOutUsd).toFixed(2)} USD`;
-            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-            if (statusLabel) {
-              statusLabel.innerText = t(`⚡ Robinhood 实时报价 (${res.quote.timeEstimate || 20}s)`, `⚡ Robinhood Live (${res.quote.timeEstimate || 20}s)`);
-              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
-            }
-            syncSwapButtonBalanceState();
+            startSwapAutoRefreshTimer();
             return;
           }
         } else if (EVM_CHAIN_CONFIGS[chain]) {
@@ -7769,11 +7801,13 @@
             if (fiatInEl && win.usdIn) fiatInEl.innerText = `≈ $${Number(win.usdIn).toFixed(2)} USD`;
             if (fiatOutEl && win.usdOut) fiatOutEl.innerText = `≈ $${Number(win.usdOut).toFixed(2)} USD`;
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+            updateSwapSummaryStats(outNum, win.src);
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ 最优路由: ${win.label}`, `⚡ Best: ${win.label}`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
             syncSwapButtonBalanceState();
+            startSwapAutoRefreshTimer();
             return;
           }
         }
@@ -8215,44 +8249,6 @@
           triggerHaptic('success');
           showToast(t(`已广播 Solana 交易: ${txHash.slice(0, 10)}...`, `Solana Tx Sent: ${txHash.slice(0, 10)}...`));
           if (typeof refreshAllChainBalances === 'function') setTimeout(refreshAllChainBalances, 4000);
-        } else if (chain === 'hood') {
-          if (!wallet.evmAddress) throw new Error(t('EVM 地址不可用', 'EVM address unavailable'));
-          const rawIn = toBaseUnits(state.nearSwap.amountIn, fromToken.decimals);
-          const hoodRes = await fetchWithTimeout('https://1click.chaindefuser.com/v0/quote', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({
-              dry: false,
-              swapType: 'EXACT_INPUT',
-              slippageTolerance: state.nearSwap.slippageTolerance || 100,
-              originAsset: fromToken.assetId,
-              depositType: 'ORIGIN_CHAIN',
-              destinationAsset: toToken.assetId,
-              amount: rawIn,
-              refundTo: wallet.evmAddress,
-              refundType: 'ORIGIN_CHAIN',
-              recipient: wallet.evmAddress,
-              recipientType: 'DESTINATION_CHAIN',
-              deadline: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-              referral: state.nearReferralAccount || 'zhic49280.near',
-              appFees: [{ recipient: state.nearReferralAccount || 'zhic49280.near', fee: Math.round(appFeeRate * 10000) }]
-            })
-          }, 12000);
-          const depAddr = hoodRes && (hoodRes.depositAddress || (hoodRes.quote && hoodRes.quote.depositAddress));
-          if (!depAddr) throw new Error((hoodRes && (hoodRes.message || hoodRes.error)) || 'Robinhood quote unavailable');
-          triggerHaptic('success');
-          renderActiveSwapOrder({
-            depositAddress: depAddr,
-            memo: hoodRes.memo || (hoodRes.quote && hoodRes.quote.depositMemo) || '',
-            amountIn: state.nearSwap.amountIn,
-            amountOut: (hoodRes.quote && hoodRes.quote.amountOutFormatted) || state.nearSwap.amountOut,
-            originSymbol: fromToken.symbol,
-            destSymbol: toToken.symbol,
-            originChain: 'Robinhood Chain',
-            destChain: 'Robinhood Chain',
-            deadline: (hoodRes.quote && hoodRes.quote.deadline) || new Date(Date.now() + 15 * 60 * 1000).toISOString()
-          });
-          showToast(t('Robinhood 兑换订单已生成', 'Robinhood order created'));
         } else if (EVM_CHAIN_CONFIGS[chain]) {
           if (!wallet.evmAddress || !wallet.evmPrivateKey) {
             throw new Error(t('当前钱包未派生 EVM 私钥', 'EVM private key unavailable'));
