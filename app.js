@@ -309,7 +309,22 @@
       'onboarding.create': '创建全新 Pearl 钱包',
       'onboarding.import': '导入已有的 12 词助记词',
       'import.nameLabel': '钱包备注名称',
-      'import.wordsLabel': '助记词 (英文空格隔开)'
+      'import.wordsLabel': '助记词 (英文空格隔开)',
+      'swap.title': '闪兑',
+      'swap.dirSell': '卖出 PRL',
+      'swap.dirBuy': '买入 PRL',
+      'swap.payLabel': '支付',
+      'swap.receiveLabel': '预计接收',
+      'swap.maxBtn': '最大',
+      'swap.pasteBtn': '粘贴',
+      'swap.addressBookBtn': '📖 常用地址',
+      'swap.saveAddrBtn': '⭐ 存为常用',
+      'swap.slippageLabel': '滑点容差',
+      'swap.rateLabel': '参考汇率',
+      'swap.feeLabel': '服务费',
+      'swap.ctaBtn': '⚡ 发起兑换',
+      'swap.pickerTitle': '选择代币',
+      'swap.pickerAllNets': '全部网络'
     },
     en: {
       'nav.wallet': 'Wallet',
@@ -357,7 +372,22 @@
       'onboarding.create': 'Create New Pearl Wallet',
       'onboarding.import': 'Import Existing 12-Word Seed',
       'import.nameLabel': 'Wallet Custom Name',
-      'import.wordsLabel': 'Seed Phrase (space separated)'
+      'import.wordsLabel': 'Seed Phrase (space separated)',
+      'swap.title': 'Swap',
+      'swap.dirSell': 'Sell PRL',
+      'swap.dirBuy': 'Buy PRL',
+      'swap.payLabel': 'Pay',
+      'swap.receiveLabel': 'Receive',
+      'swap.maxBtn': 'Max',
+      'swap.pasteBtn': 'Paste',
+      'swap.addressBookBtn': '📖 Contacts',
+      'swap.saveAddrBtn': '⭐ Save',
+      'swap.slippageLabel': 'Slippage',
+      'swap.rateLabel': 'Rate',
+      'swap.feeLabel': 'Fee',
+      'swap.ctaBtn': '⚡ Swap',
+      'swap.pickerTitle': 'Select Token',
+      'swap.pickerAllNets': 'All Networks'
     }
   };
 
@@ -368,6 +398,10 @@
     applyLanguage(lang);
     showToast(lang === 'en' ? 'Switched to English' : '已切换至简体中文');
   };
+
+  function t(zh, en) {
+    return (typeof state !== 'undefined' && state.currentLang === 'en') ? en : zh;
+  }
 
   function applyLanguage(lang = 'zh') {
     const dict = i18nDict[lang] || i18nDict.zh;
@@ -418,6 +452,14 @@
     if (btnZh) btnZh.className = (lang === 'zh') ? activeCls : inactiveCls;
     if (btnEn) btnEn.className = (lang === 'en') ? activeCls : inactiveCls;
     if (pill) pill.innerText = (lang === 'zh') ? '简体中文' : 'English';
+
+    // 同步重绘动态渲染模块（解决新增功能中文固化问题）
+    if (typeof renderNearSwapUI === 'function') {
+      try { renderNearSwapUI(); } catch (e) {}
+    }
+    if (typeof renderHomeAssetList === 'function') {
+      try { renderHomeAssetList(); } catch (e) {}
+    }
   }
 
   // 触觉震动反馈
@@ -6867,7 +6909,7 @@
       if (fiatInEl) fiatInEl.innerText = '≈ $0.00 USD';
       if (fiatOutEl) fiatOutEl.innerText = '≈ $0.00 USD';
       if (statusLabel) {
-        statusLabel.innerText = '等待输入金额';
+        statusLabel.innerText = t('等待输入金额', 'Enter amount');
         statusLabel.className = 'text-[10px] text-white/40 font-mono';
       }
       return;
@@ -6882,7 +6924,7 @@
     if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * toPrice).toFixed(2)} USD`;
 
     if (statusLabel) {
-      statusLabel.innerText = '正在向做市商与链上路由询价...';
+      statusLabel.innerText = t('正在询价...', 'Quoting...');
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
     }
 
@@ -6940,31 +6982,36 @@
         if (outEl) outEl.innerText = netOut;
         if (fiatOutEl) fiatOutEl.innerText = `≈ $${(parseFloat(netOut) * toPrice).toFixed(2)} USD`;
         if (statusLabel) {
-          statusLabel.innerText = `⚡ Solvers 实时可执行报价 (${json.quote.timeEstimate || 20}s)`;
+          statusLabel.innerText = t(`⚡ 实时报价 (${json.quote.timeEstimate || 20}s)`, `⚡ Live Quote (${json.quote.timeEstimate || 20}s)`);
           statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
         }
         const execBtnText = document.getElementById('btn-swap-text');
-        if (execBtnText) execBtnText.innerText = '⚡ 发起意图跨链兑换';
+        if (execBtnText) execBtnText.innerText = t('⚡ 发起兑换', '⚡ Swap');
       } else {
         state.nearSwap.quoteStatus = 'no_liquidity';
         state.nearSwap.quoteSource = 'none';
-        const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : '暂未匹配到做市商';
+        const reason = (json && (json.message || json.error)) ? String(json.message || json.error) : t('暂无做市商报价', 'No liquidity');
         if (statusLabel) {
           if (involvesPrl) {
-            statusLabel.innerHTML = `⚠️ 仅市价参考 · 公网 1Click 暂未开放 PRL 跨链报价 · 请前往 <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`;
+            statusLabel.innerHTML = t(
+              `⚠️ 仅参考价 · 公网 1Click 暂未开放 PRL · <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`,
+              `⚠️ Ref only · No public PRL quote · <a href="https://near.com/crypto/pearl" target="_blank" rel="noopener" class="underline text-cyan-300">near.com ↗</a>`
+            );
           } else {
-            statusLabel.innerText = `⚠️ 仅市价参考 · 做市商未报价 (${reason.slice(0, 28)})`;
+            statusLabel.innerText = t(`⚠️ 仅参考价 (${reason.slice(0, 24)})`, `⚠️ Ref only (${reason.slice(0, 24)})`);
           }
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
         const execBtnText = document.getElementById('btn-swap-text');
-        if (execBtnText) execBtnText.innerText = involvesPrl ? '当前无 PRL 公网跨链报价 (请前往 near.com)' : '当前币对暂无做市商报价';
+        if (execBtnText) execBtnText.innerText = involvesPrl
+          ? t('暂无 PRL 公网报价 (请前往 near.com)', 'No Public PRL Quote (Use near.com)')
+          : t('当前币对暂无报价', 'No Quote Available');
       }
     } catch (e) {
       state.nearSwap.quoteStatus = 'error';
       state.nearSwap.quoteSource = 'none';
       if (statusLabel) {
-        statusLabel.innerText = '⚠️ 仅市价参考 · 做市商询价超时';
+        statusLabel.innerText = t('⚠️ 仅参考价 · 询价超时', '⚠️ Ref only · Quote timeout');
         statusLabel.className = 'text-[10px] text-amber-300 font-mono';
       }
     }
@@ -7042,15 +7089,15 @@
     `;
 
     if (fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
-      if (balanceLabel) balanceLabel.innerText = 'PRL 可用余额:';
+      if (balanceLabel) balanceLabel.innerText = t('PRL 可用:', 'PRL Bal:');
       if (balanceVal) balanceVal.innerText = wallet ? (Number(wallet.balance) || 0).toFixed(4) : '0.00';
     } else {
       const balInfo = getWalletChainBalanceInfo(wallet, fromToken.blockchain);
       if (balInfo) {
-        if (balanceLabel) balanceLabel.innerText = `同源 ${fromToken.blockchain.toUpperCase()} 余额:`;
+        if (balanceLabel) balanceLabel.innerText = t(`${fromToken.blockchain.toUpperCase()} 余额:`, `${fromToken.blockchain.toUpperCase()} Bal:`);
         if (balanceVal) balanceVal.innerText = `${balInfo.bal.toFixed(4)} ${balInfo.sym}`;
       } else {
-        if (balanceLabel) balanceLabel.innerText = '外链参考:';
+        if (balanceLabel) balanceLabel.innerText = t('参考:', 'Ref:');
         if (balanceVal) balanceVal.innerText = '--';
       }
     }
@@ -7058,7 +7105,7 @@
     if (paySlot) paySlot.innerHTML = buildSwapTokenButtonHTML(fromToken, 'from', isBuy ? hiddenSelectHTML : '');
     if (receiveSlot) receiveSlot.innerHTML = buildSwapTokenButtonHTML(toToken, 'to', !isBuy ? hiddenSelectHTML : '');
 
-    // 3. 收款 / 付款退款地址区域动态适配
+    // 3. 收款 / 付款退款地址区域动态适配 (精简文案)
     const recipientLabel = document.getElementById('swap-recipient-label');
     const recipientHint = document.getElementById('swap-recipient-chain-hint');
     const recipientInput = document.getElementById('swap-recipient-input');
@@ -7066,27 +7113,27 @@
     const isBuyingPrl = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId;
 
     if (isBuyingPrl) {
-      if (recipientLabel) recipientLabel.innerText = `外链付款 / 退款地址 (可选，${fromToken.symbol} - ${fromToken.networkName})`;
-      if (recipientHint) recipientHint.innerText = `${fromToken.blockchain.toUpperCase()} 链`;
+      if (recipientLabel) recipientLabel.innerText = t(`付款 / 退款地址 (${fromToken.blockchain.toUpperCase()} · 可选)`, `Refund / Pay Addr (${fromToken.blockchain.toUpperCase()} · Opt)`);
+      if (recipientHint) recipientHint.innerText = `${fromToken.blockchain.toUpperCase()}`;
       if (recipientInput) {
         recipientInput.disabled = false;
-        recipientInput.placeholder = `默认当前同源 ${fromToken.blockchain.toUpperCase()} 地址，也可修改为其他付款地址`;
+        recipientInput.placeholder = t(`默认同源 ${fromToken.blockchain.toUpperCase()} 地址`, `Default ${fromToken.blockchain.toUpperCase()} addr`);
         recipientInput.value = state.nearSwap.recipientAddress;
       }
       if (recipientFeedback) {
-        const shortPrl = wallet && wallet.address ? `${wallet.address.slice(0, 10)}...${wallet.address.slice(-6)}` : '当前钱包';
-        recipientFeedback.innerHTML = `买入的 <strong>PRL</strong> 默认直达当前钱包 <span class="font-mono text-cyan-300">${shortPrl}</span>；此栏仅用于核对您的付款或超时原路退款（可不填或修改）。`;
+        const shortPrl = wallet && wallet.address ? `${wallet.address.slice(0, 8)}...${wallet.address.slice(-4)}` : '';
+        recipientFeedback.innerHTML = t(`PRL 将入账 <span class="font-mono text-cyan-300">${shortPrl}</span>`, `To <span class="font-mono text-cyan-300">${shortPrl}</span>`);
       }
     } else {
-      if (recipientLabel) recipientLabel.innerText = `目标收款钱包地址 (${toToken.symbol} - ${toToken.networkName})`;
-      if (recipientHint) recipientHint.innerText = `${toToken.blockchain.toUpperCase()} 链`;
+      if (recipientLabel) recipientLabel.innerText = t(`收款地址 (${toToken.symbol} · ${toToken.blockchain.toUpperCase()})`, `Recipient (${toToken.symbol} · ${toToken.blockchain.toUpperCase()})`);
+      if (recipientHint) recipientHint.innerText = `${toToken.blockchain.toUpperCase()}`;
       if (recipientInput) {
         recipientInput.disabled = false;
-        recipientInput.placeholder = `输入接收 ${toToken.symbol} 的 ${toToken.blockchain.toUpperCase()} 钱包地址`;
+        recipientInput.placeholder = t(`输入 ${toToken.blockchain.toUpperCase()} 收款地址`, `Enter ${toToken.blockchain.toUpperCase()} address`);
         recipientInput.value = state.nearSwap.recipientAddress;
       }
       if (recipientFeedback) {
-        recipientFeedback.innerHTML = `做市商将在交割后直接打款至该 <strong>${toToken.networkName}</strong> 地址（已优先自动填入本钱包同源地址）。`;
+        recipientFeedback.innerText = t('已自动填入本钱包同源地址', 'Auto-filled own chain address');
       }
     }
 

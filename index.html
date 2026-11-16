@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=7.6">
+  <link rel="stylesheet" href="style.css?v=7.7">
   <script>
     tailwind.config = {
       theme: {
@@ -1251,44 +1251,26 @@
     </div>
 
     <div class="text-center mb-3">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-[11px] font-medium mb-1.5 shadow-sm">
-        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-        <span>去中心化多链闪兑</span>
-      </div>
-      <h3 class="text-base font-bold text-white">多链闪兑 (Cross-Chain Swap)</h3>
-      <p class="text-xs text-white/40 mt-0.5">支持 NEAR / ETH / BSC / Base / SOL / BTC / PRL 自由互换</p>
+      <h3 data-i18n="swap.title" class="text-base font-bold text-white">闪兑</h3>
     </div>
 
     <!-- 极简闪兑主视图 -->
     <div id="swap-mode-intent-view">
       <!-- 兑换方向切换 Tab (卖出 PRL / 存入外链买入 PRL) -->
       <div class="flex items-center gap-1 p-1 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-2.5">
-        <button type="button" id="btn-swap-dir-sell" onclick="setSwapDirection('sell')" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm">
-          卖出 PRL ➔ 外链
+        <button type="button" id="btn-swap-dir-sell" onclick="setSwapDirection('sell')" data-i18n="swap.dirSell" class="flex-1 py-2 rounded-xl text-xs font-bold transition-all bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shadow-sm">
+          卖出 PRL
         </button>
-        <button type="button" id="btn-swap-dir-buy" onclick="setSwapDirection('buy')" class="flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white">
-          存入外链 ➔ 买入 PRL
+        <button type="button" id="btn-swap-dir-buy" onclick="setSwapDirection('buy')" data-i18n="swap.dirBuy" class="flex-1 py-2 rounded-xl text-xs font-medium text-white/50 transition-all hover:text-white">
+          买入 PRL
         </button>
       </div>
 
-      <!-- 固定当前 Pearl 钱包信息卡片 (锁定当前登录钱包) -->
-      <div class="p-3 rounded-2xl bg-white/[0.03] border border-cyan-500/20 flex items-center justify-between mb-2.5">
-        <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-xl bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 flex items-center justify-center font-bold text-sm">
-            🦪
-          </div>
-          <div>
-            <div class="flex items-center gap-1.5">
-              <span id="swap-fixed-wallet-name" class="text-xs font-bold text-white">Pearl-01</span>
-              <span class="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.2 rounded font-medium">🔒 当前登录钱包</span>
-            </div>
-            <div id="swap-fixed-wallet-addr" class="text-[10px] font-mono text-white/50 truncate max-w-[190px]">prl1p...</div>
-          </div>
-        </div>
-        <div class="text-right">
-          <div class="text-[10px] text-white/40">当前余额</div>
-          <div id="swap-fixed-wallet-bal" class="text-xs font-bold text-cyan-300 font-mono">0.00 PRL</div>
-        </div>
+      <!-- 隐藏的当前钱包兼容节点 (精简界面，保留 DOM 供逻辑读取) -->
+      <div class="hidden">
+        <span id="swap-fixed-wallet-name">Pearl-01</span>
+        <span id="swap-fixed-wallet-addr">prl1p...</span>
+        <span id="swap-fixed-wallet-bal">0.00 PRL</span>
       </div>
 
       <!-- 兑换表单区域 -->
@@ -1296,11 +1278,11 @@
         <!-- 支付方卡片 (Pay) -->
         <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.07] focus-within:border-cyan-400/50 transition-all">
           <div class="flex items-center justify-between text-xs text-white/50 mb-2">
-            <span>支付 (You Pay)</span>
+            <span data-i18n="swap.payLabel">支付 (You Pay)</span>
             <div class="flex items-center gap-1.5">
               <span id="swap-balance-label">余额:</span>
               <span id="swap-balance-value" class="font-mono text-cyan-300 font-semibold">0.00</span>
-              <button type="button" onclick="setSwapMaxAmount()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-400/20 hover:bg-cyan-500/25">最大</button>
+              <button type="button" onclick="setSwapMaxAmount()" data-i18n="swap.maxBtn" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/15 px-1.5 py-0.5 rounded border border-cyan-400/20 hover:bg-cyan-500/25">最大</button>
             </div>
           </div>
           <div class="flex items-center justify-between gap-3">
@@ -1331,8 +1313,8 @@
         <!-- 接收方卡片 (Receive) -->
         <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.07] focus-within:border-cyan-400/50 transition-all">
           <div class="flex items-center justify-between text-xs text-white/50 mb-2">
-            <span>预计接收 (You Receive)</span>
-            <span id="swap-quote-status-label" class="text-[10px] text-emerald-400 font-mono">实时做市商报价</span>
+            <span data-i18n="swap.receiveLabel">预计接收 (You Receive)</span>
+            <span id="swap-quote-status-label" class="text-[10px] text-emerald-400 font-mono">--</span>
           </div>
           <div class="flex items-center justify-between gap-3">
             <div class="flex-1">
@@ -1362,20 +1344,17 @@
           <div class="relative">
             <input id="swap-recipient-input" type="text" placeholder="输入或从常用地址簿选择" oninput="handleSwapRecipientInput(this)" class="w-full p-2.5 pr-14 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-white placeholder-white/20 focus:outline-none focus:border-cyan-400">
             <div class="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
-              <button type="button" onclick="pasteToSwapRecipient()" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded hover:bg-cyan-500/20">粘贴</button>
+              <button type="button" onclick="pasteToSwapRecipient()" data-i18n="swap.pasteBtn" class="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded hover:bg-cyan-500/20">粘贴</button>
             </div>
           </div>
-          <div class="flex items-center justify-between pt-0.5">
-            <div id="swap-recipient-feedback" class="text-[10px] text-white/40 leading-normal flex-1 pr-2">
-              做市商将原子化交割至该地址。
-            </div>
-            <!-- 地址簿常用快捷操作 (地址pu) -->
+          <div class="flex items-center justify-between pt-0.5 gap-2">
+            <div id="swap-recipient-feedback" class="text-[10px] text-white/40 leading-normal flex-1 truncate"></div>
             <div class="flex items-center gap-1.5 flex-shrink-0">
-              <button type="button" onclick="openAddressBookForSwap()" class="text-[10px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-400/30 px-2 py-1 rounded-lg hover:bg-cyan-500/25 flex items-center gap-1 btn-active">
-                <span>📖 常用地址</span>
+              <button type="button" onclick="openAddressBookForSwap()" data-i18n="swap.addressBookBtn" class="text-[10px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-400/30 px-2 py-1 rounded-lg hover:bg-cyan-500/25 flex items-center gap-1 btn-active">
+                📖 常用地址
               </button>
-              <button type="button" onclick="saveSwapRecipientToAddressBook()" class="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2 py-1 rounded-lg hover:bg-amber-500/25 flex items-center gap-1 btn-active">
-                <span>⭐ 存为常用</span>
+              <button type="button" onclick="saveSwapRecipientToAddressBook()" data-i18n="swap.saveAddrBtn" class="text-[10px] font-bold text-amber-300 bg-amber-500/15 border border-amber-400/30 px-2 py-1 rounded-lg hover:bg-amber-500/25 flex items-center gap-1 btn-active">
+                ⭐ 存为常用
               </button>
             </div>
           </div>
@@ -1384,8 +1363,7 @@
         <!-- 滑点保护选项 (0.5% / 1.0% / 2.0% / 3.0%) -->
         <div class="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-between">
           <div class="flex items-center gap-1 text-xs text-white/50">
-            <span>滑点容差 (Slippage)</span>
-            <span class="text-[10px] text-white/30" title="当实际做市撮合价格低于容差时自动退回">ℹ️</span>
+            <span data-i18n="swap.slippageLabel">滑点容差</span>
           </div>
           <div class="flex items-center gap-1">
             <button type="button" onclick="setSwapSlippage(50)" id="btn-slippage-50" class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-white/[0.04] text-white/60 hover:text-white transition-all">0.5%</button>
@@ -1395,36 +1373,21 @@
           </div>
         </div>
 
-        <!-- 路由与明细折叠信息 -->
+        <!-- 精简 2 行摘要 -->
         <div class="p-3 rounded-2xl bg-white/[0.02] border border-white/[0.05] text-[11px] space-y-1.5 text-white/50">
           <div class="flex items-center justify-between">
-            <span>做市汇率参考</span>
+            <span data-i18n="swap.rateLabel">参考汇率</span>
             <span id="swap-detail-rate" class="font-mono text-white/80 font-medium">1 PRL ≈ --</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="flex items-center gap-1">
-              <span>交易手续费 (Swap Fee)</span>
-              <span class="text-[9px] text-cyan-300 bg-cyan-500/10 px-1 py-0.2 rounded font-mono">0.25%</span>
-            </span>
+            <span data-i18n="swap.feeLabel">服务费</span>
             <span id="swap-detail-app-fee" class="font-mono text-cyan-300 font-semibold">0.25%</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span>跨链结算协议</span>
-            <span class="text-cyan-300 font-medium">去中心化意图撮合网络</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span>预估到账耗时</span>
-            <span id="swap-detail-eta" class="text-white/80 font-mono">~15 - 60 秒</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span>多链 Gas 补贴</span>
-            <span class="text-emerald-400 font-mono">免外链原生 Gas</span>
           </div>
         </div>
 
         <!-- 发起兑换主按钮 -->
         <button type="button" id="btn-execute-swap" onclick="executeNearSwap()" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-400 via-indigo-500 to-purple-600 text-black font-extrabold text-sm btn-active shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2">
-          <span id="btn-swap-text">⚡ 发起意图跨链兑换</span>
+          <span id="btn-swap-text" data-i18n="swap.ctaBtn">⚡ 发起兑换</span>
         </button>
       </div>
 
@@ -1538,10 +1501,6 @@
 
     <!-- 聚合终端兼容视图 (测试兼容) -->
     <div id="swap-mode-aggregator-view" class="hidden"></div>
-
-    <button type="button" onclick="closeSheet()" class="w-full py-3 rounded-2xl bg-white/[0.04] text-white/60 text-xs font-medium btn-active mt-3">
-      返回关闭
-    </button>
   </div>
 
   <!-- ======================== 代币选择弹窗 (#modal-swap-token-picker) ======================== -->
@@ -1550,8 +1509,7 @@
       <!-- 弹窗顶栏 -->
       <div class="flex items-center justify-between">
         <div>
-          <h4 class="text-base font-bold text-white">选择闪兑代币</h4>
-          <p class="text-[11px] text-white/50">支持 PRL 及 NEAR / ETH / BSC / Base / SOL / BTC 自由互换</p>
+          <h4 data-i18n="swap.pickerTitle" class="text-base font-bold text-white">选择代币</h4>
         </div>
         <button type="button" onclick="closeSwapTokenPickerModal()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
       </div>
@@ -1564,7 +1522,7 @@
 
       <!-- 先选网络再选币种：网络筛选栏 -->
       <div id="swap-network-filter-bar" class="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-        <button type="button" onclick="setSwapNetworkFilter('all')" data-swap-net="all" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active">全部网络</button>
+        <button type="button" onclick="setSwapNetworkFilter('all')" data-swap-net="all" data-i18n="swap.pickerAllNets" class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[11px] font-bold whitespace-nowrap btn-active">全部网络</button>
         <button type="button" onclick="setSwapNetworkFilter('prl')" data-swap-net="prl" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">Pearl</button>
         <button type="button" onclick="setSwapNetworkFilter('near')" data-swap-net="near" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">NEAR</button>
         <button type="button" onclick="setSwapNetworkFilter('tron')" data-swap-net="tron" class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-white/60 border border-white/[0.08] text-[11px] font-medium whitespace-nowrap btn-active">TRON</button>
@@ -1719,10 +1677,10 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=7.6"></script>
+  <script src="bip39-wordlist.js?v=7.7"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=7.6"></script>
+  <script src="qrcode.min.js?v=7.7"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=7.6"></script>
+  <script src="app.js?v=7.7"></script>
 </body>
 </html>
