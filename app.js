@@ -5396,10 +5396,16 @@
     AERO: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/assets/0x940181a94A35A4569E4529A3CDfB74e38FD98631/logo.png'
   };
 
-  function getTokenIconHtml(symbol, blockchain = '', sizePx = 28) {
+  function getTokenIconHtml(symbol, blockchain = '', sizePx = 28, logoURI = '') {
     const sym = String(symbol || '').toUpperCase();
     const chain = String(blockchain || '').toLowerCase();
     const s = sizePx;
+
+    if (logoURI && /^https?:\/\//i.test(logoURI)) {
+      const bgMap = { base: '#0052FF', eth: '#627EEA', arb: '#12AAFF', sol: '#9945FF', near: '#00EC97', bsc: '#F3BA2F' };
+      const bg = bgMap[chain] || '#334155';
+      return `<img src="${logoURI}" alt="${sym}" width="${s}" height="${s}" style="width:${s}px;height:${s}px" class="rounded-full object-cover flex-shrink-0" onerror="this.style.display='none';if(this.nextElementSibling)this.nextElementSibling.style.display='inline-flex'"/><svg style="display:none" width="${s}" height="${s}" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="${bg}"/><text x="16" y="20" text-anchor="middle" fill="#fff" font-size="11" font-weight="800" font-family="system-ui,sans-serif">${sym.slice(0, 3)}</text></svg>`;
+    }
 
     if (sym === 'WETH') return getTokenIconHtml('ETH', chain, s);
     if (sym === 'CBBTC') return getTokenIconHtml('BTC', chain, s);
@@ -6737,7 +6743,77 @@
   };
 
   function getActiveDexTokens() {
-    return DEX_SWAP_TOKENS[state.nearSwap.dexChain] || DEX_SWAP_TOKENS.sol;
+    const chain = state.nearSwap.dexChain || 'sol';
+    if (state.nearSwap.dexTokenCache && Array.isArray(state.nearSwap.dexTokenCache[chain]) && state.nearSwap.dexTokenCache[chain].length > 0) {
+      return state.nearSwap.dexTokenCache[chain];
+    }
+    return DEX_SWAP_TOKENS[chain] || DEX_SWAP_TOKENS.sol;
+  }
+
+  async function fetchLiveDexTokensForChain(chain = 'sol') {
+    if (!state.nearSwap.dexTokenCache) state.nearSwap.dexTokenCache = {};
+    if (state.nearSwap.dexTokenCache[chain] && state.nearSwap.dexTokenCache[chain].length > 15) {
+      return state.nearSwap.dexTokenCache[chain];
+    }
+    const baseList = DEX_SWAP_TOKENS[chain] || [];
+    const seen = new Set(baseList.map(t => t.assetId.toLowerCase()));
+    const merged = [...baseList];
+    try {
+      if (chain === 'sol') {
+        const res = await fetchWithTimeout('https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=50', {}, 8000);
+        if (Array.isArray(res)) {
+          for (const item of res) {
+            if (!item || !item.id || !item.symbol) continue;
+            const key = String(item.id).toLowerCase();
+            if (seen.has(key)) {
+              const existing = merged.find(x => x.assetId.toLowerCase() === key);
+              if (existing && !existing.logoURI && item.icon) existing.logoURI = item.icon;
+              continue;
+            }
+            seen.add(key);
+            merged.push({
+              symbol: item.symbol,
+              name: item.name || item.symbol,
+              blockchain: 'sol',
+              assetId: item.id,
+              decimals: typeof item.decimals === 'number' ? item.decimals : 6,
+              logoURI: item.icon || '',
+              networkName: 'Solana'
+            });
+          }
+        }
+      } else if (EVM_CHAIN_CONFIGS[chain]) {
+        const cfg = EVM_CHAIN_CONFIGS[chain];
+        const res = await fetchWithTimeout(`https://ks-setting.kyberswap.com/api/v1/tokens?chainIds=${cfg.chainId}&isWhitelisted=true&pageSize=80`, {}, 8000);
+        const tokens = res && res.code === 0 && res.data && Array.isArray(res.data.tokens) ? res.data.tokens : [];
+        for (const item of tokens) {
+          if (!item || !item.address || !item.symbol) continue;
+          const key = String(item.address).toLowerCase();
+          if (seen.has(key)) {
+            const existing = merged.find(x => x.assetId.toLowerCase() === key);
+            if (existing && !existing.logoURI && item.logoURI) existing.logoURI = item.logoURI;
+            continue;
+          }
+          seen.add(key);
+          merged.push({
+            symbol: item.symbol,
+            name: item.name || item.symbol,
+            blockchain: chain,
+            assetId: item.address,
+            decimals: typeof item.decimals === 'number' ? item.decimals : 18,
+            logoURI: item.logoURI || '',
+            networkName: cfg.name
+          });
+        }
+      }
+      state.nearSwap.dexTokenCache[chain] = merged;
+      const modal = document.getElementById('modal-swap-token-picker');
+      if (modal && !modal.classList.contains('hidden')) {
+        const input = document.getElementById('swap-token-search-input');
+        renderSwapTokenPickerList(input ? input.value : '');
+      }
+    } catch (e) {}
+    return merged;
   }
 
   function getAllSwapTokens() {
@@ -6791,6 +6867,7 @@
     state.nearSwap.dexQuoteData = null;
     renderNearSwapUI();
     refreshDexFromTokenBalance();
+    fetchLiveDexTokensForChain(state.nearSwap.dexChain);
     calculateSwapQuote();
   };
   globalThis.setDexSwapChain = window.setDexSwapChain;
@@ -6958,7 +7035,7 @@
         <div onclick="selectSwapTokenFromPicker('${t.assetId}')" class="p-3 rounded-2xl ${isSelected ? 'bg-cyan-500/10 border-cyan-400/40' : 'bg-white/[0.03] hover:bg-white/[0.07] border-white/[0.06]'} border flex items-center justify-between cursor-pointer transition-all btn-active">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center overflow-hidden">
-              ${getTokenIconHtml(t.symbol, t.blockchain, 28)}
+              ${getTokenIconHtml(t.symbol, t.blockchain, 28, t.logoURI || '')}
             </div>
             <div>
               <div class="flex items-center gap-1.5">
@@ -7181,6 +7258,7 @@
     }
     autoFillSwapWalletAddress(wallet, getSelectedTargetToken());
     fetchNearDefuseTokens();
+    fetchLiveDexTokensForChain(state.nearSwap.dexChain);
     renderNearSwapUI();
     refreshDexFromTokenBalance();
     openSheet('sheet-near-swap');
@@ -7662,7 +7740,7 @@
     return `
       <div class="relative">
         <button type="button" onclick="openSwapTokenPickerModal('${slot}')" id="btn-swap-token-picker-${slot}" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] hover:border-cyan-400/50 text-white transition-all btn-active shadow-sm group">
-          <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml(token.symbol, token.blockchain, 24)}</span>
+          <span class="inline-flex items-center justify-center flex-shrink-0">${getTokenIconHtml(token.symbol, token.blockchain, 24, token.logoURI || '')}</span>
           <div class="text-left">
             <div class="text-xs font-bold leading-tight group-hover:text-cyan-300 transition-colors flex items-center gap-1">
               <span>${token.symbol}</span>
