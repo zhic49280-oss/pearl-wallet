@@ -7222,14 +7222,57 @@
     calculateSwapQuote();
   };
 
+  function syncSwapButtonBalanceState() {
+    const btn = document.getElementById('btn-execute-swap');
+    const btnText = document.getElementById('btn-swap-text');
+    if (!btn || !btnText) return;
+    const wallet = getActiveWallet();
+    const amt = Number(state.nearSwap.amountIn);
+    const fromToken = getSwapFromToken();
+    const isDex = state.nearSwap.engineMode === 'dex';
+    let insufficient = false;
+    let sym = fromToken ? fromToken.symbol : '';
+
+    if (wallet && amt > 0) {
+      if (!isDex && fromToken.assetId === PEARL_DEFUSE_TOKEN.assetId) {
+        const bal = Number(wallet.balance) || 0;
+        if (amt > bal) insufficient = true;
+      } else if (isDex) {
+        const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH' };
+        const chain = state.nearSwap.dexChain;
+        if (fromToken.symbol === nativeSymbols[chain]) {
+          const balInfo = getWalletChainBalanceInfo(wallet, chain);
+          const avail = balInfo ? balInfo.bal : 0;
+          if (amt > avail) insufficient = true;
+        }
+      }
+    }
+
+    if (insufficient) {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'cursor-not-allowed');
+      btnText.innerText = t(`${sym} 余额不足`, `Insufficient ${sym}`);
+    } else {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'cursor-not-allowed');
+      if (isDex) {
+        btnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+      } else {
+        btnText.innerText = t('⚡ 发起兑换', '⚡ Swap');
+      }
+    }
+  }
+
   window.handleSwapAmountInput = function (input) {
-    state.nearSwap.amountIn = input.value.trim();
+    state.nearSwap.amountIn = (input && input.value ? input.value : '').trim();
+    state.nearSwap.dexQuoteData = null;
+    syncSwapButtonBalanceState();
     if (state.nearSwap.quoteDebounceTimer) {
       clearTimeout(state.nearSwap.quoteDebounceTimer);
     }
     state.nearSwap.quoteDebounceTimer = setTimeout(() => {
       calculateSwapQuote();
-    }, 350);
+    }, 250);
   };
 
   window.setSwapMaxAmount = function () {
@@ -7319,69 +7362,107 @@
       appFeeEl.innerText = `${(appFeeRate * 100).toFixed(2)}%`;
     }
 
-    // 基础汇率显示
+    const isDex = state.nearSwap.engineMode === 'dex';
+
+    // 基础汇率显示 (仅跨链非 DEX 时展示参考汇率；DEX 必须等真实路由返回再显示，绝不预填假价格)
     const pairRate = toPrice > 0 ? (fromPrice / toPrice) : 1.0;
     if (rateEl) {
-      rateEl.innerText = `1 ${fromToken.symbol} ≈ ${pairRate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
+      rateEl.innerText = isDex
+        ? `1 ${fromToken.symbol} ≈ -- ${toToken.symbol}`
+        : `1 ${fromToken.symbol} ≈ ${pairRate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
     }
 
     if (!amt || isNaN(amt) || amt <= 0) {
       if (outEl) outEl.innerText = '0.00';
-      if (fiatInEl) fiatInEl.innerText = '≈ $0.00 USD';
-      if (fiatOutEl) fiatOutEl.innerText = '≈ $0.00 USD';
+      if (fiatInEl) fiatInEl.innerText = isDex ? '--' : '≈ $0.00 USD';
+      if (fiatOutEl) fiatOutEl.innerText = isDex ? '--' : '≈ $0.00 USD';
       if (statusLabel) {
         statusLabel.innerText = t('等待输入金额', 'Enter amount');
         statusLabel.className = 'text-[10px] text-white/40 font-mono';
       }
+      syncSwapButtonBalanceState();
       return;
     }
 
-    // 本地法定货币参考估值 (USD)
-    const fiatInUsd = amt * fromPrice;
-    if (fiatInEl) fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD`;
-    const estOut = amt * pairRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
-    state.nearSwap.amountOut = estOut.toFixed(4);
-    if (outEl) outEl.innerText = state.nearSwap.amountOut;
-    if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * toPrice).toFixed(2)} USD`;
+    if (isDex) {
+      if (outEl) outEl.innerText = '...';
+      if (fiatInEl) fiatInEl.innerText = '--';
+      if (fiatOutEl) fiatOutEl.innerText = '--';
+    } else {
+      // 跨链参考估值 (USD)
+      const fiatInUsd = amt * fromPrice;
+      if (fiatInEl) fiatInEl.innerText = `≈ $${fiatInUsd.toFixed(2)} USD`;
+      const estOut = amt * pairRate * (1 - state.nearSwap.slippageTolerance / 10000) * (1 - appFeeRate);
+      state.nearSwap.amountOut = estOut.toFixed(4);
+      if (outEl) outEl.innerText = state.nearSwap.amountOut;
+      if (fiatOutEl) fiatOutEl.innerText = `≈ $${(estOut * toPrice).toFixed(2)} USD`;
+    }
 
     if (statusLabel) {
       statusLabel.innerText = t('正在询价...', 'Quoting...');
       statusLabel.className = 'text-[10px] text-cyan-300 font-mono animate-pulse';
     }
 
-    // 1. 链上兑换模式 (Solana Jupiter / EVM KyberSwap)
-    if (state.nearSwap.engineMode === 'dex') {
+    // 1. 链上兑换模式 (Solana Jupiter / Raydium, EVM KyberSwap)
+    if (isDex) {
       const chain = state.nearSwap.dexChain;
       const rawIn = toBaseUnits(amtStr, fromToken.decimals);
       state.nearSwap.dexQuoteData = null;
       try {
-        await ensureWalletSigningKeysAsync(wallet);
         if (chain === 'sol') {
-          const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
-          const jData = await fetchWithTimeout(jupUrl, {}, 7000);
-          if (jData && jData.outAmount) {
-            const outFormatted = fromBaseUnits(jData.outAmount, toToken.decimals);
-            const outNum = parseFloat(outFormatted);
-            const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
-            state.nearSwap.amountOut = displayOut;
-            state.nearSwap.quoteStatus = 'success';
-            state.nearSwap.quoteSource = 'jup';
-            state.nearSwap.dexQuoteData = jData;
-            if (outEl) outEl.innerText = displayOut;
-            if (fiatOutEl) fiatOutEl.innerText = `≈ $${(outNum * toPrice).toFixed(2)} USD`;
-            if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
-            if (statusLabel) {
-              statusLabel.innerText = t('⚡ Jupiter 实时报价', '⚡ Jupiter Live Quote');
-              statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+          let gotSolQuote = false;
+          try {
+            const jupUrl = `https://lite-api.jup.ag/swap/v1/quote?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}`;
+            const jData = await fetchWithTimeout(jupUrl, {}, 12000);
+            if (jData && jData.outAmount) {
+              const outFormatted = fromBaseUnits(jData.outAmount, toToken.decimals);
+              const outNum = parseFloat(outFormatted);
+              const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+              state.nearSwap.amountOut = displayOut;
+              state.nearSwap.quoteStatus = 'success';
+              state.nearSwap.quoteSource = 'jup';
+              state.nearSwap.dexQuoteData = jData;
+              if (outEl) outEl.innerText = displayOut;
+              if (fiatOutEl) fiatOutEl.innerText = jData.swapUsdValue ? `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD` : '--';
+              if (fiatInEl) fiatInEl.innerText = jData.swapUsdValue ? `≈ $${Number(jData.swapUsdValue).toFixed(2)} USD` : '--';
+              if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+              if (statusLabel) {
+                statusLabel.innerText = t('⚡ Jupiter 实时报价', '⚡ Jupiter Live Quote');
+                statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+              }
+              gotSolQuote = true;
             }
-            const execBtnText = document.getElementById('btn-swap-text');
-            if (execBtnText) execBtnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+          } catch (jErr) {}
+
+          if (!gotSolQuote) {
+            const rayUrl = `https://transaction-v1.raydium.io/compute/swap-base-in?inputMint=${encodeURIComponent(fromToken.assetId)}&outputMint=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&slippageBps=${state.nearSwap.slippageTolerance || 100}&txVersion=V0`;
+            const rData = await fetchWithTimeout(rayUrl, {}, 10000);
+            const rOut = rData && rData.success && rData.data ? rData.data.outputAmount : null;
+            if (rOut) {
+              const outFormatted = fromBaseUnits(rOut, toToken.decimals);
+              const outNum = parseFloat(outFormatted);
+              const displayOut = !isNaN(outNum) ? outNum.toFixed(4) : outFormatted;
+              state.nearSwap.amountOut = displayOut;
+              state.nearSwap.quoteStatus = 'success';
+              state.nearSwap.quoteSource = 'raydium';
+              state.nearSwap.dexQuoteData = rData;
+              if (outEl) outEl.innerText = displayOut;
+              if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
+              if (statusLabel) {
+                statusLabel.innerText = t('⚡ Raydium 实时报价', '⚡ Raydium Live Quote');
+                statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
+              }
+              gotSolQuote = true;
+            }
+          }
+          if (gotSolQuote) {
+            syncSwapButtonBalanceState();
             return;
           }
         } else if (EVM_CHAIN_CONFIGS[chain]) {
           const kyberSlug = EVM_CHAIN_CONFIGS[chain].kyber;
           const kUrl = `https://aggregator-api.kyberswap.com/${kyberSlug}/api/v1/routes?tokenIn=${encodeURIComponent(fromToken.assetId)}&tokenOut=${encodeURIComponent(toToken.assetId)}&amountIn=${encodeURIComponent(rawIn)}`;
-          const kData = await fetchWithTimeout(kUrl, {}, 7000);
+          const kData = await fetchWithTimeout(kUrl, {}, 12000);
           const routeSummary = kData && kData.code === 0 && kData.data && kData.data.routeSummary ? kData.data.routeSummary : null;
           if (routeSummary && routeSummary.amountOut) {
             const outFormatted = fromBaseUnits(routeSummary.amountOut, toToken.decimals);
@@ -7392,29 +7473,32 @@
             state.nearSwap.quoteSource = 'kyber';
             state.nearSwap.dexQuoteData = routeSummary;
             if (outEl) outEl.innerText = displayOut;
-            if (fiatOutEl) fiatOutEl.innerText = `≈ $${(Number(routeSummary.amountOutUsd) || outNum * toPrice).toFixed(2)} USD`;
+            if (fiatInEl && routeSummary.amountInUsd) fiatInEl.innerText = `≈ $${Number(routeSummary.amountInUsd).toFixed(2)} USD`;
+            if (fiatOutEl && routeSummary.amountOutUsd) fiatOutEl.innerText = `≈ $${Number(routeSummary.amountOutUsd).toFixed(2)} USD`;
             if (rateEl && amt > 0) rateEl.innerText = `1 ${fromToken.symbol} ≈ ${(outNum / amt).toFixed(4)} ${toToken.symbol}`;
             if (statusLabel) {
               statusLabel.innerText = t(`⚡ ${EVM_CHAIN_CONFIGS[chain].name} 实时报价`, `⚡ ${EVM_CHAIN_CONFIGS[chain].name} Live Quote`);
               statusLabel.className = 'text-[10px] text-emerald-400 font-mono';
             }
-            const execBtnText = document.getElementById('btn-swap-text');
-            if (execBtnText) execBtnText.innerText = t('⚡ 立即兑换', '⚡ Swap Now');
+            syncSwapButtonBalanceState();
             return;
           }
         }
         state.nearSwap.quoteStatus = 'no_liquidity';
+        if (outEl) outEl.innerText = '--';
         if (statusLabel) {
           statusLabel.innerText = t('⚠️ 暂无流动性报价', '⚠️ No quote available');
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
       } catch (e) {
         state.nearSwap.quoteStatus = 'error';
+        if (outEl) outEl.innerText = '--';
         if (statusLabel) {
-          statusLabel.innerText = t('⚠️ 询价超时', '⚠️ Quote timeout');
+          statusLabel.innerText = t('⚠️ 询价超时，请重试', '⚠️ Quote timeout');
           statusLabel.className = 'text-[10px] text-amber-300 font-mono';
         }
       }
+      syncSwapButtonBalanceState();
       return;
     }
 
@@ -7661,7 +7745,9 @@
     const toPrice = toToken.assetId === PEARL_DEFUSE_TOKEN.assetId ? prlPrice : (toToken.price || 1.0);
     const rate = toPrice > 0 ? (fromPrice / toPrice) : 1.0;
     if (rateEl) {
-      rateEl.innerText = `1 ${fromToken.symbol} ≈ ${rate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
+      rateEl.innerText = isDex
+        ? `1 ${fromToken.symbol} ≈ -- ${toToken.symbol}`
+        : `1 ${fromToken.symbol} ≈ ${rate.toFixed(4)} ${toToken.symbol} (${toToken.blockchain.toUpperCase()})`;
     }
 
     const appFeeEl = document.getElementById('swap-detail-app-fee');
@@ -7669,6 +7755,7 @@
       const appFeeRate = (state && typeof state.appFeeRate === 'number') ? state.appFeeRate : 0.0025;
       appFeeEl.innerText = `${(appFeeRate * 100).toFixed(2)}%`;
     }
+    syncSwapButtonBalanceState();
   }
 
   // ======================== NEAR 链抽象跨链兑换功能 (Intents & 1Click) ========================
@@ -8368,14 +8455,30 @@
 
   window.updateStakingPreview = function () {
     const sel = STAKING_POOLS.find(p => p.id === state.staking.selectedId) || STAKING_POOLS[0];
+    const wallet = getActiveWallet();
     const input = document.getElementById('staking-amount-input');
     const prevEl = document.getElementById('staking-receive-preview');
+    const btn = document.getElementById('btn-execute-stake');
+    const btnText = document.getElementById('btn-stake-text');
     const amt = Number(input ? input.value : 0) || 0;
     if (prevEl) {
       if (typeof sel.rate === 'number') {
         prevEl.innerText = `${(amt * sel.rate).toFixed(4)} ${sel.outSymbol}`;
       } else {
         prevEl.innerText = `-- ${sel.outSymbol}`;
+      }
+    }
+    if (btn && btnText) {
+      const balInfo = getWalletChainBalanceInfo(wallet, sel.chain);
+      const avail = balInfo ? balInfo.bal : 0;
+      if (amt > avail) {
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        btnText.innerText = t(`${sel.inSymbol} 余额不足`, `Insufficient ${sel.inSymbol}`);
+      } else {
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        btnText.innerText = t('立即质押', 'Stake Now');
       }
     }
   };
