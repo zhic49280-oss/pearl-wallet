@@ -5733,7 +5733,10 @@
     }
 
     if (sym === 'WETH') return getTokenIconHtml('ETH', chain, s);
-    if (sym === 'CBBTC') return getTokenIconHtml('BTC', chain, s);
+    if (sym === 'CBBTC' || sym === 'WBTC') return getTokenIconHtml('BTC', chain, s);
+    if (sym === 'WNEAR') return getTokenIconHtml('NEAR', chain, s);
+    if (sym === 'WSOL') return getTokenIconHtml('SOL', chain, s);
+    if (sym === 'WBNB') return getTokenIconHtml('BNB', chain, s);
 
     if (TRUSTWALLET_LOGOS[sym]) {
       const bgMap = { base: '#0052FF', eth: '#627EEA', arb: '#12AAFF', sol: '#9945FF', near: '#00EC97', bsc: '#F3BA2F' };
@@ -7404,6 +7407,8 @@
       return;
     }
 
+    const isPrlInvolved = (getSwapFromToken().assetId === PEARL_DEFUSE_TOKEN.assetId) || (state.nearSwap.direction === 'buy' && slot === 'from') || (state.nearSwap.direction === 'sell' && slot === 'to' && getSwapFromToken().assetId === PEARL_DEFUSE_TOKEN.assetId);
+
     container.innerHTML = filtered.map(t => {
       const isSelected = t.assetId === currentAssetId;
       const badge = getChainBadge(t);
@@ -7428,8 +7433,10 @@
             <div>
               ${state.nearSwap.engineMode === 'dex'
                 ? `<div class="text-[11px] font-medium text-white/60">${t.name}</div>`
-                : `<div class="text-[11px] font-mono font-bold text-cyan-300">1 PRL ≈ ${rate.toFixed(4)}</div>
-                   <div class="text-[9px] text-white/40 font-mono">$${targetPrice.toLocaleString()} USD</div>`
+                : (isPrlInvolved && targetPrice > 0
+                  ? `<div class="text-[11px] font-mono font-bold text-cyan-300">1 PRL ≈ ${rate.toFixed(4)}</div>
+                     <div class="text-[9px] text-white/40 font-mono">$${targetPrice.toLocaleString()} USD</div>`
+                  : `<div class="text-[11px] font-mono font-medium text-white/80">${targetPrice > 0 ? `$${targetPrice.toLocaleString()} USD` : t.name}</div>`)
               }
             </div>
             ${isSelected ? `
@@ -7493,6 +7500,28 @@
           if (!item || !item.assetId || item.assetId === PEARL_DEFUSE_TOKEN.assetId || existingIds.has(item.assetId)) return;
           existingIds.add(item.assetId);
           const bc = String(item.blockchain || '').toLowerCase();
+          let netLabel = netNames[bc] || bc.toUpperCase();
+          if (bc === 'hypercore') {
+            if (String(item.assetId).includes(':hip1:')) netLabel = 'Hyperliquid (Spot)';
+            else if (String(item.assetId).includes(':erc20:')) netLabel = 'Hyperliquid (HyperEVM)';
+          }
+          const twChainMap = {
+            eth: 'ethereum', bsc: 'smartchain', base: 'base', arb: 'arbitrum',
+            sol: 'solana', op: 'optimism', pol: 'polygon', avax: 'avalanchec', tron: 'tron'
+          };
+          const twNativeMap = {
+            near: 'near', doge: 'doge', xrp: 'ripple', ltc: 'litecoin', bch: 'bitcoincash',
+            sui: 'sui', ton: 'ton', aptos: 'aptos', cardano: 'cardano', stellar: 'stellar',
+            zec: 'zcash', dash: 'dash'
+          };
+          let logoURI = '';
+          if (item.contractAddress && twChainMap[bc]) {
+            logoURI = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${twChainMap[bc]}/assets/${item.contractAddress}/logo.png`;
+          } else if (!item.contractAddress && twNativeMap[bc]) {
+            logoURI = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${twNativeMap[bc]}/info/logo.png`;
+          } else if (item.symbol && /^[a-z0-9]{2,8}$/i.test(item.symbol)) {
+            logoURI = `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${item.symbol.toLowerCase()}.png`;
+          }
           state.nearSwap.tokensList.push({
             symbol: item.symbol || 'TOKEN',
             name: item.symbol || 'Token',
@@ -7500,7 +7529,8 @@
             assetId: item.assetId,
             decimals: Number(item.decimals) || 18,
             price: Number(item.price) || 0,
-            networkName: netNames[bc] || bc.toUpperCase()
+            networkName: netLabel,
+            logoURI
           });
         });
         renderNearSwapUI();
