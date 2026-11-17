@@ -9512,6 +9512,7 @@
     if (getWcProjectId()) {
       try {
         await ensureWcWalletReady();
+        renderWcSessionsList();
       } catch (e) {
         updateWcStatusPill(t('初始化失败', 'Init error'), false);
       }
@@ -9734,6 +9735,7 @@
     // 启动代币市价实时更新心跳 (每 30 秒自动同步)
     fetchRealKryptexRates();
     setInterval(fetchRealKryptexRates, 30000);
+    if (getWcProjectId()) ensureWcWalletReady().catch(() => {});
   });
 
 })();
