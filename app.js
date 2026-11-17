@@ -1521,7 +1521,8 @@
     eth: { chainId: 1, rpc: 'https://ethereum-rpc.publicnode.com', kyber: 'ethereum', name: 'Ethereum', explorer: 'https://etherscan.io/tx/' },
     bsc: { chainId: 56, rpc: 'https://bsc-dataseed.bnbchain.org', kyber: 'bsc', name: 'BSC', explorer: 'https://bscscan.com/tx/' },
     arb: { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', kyber: 'arbitrum', name: 'Arbitrum', explorer: 'https://arbiscan.io/tx/' },
-    hood: { chainId: 4663, rpc: 'https://rpc.mainnet.chain.robinhood.com', kyber: 'robinhood', name: 'Robinhood', explorer: 'https://robinhoodchain.blockscout.com/tx/' }
+    hood: { chainId: 4663, rpc: 'https://rpc.mainnet.chain.robinhood.com', kyber: 'robinhood', name: 'Robinhood', explorer: 'https://robinhoodchain.blockscout.com/tx/' },
+    hype: { chainId: 999, rpc: 'https://rpc.hyperliquid.xyz/evm', kyber: 'hyperevm', name: 'HyperEVM', explorer: 'https://purrsec.com/tx/' }
   };
 
   async function executeEvmContractTx({ chainKey, to, data, value = '0', privateKey, approvalToken, spender, amountRaw }) {
@@ -7087,6 +7088,11 @@
       { symbol: 'WETH', name: 'Wrapped Ether', blockchain: 'hood', assetId: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73', decimals: 18, networkName: 'Robinhood Chain' },
       { symbol: 'USDe', name: 'Ethena USDe', blockchain: 'hood', assetId: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34', decimals: 18, networkName: 'Robinhood Chain' },
       { symbol: 'CASHCAT', name: 'CashCat', blockchain: 'hood', assetId: '0x020bfc650a365f8bb26819deaabf3e21291018b4', decimals: 18, networkName: 'Robinhood Chain' }
+    ],
+    hype: [
+      { symbol: 'HYPE', name: 'HYPE (HyperEVM)', blockchain: 'hype', assetId: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', decimals: 18, networkName: 'HyperEVM' },
+      { symbol: 'USDC', name: 'USD Coin', blockchain: 'hype', assetId: '0xb88339cb7199b77e23db6e890353e22632ba630f', decimals: 6, networkName: 'HyperEVM' },
+      { symbol: 'USDe', name: 'Ethena USDe', blockchain: 'hype', assetId: '0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34', decimals: 18, networkName: 'HyperEVM' }
     ]
   };
 
@@ -7476,7 +7482,33 @@
             pt.price = Number(live.price);
           }
         }
+        const netNames = {
+          near: 'NEAR Protocol', eth: 'Ethereum', bsc: 'BNB Smart Chain (BSC)', base: 'Base',
+          arb: 'Arbitrum One', sol: 'Solana', tron: 'TRON', btc: 'Bitcoin', hood: 'Robinhood Chain',
+          hypercore: 'Hyperliquid', op: 'Optimism', pol: 'Polygon', avax: 'Avalanche', sui: 'Sui',
+          ton: 'TON', aptos: 'Aptos', bera: 'Berachain', gnosis: 'Gnosis', scroll: 'Scroll'
+        };
+        const existingIds = new Set(state.nearSwap.tokensList.map(t => t.assetId));
+        res.forEach(item => {
+          if (!item || !item.assetId || item.assetId === PEARL_DEFUSE_TOKEN.assetId || existingIds.has(item.assetId)) return;
+          existingIds.add(item.assetId);
+          const bc = String(item.blockchain || '').toLowerCase();
+          state.nearSwap.tokensList.push({
+            symbol: item.symbol || 'TOKEN',
+            name: item.symbol || 'Token',
+            blockchain: bc,
+            assetId: item.assetId,
+            decimals: Number(item.decimals) || 18,
+            price: Number(item.price) || 0,
+            networkName: netNames[bc] || bc.toUpperCase()
+          });
+        });
         renderNearSwapUI();
+        const pickerModal = document.getElementById('modal-swap-token-picker');
+        if (pickerModal && !pickerModal.classList.contains('hidden')) {
+          const input = document.getElementById('swap-token-search-input');
+          renderSwapTokenPickerList(input ? input.value : '');
+        }
       }
     } catch (e) {
       // 网络离线或超时降级维持当前价格
@@ -7489,7 +7521,7 @@
     if (chain === 'prl') return wallet.address || '';
     if (chain === 'near') return wallet.nearNamedAccount || wallet.nearAddress || '';
     if (chain === 'sol') return wallet.solAddress || '';
-    if (['eth', 'bsc', 'base', 'arb', 'hype', 'hood'].includes(chain)) return wallet.evmAddress || '';
+    if (['eth', 'bsc', 'base', 'arb', 'hype', 'hood', 'hypercore'].includes(chain)) return wallet.evmAddress || '';
     return '';
   }
 
@@ -7766,7 +7798,7 @@
         const bal = Number(wallet.balance) || 0;
         if (amt > bal) insufficient = true;
       } else if (isDex) {
-        const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH', hood: 'ETH' };
+        const nativeSymbols = { sol: 'SOL', base: 'ETH', eth: 'ETH', bsc: 'BNB', arb: 'ETH', hood: 'ETH', hype: 'HYPE' };
         const chain = state.nearSwap.dexChain;
         if (fromToken.symbol === nativeSymbols[chain]) {
           const balInfo = getWalletChainBalanceInfo(wallet, chain);
@@ -8124,7 +8156,7 @@
           const pUrl = `https://api.paraswap.io/prices?srcToken=${encodeURIComponent(fromToken.assetId)}&destToken=${encodeURIComponent(toToken.assetId)}&amount=${encodeURIComponent(rawIn)}&srcDecimals=${fromToken.decimals}&destDecimals=${toToken.decimals}&network=${cfg.chainId}&side=SELL&partner=pearlwallet&partnerAddress=${encodeURIComponent(evmFeeReceiver)}&partnerFeeBps=${feeBps}`;
           const [kRes, pRes, ocRes] = await Promise.allSettled([
             fetchWithTimeout(kUrl, {}, 12000),
-            fetchWithTimeout(pUrl, {}, 10000),
+            cfg.chainId === 999 ? Promise.resolve(null) : fetchWithTimeout(pUrl, {}, 10000),
             fetchOneClickDexQuote({ chain, fromToken, toToken, rawIn, appFeeRate })
           ]);
           const kRoute = kRes.status === 'fulfilled' && kRes.value && kRes.value.code === 0 && kRes.value.data && kRes.value.data.routeSummary ? kRes.value.data.routeSummary : null;
@@ -8315,7 +8347,7 @@
     if (recipientCard) recipientCard.classList.toggle('hidden', isDex);
 
     if (isDex) {
-      ['sol', 'base', 'eth', 'bsc', 'arb', 'hood'].forEach(c => {
+      ['sol', 'base', 'eth', 'bsc', 'arb', 'hood', 'hype'].forEach(c => {
         const cb = document.getElementById(`btn-dex-chain-${c}`);
         if (!cb) return;
         cb.className = c === state.nearSwap.dexChain
