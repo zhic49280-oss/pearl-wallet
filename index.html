@@ -14,7 +14,7 @@
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="style.css?v=9.8">
+  <link rel="stylesheet" href="style.css?v=9.9">
   <script>
     tailwind.config = {
       theme: {
@@ -60,10 +60,16 @@
         </div>
       </div>
 
-      <!-- 右侧：网络状态微胶囊 -->
-      <div onclick="openSheet('sheet-rpc-settings')" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-md cursor-pointer btn-active">
-        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span id="header-node-label" class="text-[11px] font-medium text-white/70">Pearl Mainnet</span>
+      <!-- 右侧：WalletConnect 授权入口 + 网络状态微胶囊 -->
+      <div class="flex items-center gap-1.5">
+        <button type="button" onclick="openWalletConnectSheet()" class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/30 text-[11px] font-bold text-indigo-300 btn-active" title="WalletConnect">
+          <span>🔗</span>
+          <span class="hidden sm:inline">WC</span>
+        </button>
+        <div onclick="openSheet('sheet-rpc-settings')" class="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.04] border border-white/[0.08] backdrop-blur-md cursor-pointer btn-active">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="header-node-label" class="text-[11px] font-medium text-white/70">Pearl Mainnet</span>
+        </div>
       </div>
     </header>
 
@@ -626,6 +632,14 @@
             <span id="settings-contacts-count" class="text-xs font-mono">0 个</span>
             <svg class="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </div>
+        </button>
+
+        <button onclick="openWalletConnectSheet()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-cyan-500/25 flex items-center justify-between btn-active text-left">
+          <div>
+            <div class="text-sm font-bold text-cyan-300" data-i18n="settings.wcTitle">WalletConnect 外部授权</div>
+            <div class="text-xs text-white/40" data-i18n="settings.wcDesc">连接 Hyperliquid 等外部 DApp 并签名授权</div>
+          </div>
+          <span class="text-sm">🔗</span>
         </button>
 
         <button onclick="openMultichainAddressesSheet()" class="w-full p-4 rounded-2xl bg-white/[0.04] border border-indigo-500/25 flex items-center justify-between btn-active text-left">
@@ -1768,6 +1782,88 @@
     </button>
   </div>
 
+  <!-- 抽屉 WC：WalletConnect v2 外部应用授权与签名 -->
+  <div id="sheet-walletconnect" class="fixed bottom-0 inset-x-0 z-50 bottom-sheet translate-y-full bg-[#10121B] px-5 pt-3 pb-6 max-w-md mx-auto sheet-safe-bottom max-h-[90vh] max-h-[90dvh] flex flex-col overflow-y-auto no-scrollbar">
+    <div class="sticky top-0 bg-[#10121B]/95 backdrop-blur z-20 py-2 flex items-center justify-between mb-2">
+      <div class="w-8"></div>
+      <div class="w-10 h-1 bg-white/20 rounded-full"></div>
+      <button onclick="closeSheet()" class="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-white/60 hover:text-white btn-active text-sm">✕</button>
+    </div>
+
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <span>🔗</span>
+          <span data-i18n="wc.title">WalletConnect 外部授权</span>
+        </h3>
+        <p class="text-[11px] text-white/45 mt-0.5" data-i18n="wc.subtitle">粘贴 DApp 提供的 wc: 连接码，在钱包内安全签名</p>
+      </div>
+      <span id="wc-status-pill" class="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/50 border border-white/10 font-mono">未初始化</span>
+    </div>
+
+    <!-- Reown / WalletConnect Project ID -->
+    <div class="p-3 rounded-2xl bg-white/[0.03] border border-white/[0.08] mb-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[11px] font-semibold text-white/70" data-i18n="wc.projectIdLabel">Project ID (cloud.reown.com)</span>
+        <a href="https://cloud.reown.com" target="_blank" class="text-[10px] text-cyan-400 underline" data-i18n="wc.getId">免费获取 ↗</a>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <input id="wc-project-id-input" type="text" placeholder="32位 WalletConnect Project ID" class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white font-mono placeholder-white/30 focus:outline-none focus:border-cyan-400">
+        <button type="button" onclick="saveWalletConnectProjectId()" data-i18n="wc.saveIdBtn" class="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold btn-active whitespace-nowrap">保存</button>
+      </div>
+    </div>
+
+    <!-- wc: URI 配对 -->
+    <div class="p-3.5 rounded-2xl bg-white/[0.03] border border-cyan-500/20 mb-3">
+      <label class="block text-[11px] font-semibold text-cyan-300 mb-1.5" data-i18n="wc.uriLabel">连接 DApp (粘贴 wc: 链接)</label>
+      <div class="flex items-center gap-1.5">
+        <div class="relative flex-1 min-w-0">
+          <input id="wc-uri-input" type="text" placeholder="wc:..." class="w-full pl-3 pr-12 py-2 rounded-xl bg-black/40 border border-white/10 text-xs text-white font-mono placeholder-white/30 focus:outline-none focus:border-cyan-400">
+          <button type="button" onclick="pasteToWcUri()" data-i18n="swap.pasteBtn" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-cyan-400">粘贴</button>
+        </div>
+        <button type="button" onclick="pairWalletConnectUri()" id="btn-wc-pair" data-i18n="wc.connectBtn" class="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 text-black text-xs font-bold btn-active whitespace-nowrap">连接</button>
+      </div>
+    </div>
+
+    <!-- 待审批会话请求 -->
+    <div id="wc-proposal-card" class="hidden p-4 rounded-2xl bg-indigo-500/10 border border-indigo-400/35 mb-3 space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-indigo-300" data-i18n="wc.proposalTitle">请求连接钱包</span>
+        <span id="wc-proposal-chains" class="text-[10px] font-mono text-white/60"></span>
+      </div>
+      <div>
+        <div id="wc-proposal-name" class="text-sm font-bold text-white">--</div>
+        <div id="wc-proposal-url" class="text-[11px] text-white/50 truncate">--</div>
+      </div>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="approveWcProposal()" data-i18n="wc.approveBtn" class="flex-1 py-2.5 rounded-xl bg-emerald-400 text-black font-bold text-xs btn-active">批准连接</button>
+        <button type="button" onclick="rejectWcProposal()" data-i18n="wc.rejectBtn" class="px-4 py-2.5 rounded-xl bg-white/10 text-white/70 font-bold text-xs btn-active">拒绝</button>
+      </div>
+    </div>
+
+    <!-- 待审批签名 / 交易请求 -->
+    <div id="wc-request-card" class="hidden p-4 rounded-2xl bg-amber-500/10 border border-amber-400/35 mb-3 space-y-2.5">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-amber-300" data-i18n="wc.signTitle">请求签名授权</span>
+        <span id="wc-request-method" class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-200">--</span>
+      </div>
+      <div id="wc-request-dapp" class="text-xs font-semibold text-white">--</div>
+      <pre id="wc-request-payload" class="p-2.5 rounded-xl bg-black/50 border border-white/10 text-[10px] font-mono text-cyan-200 max-h-36 overflow-y-auto whitespace-pre-wrap break-all">--</pre>
+      <div class="flex gap-2 pt-1">
+        <button type="button" onclick="approveWcRequest()" data-i18n="wc.signBtn" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-cyan-400 text-black font-bold text-xs btn-active">确认签名</button>
+        <button type="button" onclick="rejectWcRequest()" data-i18n="wc.rejectBtn" class="px-4 py-2.5 rounded-xl bg-white/10 text-white/70 font-bold text-xs btn-active">拒绝</button>
+      </div>
+    </div>
+
+    <!-- 已连接 DApp 列表 -->
+    <div class="mb-2">
+      <div class="text-[11px] font-bold text-white/60 mb-2" data-i18n="wc.sessionsTitle">已连接应用</div>
+      <div id="wc-sessions-list" class="space-y-2">
+        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-[11px] text-white/35">暂无已连接应用</div>
+      </div>
+    </div>
+  </div>
+
   <!-- 注册 Service Worker (启用即时更新校验机制) -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -1784,12 +1880,14 @@
   </script>
 
   <!-- 引入官方完整 2048 词表 -->
-  <script src="bip39-wordlist.js?v=9.8"></script>
+  <script src="bip39-wordlist.js?v=9.9"></script>
   <!-- 引入标准离线二维码生成库 -->
-  <script src="qrcode.min.js?v=9.8"></script>
+  <script src="qrcode.min.js?v=9.9"></script>
   <!-- 引入标准 EVM 合约编码与本地签名库 -->
-  <script src="ethers.umd.min.js?v=9.8"></script>
+  <script src="ethers.umd.min.js?v=9.9"></script>
+  <!-- 引入 WalletConnect v2 SDK -->
+  <script src="walletconnect.umd.min.js?v=9.9"></script>
   <!-- 业务核心脚本 -->
-  <script src="app.js?v=9.8"></script>
+  <script src="app.js?v=9.9"></script>
 </body>
 </html>

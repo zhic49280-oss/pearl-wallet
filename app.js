@@ -349,6 +349,21 @@
       'import.pinLabel': '安全密码 (6 位数字，可选)',
       'contacts.nameLabel': '备注名称',
       'contacts.addrLabel': '收款地址',
+      'settings.wcTitle': 'WalletConnect 外部授权',
+      'settings.wcDesc': '连接 Hyperliquid 等外部 DApp 并签名授权',
+      'wc.title': 'WalletConnect 外部授权',
+      'wc.subtitle': '粘贴 DApp 提供的 wc: 连接码，在钱包内安全签名',
+      'wc.projectIdLabel': 'Project ID (cloud.reown.com)',
+      'wc.getId': '免费获取 ↗',
+      'wc.saveIdBtn': '保存',
+      'wc.uriLabel': '连接 DApp (粘贴 wc: 链接)',
+      'wc.connectBtn': '连接',
+      'wc.proposalTitle': '请求连接钱包',
+      'wc.approveBtn': '批准连接',
+      'wc.rejectBtn': '拒绝',
+      'wc.signTitle': '请求签名授权',
+      'wc.signBtn': '确认签名',
+      'wc.sessionsTitle': '已连接应用',
       'receive.addrSlot': '地址序号',
       'receive.nextAddr': '换一个地址 ↻',
       'receive.copyBtn': '复制收款地址',
@@ -441,6 +456,21 @@
       'import.pinLabel': 'Security PIN (6 digits, optional)',
       'contacts.nameLabel': 'Contact Name',
       'contacts.addrLabel': 'Wallet Address',
+      'settings.wcTitle': 'WalletConnect DApp Auth',
+      'settings.wcDesc': 'Connect & sign for Hyperliquid and external DApps',
+      'wc.title': 'WalletConnect',
+      'wc.subtitle': 'Paste a wc: pairing link from any DApp to connect & sign',
+      'wc.projectIdLabel': 'Project ID (cloud.reown.com)',
+      'wc.getId': 'Get Free ID ↗',
+      'wc.saveIdBtn': 'Save',
+      'wc.uriLabel': 'Connect DApp (Paste wc: URI)',
+      'wc.connectBtn': 'Connect',
+      'wc.proposalTitle': 'Session Proposal',
+      'wc.approveBtn': 'Approve',
+      'wc.rejectBtn': 'Reject',
+      'wc.signTitle': 'Signature Request',
+      'wc.signBtn': 'Sign & Approve',
+      'wc.sessionsTitle': 'Active Sessions',
       'receive.addrSlot': 'Address Index',
       'receive.nextAddr': 'Next ↻',
       'receive.copyBtn': 'Copy Address',
@@ -9315,6 +9345,381 @@
     }
   };
   globalThis.executeStaking = window.executeStaking;
+
+  // ======================== WalletConnect v2 外部应用授权 ========================
+  state.wc = {
+    client: null,
+    initProjectId: '',
+    pendingProposal: null,
+    pendingRequest: null
+  };
+
+  function getWcProjectId() {
+    return (typeof localStorage !== 'undefined' && localStorage.getItem('pearl_wc_project_id')) || '';
+  }
+
+  function updateWcStatusPill(text, ok = false) {
+    const pill = document.getElementById('wc-status-pill');
+    if (!pill) return;
+    pill.innerText = text;
+    pill.className = ok
+      ? 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 font-mono'
+      : 'text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/50 border border-white/10 font-mono';
+  }
+
+  async function ensureWcWalletReady() {
+    const projectId = getWcProjectId().trim();
+    if (!projectId) {
+      updateWcStatusPill(t('未配置 ID', 'No ID'), false);
+      return null;
+    }
+    if (state.wc.client && state.wc.initProjectId === projectId) {
+      updateWcStatusPill(t('已就绪', 'Ready'), true);
+      return state.wc.client;
+    }
+    const sdk = (typeof window !== 'undefined' && window.PearlWalletConnect) || (typeof globalThis !== 'undefined' && globalThis.PearlWalletConnect);
+    if (!sdk || !sdk.Core || !sdk.Web3Wallet) {
+      throw new Error(t('WalletConnect 模块未加载', 'WalletConnect SDK unavailable'));
+    }
+    updateWcStatusPill(t('连接中...', 'Connecting...'), false);
+    const core = new sdk.Core({ projectId });
+    const web3wallet = await sdk.Web3Wallet.init({
+      core,
+      metadata: {
+        name: 'Pearl Wallet',
+        description: 'Multi-Chain Self-Custody Wallet',
+        url: (typeof location !== 'undefined' && location.origin) || 'https://pearlwallet.app',
+        icons: []
+      }
+    });
+
+    web3wallet.on('session_proposal', (proposal) => {
+      state.wc.pendingProposal = proposal;
+      renderWcProposalCard();
+      openSheet('sheet-walletconnect');
+      triggerHaptic('medium');
+    });
+
+    web3wallet.on('session_request', (event) => {
+      state.wc.pendingRequest = event;
+      renderWcRequestCard();
+      openSheet('sheet-walletconnect');
+      triggerHaptic('medium');
+    });
+
+    web3wallet.on('session_delete', () => {
+      renderWcSessionsList();
+    });
+
+    state.wc.client = web3wallet;
+    state.wc.initProjectId = projectId;
+    updateWcStatusPill(t('已就绪', 'Ready'), true);
+    renderWcSessionsList();
+    return web3wallet;
+  }
+
+  function renderWcProposalCard() {
+    const card = document.getElementById('wc-proposal-card');
+    if (!card) return;
+    const p = state.wc.pendingProposal;
+    if (!p) {
+      card.classList.add('hidden');
+      return;
+    }
+    const meta = (p.params && p.params.proposer && p.params.proposer.metadata) || {};
+    const reqChains = [];
+    const reqNs = (p.params && p.params.requiredNamespaces) || {};
+    const optNs = (p.params && p.params.optionalNamespaces) || {};
+    [reqNs, optNs].forEach(ns => {
+      if (ns.eip155 && Array.isArray(ns.eip155.chains)) {
+        ns.eip155.chains.forEach(c => { if (!reqChains.includes(c)) reqChains.push(c); });
+      }
+    });
+    const nameEl = document.getElementById('wc-proposal-name');
+    const urlEl = document.getElementById('wc-proposal-url');
+    const chainsEl = document.getElementById('wc-proposal-chains');
+    if (nameEl) nameEl.innerText = meta.name || 'External DApp';
+    if (urlEl) urlEl.innerText = meta.url || '--';
+    if (chainsEl) chainsEl.innerText = reqChains.slice(0, 4).join(', ') || 'eip155:1';
+    card.classList.remove('hidden');
+  }
+
+  function renderWcRequestCard() {
+    const card = document.getElementById('wc-request-card');
+    if (!card) return;
+    const ev = state.wc.pendingRequest;
+    if (!ev) {
+      card.classList.add('hidden');
+      return;
+    }
+    const req = (ev.params && ev.params.request) || {};
+    const methodEl = document.getElementById('wc-request-method');
+    const dappEl = document.getElementById('wc-request-dapp');
+    const payloadEl = document.getElementById('wc-request-payload');
+    const sessions = state.wc.client ? state.wc.client.getActiveSessions() : {};
+    const sess = sessions && sessions[ev.topic];
+    const dappName = (sess && sess.peer && sess.peer.metadata && sess.peer.metadata.name) || ev.params.chainId || 'DApp';
+    if (methodEl) methodEl.innerText = req.method || '--';
+    if (dappEl) dappEl.innerText = `${dappName} (${ev.params.chainId || 'eip155:1'})`;
+    let preview = '';
+    try {
+      if (req.method === 'personal_sign' && Array.isArray(req.params)) {
+        const raw = req.params[0];
+        preview = (typeof raw === 'string' && raw.startsWith('0x') && window.ethers)
+          ? window.ethers.toUtf8String(raw)
+          : String(raw);
+      } else {
+        preview = JSON.stringify(req.params, null, 2);
+      }
+    } catch (_) {
+      preview = JSON.stringify(req.params || {});
+    }
+    if (payloadEl) payloadEl.innerText = preview;
+    card.classList.remove('hidden');
+  }
+
+  function renderWcSessionsList() {
+    const listEl = document.getElementById('wc-sessions-list');
+    if (!listEl) return;
+    const sessions = state.wc.client ? Object.values(state.wc.client.getActiveSessions() || {}) : [];
+    if (sessions.length === 0) {
+      listEl.innerHTML = `<div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-[11px] text-white/35">${t('暂无已连接应用', 'No active sessions')}</div>`;
+      return;
+    }
+    listEl.innerHTML = sessions.map(s => {
+      const meta = (s.peer && s.peer.metadata) || {};
+      return `
+        <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="text-xs font-bold text-white truncate">${meta.name || 'DApp'}</div>
+            <div class="text-[10px] text-white/45 truncate">${meta.url || s.topic.slice(0, 16) + '...'}</div>
+          </div>
+          <button type="button" onclick="disconnectWcSession('${s.topic}')" class="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-[10px] font-bold border border-rose-400/25 btn-active">${t('断开', 'Disconnect')}</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  window.openWalletConnectSheet = async function () {
+    triggerHaptic('light');
+    const idInput = document.getElementById('wc-project-id-input');
+    if (idInput) idInput.value = getWcProjectId();
+    const uriInput = document.getElementById('wc-uri-input');
+    if (uriInput) uriInput.value = '';
+    openSheet('sheet-walletconnect');
+    renderWcProposalCard();
+    renderWcRequestCard();
+    if (getWcProjectId()) {
+      try {
+        await ensureWcWalletReady();
+      } catch (e) {
+        updateWcStatusPill(t('初始化失败', 'Init error'), false);
+      }
+    } else {
+      updateWcStatusPill(t('未配置 ID', 'No ID'), false);
+      renderWcSessionsList();
+    }
+  };
+  globalThis.openWalletConnectSheet = window.openWalletConnectSheet;
+
+  window.saveWalletConnectProjectId = async function () {
+    triggerHaptic('light');
+    const val = (document.getElementById('wc-project-id-input')?.value || '').trim();
+    if (!val || val.length < 16) {
+      showToast(t('请输入有效的 WalletConnect Project ID', 'Enter a valid WalletConnect Project ID'));
+      return;
+    }
+    if (typeof localStorage !== 'undefined') localStorage.setItem('pearl_wc_project_id', val);
+    try {
+      await ensureWcWalletReady();
+      showToast(t('✅ Project ID 已保存并连接', '✅ Project ID saved & connected'));
+    } catch (e) {
+      showToast(e && e.message ? e.message : t('连接失败', 'Connection failed'));
+    }
+  };
+  globalThis.saveWalletConnectProjectId = window.saveWalletConnectProjectId;
+
+  window.pasteToWcUri = async function () {
+    try {
+      const text = await navigator.clipboard.readText();
+      const el = document.getElementById('wc-uri-input');
+      if (el && text) el.value = text.trim();
+    } catch (_) {
+      showToast(t('请手动长按粘贴', 'Please paste manually'));
+    }
+  };
+  globalThis.pasteToWcUri = window.pasteToWcUri;
+
+  window.pairWalletConnectUri = async function () {
+    triggerHaptic('medium');
+    const wallet = getActiveWallet();
+    if (!wallet || !wallet.mnemonic) {
+      showToast(t('请先创建或导入助记词钱包', 'Create or import a mnemonic wallet first'));
+      return;
+    }
+    if (!wallet.evmAddress || !wallet.evmPrivateKey) {
+      const evmDerived = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+      if (evmDerived && evmDerived.address) {
+        wallet.evmAddress = evmDerived.address;
+        wallet.evmPrivateKey = evmDerived.privateKeyHex;
+        saveWalletsToStorage();
+      }
+    }
+    const uri = (document.getElementById('wc-uri-input')?.value || '').trim();
+    if (!uri.startsWith('wc:')) {
+      showToast(t('请粘贴有效的 wc: 链接', 'Paste a valid wc: URI'));
+      return;
+    }
+    if (!getWcProjectId()) {
+      showToast(t('请先填写并保存 Project ID', 'Save your Project ID first'));
+      return;
+    }
+    try {
+      const client = await ensureWcWalletReady();
+      await client.core.pairing.pair({ uri });
+      showToast(t('已发起配对，请等待 DApp 请求...', 'Pairing sent, waiting for DApp...'));
+    } catch (e) {
+      showToast(e && e.message ? e.message : t('配对失败', 'Pairing failed'));
+    }
+  };
+  globalThis.pairWalletConnectUri = window.pairWalletConnectUri;
+
+  window.approveWcProposal = async function () {
+    const p = state.wc.pendingProposal;
+    const client = state.wc.client;
+    const wallet = getActiveWallet();
+    if (!p || !client || !wallet) return;
+    try {
+      if (!wallet.evmAddress && wallet.mnemonic) {
+        const d = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+        wallet.evmAddress = d.address;
+        wallet.evmPrivateKey = d.privateKeyHex;
+        saveWalletsToStorage();
+      }
+      const chainsSet = new Set(['eip155:1', 'eip155:8453', 'eip155:56', 'eip155:42161', 'eip155:4663', 'eip155:999', 'eip155:1337']);
+      const reqNs = (p.params && p.params.requiredNamespaces) || {};
+      const optNs = (p.params && p.params.optionalNamespaces) || {};
+      [reqNs, optNs].forEach(ns => {
+        if (ns.eip155 && Array.isArray(ns.eip155.chains)) ns.eip155.chains.forEach(c => chainsSet.add(c));
+      });
+      const accounts = Array.from(chainsSet).map(c => `${c}:${wallet.evmAddress}`);
+      await client.approveSession({
+        id: p.id,
+        namespaces: {
+          eip155: {
+            chains: Array.from(chainsSet),
+            accounts,
+            methods: ['eth_sendTransaction', 'personal_sign', 'eth_sign', 'eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4', 'wallet_switchEthereumChain', 'wallet_addEthereumChain'],
+            events: ['chainChanged', 'accountsChanged']
+          }
+        }
+      });
+      state.wc.pendingProposal = null;
+      renderWcProposalCard();
+      renderWcSessionsList();
+      triggerHaptic('success');
+      showToast(t('✅ 已批准连接 DApp', '✅ DApp session approved'));
+    } catch (e) {
+      showToast(e && e.message ? e.message : t('批准失败', 'Approve failed'));
+    }
+  };
+  globalThis.approveWcProposal = window.approveWcProposal;
+
+  window.rejectWcProposal = async function () {
+    const p = state.wc.pendingProposal;
+    if (p && state.wc.client) {
+      try {
+        await state.wc.client.rejectSession({ id: p.id, reason: { code: 5000, message: 'User rejected' } });
+      } catch (_) {}
+    }
+    state.wc.pendingProposal = null;
+    renderWcProposalCard();
+  };
+  globalThis.rejectWcProposal = window.rejectWcProposal;
+
+  window.approveWcRequest = async function () {
+    const ev = state.wc.pendingRequest;
+    const client = state.wc.client;
+    const wallet = getActiveWallet();
+    if (!ev || !client || !wallet) return;
+    try {
+      if (!wallet.evmPrivateKey && wallet.mnemonic) {
+        const d = await deriveEvmFromSeedAsync(wallet.mnemonic, "m/44'/60'/0'/0/0");
+        wallet.evmAddress = d.address;
+        wallet.evmPrivateKey = d.privateKeyHex;
+        saveWalletsToStorage();
+      }
+      const ethersLib = (typeof window !== 'undefined' && window.ethers) || (typeof globalThis !== 'undefined' && globalThis.ethers);
+      if (!ethersLib || !wallet.evmPrivateKey) throw new Error(t('EVM 签名环境不可用', 'EVM signer unavailable'));
+      const signer = new ethersLib.Wallet(wallet.evmPrivateKey);
+      const { topic, id, params } = ev;
+      const method = params.request.method;
+      const reqParams = params.request.params || [];
+      let result;
+
+      if (method === 'personal_sign' || method === 'eth_sign') {
+        const msgRaw = method === 'personal_sign' ? reqParams[0] : reqParams[1];
+        const msgBytes = (typeof msgRaw === 'string' && msgRaw.startsWith('0x')) ? ethersLib.getBytes(msgRaw) : String(msgRaw);
+        result = await signer.signMessage(msgBytes);
+      } else if (method === 'eth_signTypedData' || method === 'eth_signTypedData_v3' || method === 'eth_signTypedData_v4') {
+        const rawTyped = typeof reqParams[1] === 'string' ? JSON.parse(reqParams[1]) : reqParams[1];
+        const cleanTypes = Object.assign({}, rawTyped.types || {});
+        delete cleanTypes.EIP712Domain;
+        result = await signer.signTypedData(rawTyped.domain || {}, cleanTypes, rawTyped.message || {});
+      } else if (method === 'eth_sendTransaction') {
+        const txReq = reqParams[0] || {};
+        const cid = Number(String(params.chainId || 'eip155:1').split(':')[1] || 1);
+        const cfg = Object.values(EVM_CHAIN_CONFIGS).find(c => c.chainId === cid);
+        if (!cfg) throw new Error(`Unsupported chainId: ${cid}`);
+        const provider = new ethersLib.JsonRpcProvider(cfg.rpc, cfg.chainId);
+        const connected = signer.connect(provider);
+        const tx = await connected.sendTransaction({
+          to: txReq.to,
+          data: txReq.data || '0x',
+          value: txReq.value ? BigInt(txReq.value) : 0n
+        });
+        result = tx.hash;
+      } else if (method === 'wallet_switchEthereumChain' || method === 'wallet_addEthereumChain') {
+        result = null;
+      } else {
+        throw new Error(`Unsupported method: ${method}`);
+      }
+
+      await client.respondSessionRequest({ topic, response: { id, jsonrpc: '2.0', result } });
+      state.wc.pendingRequest = null;
+      renderWcRequestCard();
+      triggerHaptic('success');
+      showToast(t('✅ 已完成签名授权', '✅ Signature approved'));
+    } catch (e) {
+      showToast(e && e.message ? e.message : t('签名失败', 'Sign failed'));
+    }
+  };
+  globalThis.approveWcRequest = window.approveWcRequest;
+
+  window.rejectWcRequest = async function () {
+    const ev = state.wc.pendingRequest;
+    if (ev && state.wc.client) {
+      try {
+        await state.wc.client.respondSessionRequest({
+          topic: ev.topic,
+          response: { id: ev.id, jsonrpc: '2.0', error: { code: 4001, message: 'User rejected request' } }
+        });
+      } catch (_) {}
+    }
+    state.wc.pendingRequest = null;
+    renderWcRequestCard();
+  };
+  globalThis.rejectWcRequest = window.rejectWcRequest;
+
+  window.disconnectWcSession = async function (topic) {
+    if (!state.wc.client) return;
+    try {
+      await state.wc.client.disconnectSession({ topic, reason: { code: 6000, message: 'User disconnected' } });
+    } catch (_) {}
+    renderWcSessionsList();
+    showToast(t('已断开连接', 'Session disconnected'));
+  };
+  globalThis.disconnectWcSession = window.disconnectWcSession;
 
   window.addEventListener('DOMContentLoaded', () => {
     initWallets();

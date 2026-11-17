@@ -21,6 +21,7 @@ const CORE_ASSETS = [
   'bip39-wordlist.js',
   'qrcode.min.js',
   'ethers.umd.min.js',
+  'walletconnect.umd.min.js',
   'manifest.json',
   'sw.js'
 ];
